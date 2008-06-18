@@ -35,43 +35,172 @@ void unloadPlugin()
 {
 }
 
-QStringList supportedCodecs()
+QList<AudioParams> supportedAudioModes()
 {
+	QList<AudioParams> list;
+	{
+		AudioParams p;
+		p.setCodec("speex");
+		p.setSampleRate(8000);
+		p.setSampleSize(16);
+		p.setChannels(1);
+		list += p;
+	}
+	{
+		AudioParams p;
+		p.setCodec("speex");
+		p.setSampleRate(16000);
+		p.setSampleSize(16);
+		p.setChannels(1);
+		list += p;
+	}
+	{
+		AudioParams p;
+		p.setCodec("speex");
+		p.setSampleRate(32000);
+		p.setSampleSize(16);
+		p.setChannels(1);
+		list += p;
+	}
+	return list;
+}
+
+QList<VideoParams> supportedVideoModes()
+{
+	QList<VideoParams> list;
+	{
+		VideoParams p;
+		p.setCodec("theora");
+		p.setSize(QSize(160, 120));
+		p.setFps(15);
+		list += p;
+	}
+	{
+		VideoParams p;
+		p.setCodec("theora");
+		p.setSize(QSize(320, 240));
+		p.setFps(15);
+		list += p;
+	}
+	{
+		VideoParams p;
+		p.setCodec("theora");
+		p.setSize(QSize(320, 240));
+		p.setFps(30);
+		list += p;
+	}
+	return list;
+}
+
+class Device::Private
+{
+public:
+	Device::Type type;
+	QString id;
+	QString name;
+};
+
+class Global
+{
+public:
+	static Device makeDevice(Device::Type type, const QString &id, const QString &name)
+	{
+		Device dev;
+		dev.d = new Device::Private;
+		dev.d->type = type;
+		dev.d->id = id;
+		dev.d->name = name;
+		return dev;
+	}
+};
+
+// some fake devices for now
+QList<Device> audioOutputDevices()
+{
+	QList<Device> list;
+	{
+		list += Global::makeDevice(Device::AudioOut, "default", "STAC92xx Analog");
+	}
+	return list;
+}
+
+QList<Device> audioInputDevices()
+{
+	QList<Device> list;
+	{
+		list += Global::makeDevice(Device::AudioIn, "default", "USB Audio");
+	}
+	return list;
+}
+
+QList<Device> videoInputDevices()
+{
+	QList<Device> list;
+	{
+		list += Global::makeDevice(Device::VideoIn, "default", "Laptop Integrated Webcam");
+	}
+	return list;
 }
 
 //----------------------------------------------------------------------------
 // Device
 //----------------------------------------------------------------------------
-Device::Device()
+Device::Device() :
+	d(0)
 {
 }
 
-Device::Device(const Device &other)
+Device::Device(const Device &other) :
+	d(other.d ? new Private(*other.d) : 0)
 {
 }
 
 Device::~Device()
 {
+	delete d;
 }
 
 Device & Device::operator=(const Device &other)
 {
+	if(d)
+	{
+		if(other.d)
+		{
+			*d = *other.d;
+		}
+		else
+		{
+			delete d;
+			d = 0;
+		}
+	}
+	else
+	{
+		if(other.d)
+			d = new Private(*other.d);
+	}
+
+	return *this;
 }
 
 bool Device::isNull() const
 {
+	return (d ? false : true);
 }
 
 Device::Type Device::type() const
 {
+	return d->type;
 }
 
 QString Device::name() const
 {
+	return d->name;
 }
 
 QString Device::id() const
 {
+	return d->id;
 }
 
 #ifdef QT_GUI_LIB
@@ -80,6 +209,11 @@ QString Device::id() const
 //----------------------------------------------------------------------------
 VideoWidget::VideoWidget(QWidget *parent)
 {
+	QPalette palette;
+	palette.setColor(backgroundRole(), Qt::black);
+	setPalette(palette);
+
+	setAutoFillBackground(true);
 }
 
 VideoWidget::~VideoWidget()
@@ -90,95 +224,136 @@ VideoWidget::~VideoWidget()
 //----------------------------------------------------------------------------
 // AudioParams
 //----------------------------------------------------------------------------
-AudioParams::AudioParams()
+class AudioParams::Private
+{
+public:
+	QString codec;
+	int sampleRate;
+	int sampleSize;
+	int channels;
+};
+
+AudioParams::AudioParams() :
+	d(new Private)
 {
 }
 
-AudioParams::AudioParams(const AudioParams &other)
+AudioParams::AudioParams(const AudioParams &other) :
+	d(new Private(*other.d))
 {
 }
 
 AudioParams::~AudioParams()
 {
+	delete d;
 }
 
 AudioParams & AudioParams::operator=(const AudioParams &other)
 {
+	*d = *other.d;
+	return *this;
 }
 
 QString AudioParams::codec() const
 {
+	return d->codec;
 }
 
 int AudioParams::sampleRate() const
 {
+	return d->sampleRate;
 }
 
 int AudioParams::sampleSize() const
 {
+	return d->sampleSize;
 }
 
 int AudioParams::channels() const
 {
+	return d->channels;
 }
 
 void AudioParams::setCodec(const QString &s)
 {
+	d->codec = s;
 }
 
 void AudioParams::setSampleRate(int n)
 {
+	d->sampleRate = n;
 }
 
 void AudioParams::setSampleSize(int n)
 {
+	d->sampleSize = n;
 }
 
 void AudioParams::setChannels(int n)
 {
+	d->channels = n;
 }
 
 //----------------------------------------------------------------------------
 // VideoParams
 //----------------------------------------------------------------------------
-VideoParams::VideoParams()
+class VideoParams::Private
+{
+public:
+	QString codec;
+	QSize size;
+	int fps;
+};
+
+VideoParams::VideoParams() :
+	d(new Private)
 {
 }
 
-VideoParams::VideoParams(const VideoParams &other)
+VideoParams::VideoParams(const VideoParams &other) :
+	d(new Private(*other.d))
 {
 }
 
 VideoParams::~VideoParams()
 {
+	delete d;
 }
 
 VideoParams & VideoParams::operator=(const VideoParams &other)
 {
+	*d = *other.d;
+	return *this;
 }
 
 QString VideoParams::codec() const
 {
+	return d->codec;
 }
 
 QSize VideoParams::size() const
 {
+	return d->size;
 }
 
 int VideoParams::fps() const
 {
+	return d->fps;
 }
 
 void VideoParams::setCodec(const QString &s)
 {
+	d->codec = s;
 }
 
 void VideoParams::setSize(const QSize &s)
 {
+	d->size = s;
 }
 
 void VideoParams::setFps(int n)
 {
+	d->fps = n;
 }
 
 //----------------------------------------------------------------------------
@@ -256,6 +431,14 @@ RtpPacket RtpSource::read()
 {
 }
 
+void RtpSource::connectNotify(const char *signal)
+{
+}
+
+void RtpSource::disconnectNotify(const char *signal)
+{
+}
+
 //----------------------------------------------------------------------------
 // RtpSink
 //----------------------------------------------------------------------------
@@ -291,29 +474,77 @@ void Recorder::setDevice(QIODevice *dev)
 }
 
 //----------------------------------------------------------------------------
-// CodecConfiguration
+// PayloadInfo
 //----------------------------------------------------------------------------
-CodecConfiguration::CodecConfiguration()
+PayloadInfo::PayloadInfo()
 {
 }
 
-CodecConfiguration::CodecConfiguration(const QByteArray &rawValue)
+PayloadInfo::PayloadInfo(const PayloadInfo &other)
 {
 }
 
-CodecConfiguration::CodecConfiguration(const CodecConfiguration &other)
+PayloadInfo::~PayloadInfo()
 {
 }
 
-CodecConfiguration::~CodecConfiguration()
+PayloadInfo & PayloadInfo::operator=(const PayloadInfo &other)
 {
 }
 
-CodecConfiguration & CodecConfiguration::operator=(const CodecConfiguration &other)
+int PayloadInfo::id() const
 {
 }
 
-QByteArray CodecConfiguration::rawValue() const
+QString PayloadInfo::name() const
+{
+}
+
+int PayloadInfo::clockrate() const
+{
+}
+
+int PayloadInfo::channels() const
+{
+}
+
+int PayloadInfo::ptime() const
+{
+}
+
+int PayloadInfo::maxptime() const
+{
+}
+
+QList<PayloadInfo::Parameter> PayloadInfo::parameters() const
+{
+}
+
+void PayloadInfo::setId(int i)
+{
+}
+
+void PayloadInfo::setName(const QString &str)
+{
+}
+
+void PayloadInfo::setClockrate(int i)
+{
+}
+
+void PayloadInfo::setChannels(int num)
+{
+}
+
+void PayloadInfo::setPtime(int i)
+{
+}
+
+void PayloadInfo::setMaxptime(int i)
+{
+}
+
+void PayloadInfo::setParameters(const QList<PayloadInfo::Parameter> &params)
 {
 }
 
@@ -332,6 +563,14 @@ void Receiver::setAudioOutputDevice(const Device &dev)
 {
 }
 
+void Receiver::setAudioPayloadInfo(const PayloadInfo &info)
+{
+}
+
+void Receiver::setVideoPayloadInfo(const PayloadInfo &info)
+{
+}
+
 #ifdef QT_GUI_LIB
 void Receiver::setVideoWidget(VideoWidget *widget)
 {
@@ -342,7 +581,7 @@ void Receiver::setRecorder(Recorder *recorder)
 {
 }
 
-void Receiver::start(const CodecConfiguration &config)
+void Receiver::start()
 {
 }
 
@@ -378,7 +617,11 @@ Receiver::Error Receiver::errorCode() const
 {
 }
 
-RtpSink *Receiver::rtpSink()
+RtpSink *Receiver::audioRtpSink()
+{
+}
+
+RtpSink *Receiver::videoRtpSink()
 {
 }
 
@@ -427,7 +670,7 @@ void Producer::start()
 {
 }
 
-void Producer::startPreviewOnly()
+void Producer::beginTransmitting()
 {
 }
 
@@ -435,7 +678,11 @@ void Producer::stop()
 {
 }
 
-CodecConfiguration Producer::codecConfiguration() const
+PayloadInfo Producer::audioPayloadInfo() const
+{
+}
+
+PayloadInfo Producer::videoPayloadInfo() const
 {
 }
 
@@ -451,7 +698,11 @@ Producer::Error Producer::errorCode() const
 {
 }
 
-RtpSource *Producer::rtpSource()
+RtpSource *Producer::audioRtpSource()
+{
+}
+
+RtpSource *Producer::videoRtpSource()
 {
 }
 

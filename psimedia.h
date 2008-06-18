@@ -40,9 +40,6 @@ enum PluginResult
 PluginResult loadPlugin(const QString &fname, const QString &resourcePath);
 void unloadPlugin();
 
-// at minimum, will always contain "speex", "vorbis", and "theora"
-QStringList supportedCodecs();
-
 class Device
 {
 public:
@@ -65,6 +62,7 @@ public:
 
 private:
 	class Private;
+	friend class Global;
 	Private *d;
 };
 
@@ -129,6 +127,12 @@ private:
 	Private *d;
 };
 
+QList<AudioParams> supportedAudioModes();
+QList<VideoParams> supportedVideoModes();
+QList<Device> audioOutputDevices();
+QList<Device> audioInputDevices();
+QList<Device> videoInputDevices();
+
 class RtpPacket
 {
 public:
@@ -148,6 +152,8 @@ private:
 	QSharedDataPointer<Private> d;
 };
 
+// may drop packets if not read fast enough.
+// may queue no packets at all, if nobody is listening to readyRead.
 class RtpSource : public QObject
 {
 	Q_OBJECT
@@ -158,6 +164,10 @@ public:
 
 signals:
 	void readyRead();
+
+protected:
+	virtual void connectNotify(const char *signal);
+	virtual void disconnectNotify(const char *signal);
 
 private:
 	RtpSource();
@@ -208,17 +218,40 @@ private:
 	Private *d;
 };
 
-class CodecConfiguration
+// this class essentially follows jingle's notion of payload information,
+//   though it's not really jingle-specific and should be usable for any RTP
+//   purpose
+class PayloadInfo
 {
 public:
-	CodecConfiguration();
-	CodecConfiguration(const QByteArray &rawValue);
-	CodecConfiguration(const CodecConfiguration &other);
-	~CodecConfiguration();
-	CodecConfiguration & operator=(const CodecConfiguration &other);
+	class Parameter
+	{
+	public:
+		QString name;
+		QString value;
+	};
 
-	QByteArray rawValue() const;
+	PayloadInfo();
+	PayloadInfo(const PayloadInfo &other);
+	~PayloadInfo();
+	PayloadInfo & operator=(const PayloadInfo &other);
 
+	int id() const;
+	QString name() const;
+	int clockrate() const;
+	int channels() const;
+	int ptime() const;
+	int maxptime() const;
+	QList<Parameter> parameters() const;
+
+	void setId(int i);
+	void setName(const QString &str);
+	void setClockrate(int i);
+	void setChannels(int num);
+	void setPtime(int i);
+	void setMaxptime(int i);
+	void setParameters(const QList<Parameter> &params);
+ 
 private:
 	class Private;
 	Private *d;
@@ -240,12 +273,14 @@ public:
 	~Receiver();
 
 	void setAudioOutputDevice(const Device &dev);
+	void setAudioPayloadInfo(const PayloadInfo &info);
+	void setVideoPayloadInfo(const PayloadInfo &info);
 #ifdef QT_GUI_LIB
 	void setVideoWidget(VideoWidget *widget);
 #endif
 	void setRecorder(Recorder *recorder);
 
-	void start(const CodecConfiguration &config);
+	void start();
 	void stop();
 
 	bool hasAudio() const;
@@ -258,12 +293,12 @@ public:
 
 	Error errorCode() const;
 
-	RtpSink *rtpSink();
+	RtpSink *audioRtpSink();
+	RtpSink *videoRtpSink();
 
 signals:
 	void started();
 	void stopped();
-	void paramsChanged();
 	void error();
 
 private:
@@ -299,17 +334,19 @@ public:
 	void setVideoParams(const VideoParams &params);
 
 	void start();
-	void startPreviewOnly();
+	void beginTransmitting();
 	void stop();
 
-	CodecConfiguration codecConfiguration() const;
+	PayloadInfo audioPayloadInfo() const;
+	PayloadInfo videoPayloadInfo() const;
 
 	int volume() const; // 0 (mute) to 100
 	void setVolume(int level);
 
 	Error errorCode() const;
 
-	RtpSource *rtpSource();
+	RtpSource *audioRtpSource();
+	RtpSource *videoRtpSource();
 
 signals:
 	void started();
