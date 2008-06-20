@@ -207,7 +207,7 @@
          <property name="sizeHint" >
           <size>
            <width>261</width>
-           <height>40</height>
+           <height>16</height>
           </size>
          </property>
         </spacer>
@@ -229,14 +229,21 @@
           </widget>
          </item>
          <item>
+          <widget class="QPushButton" name="pb_record" >
+           <property name="text" >
+            <string>&amp;Record</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <spacer>
            <property name="orientation" >
             <enum>Qt::Horizontal</enum>
            </property>
            <property name="sizeHint" >
             <size>
-             <width>40</width>
-             <height>20</height>
+             <width>20</width>
+             <height>28</height>
             </size>
            </property>
           </spacer>
@@ -366,6 +373,7 @@
   <tabstop>le_receiveConfig</tabstop>
   <tabstop>pb_startReceive</tabstop>
   <tabstop>pb_stopReceive</tabstop>
+  <tabstop>pb_record</tabstop>
   <tabstop>sl_mic</tabstop>
   <tabstop>sl_spk</tabstop>
  </tabstops>

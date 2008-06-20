@@ -651,19 +651,25 @@ public:
 	Ui::MainWin ui;
 	PsiMedia::Producer producer;
 	PsiMedia::Receiver receiver;
+	PsiMedia::Recorder recorder;
 	Configuration config;
 	bool transmitAudio, transmitVideo, transmitting;
 	bool receiveAudio, receiveVideo;
 	RtpBinding *sendAudioRtp, *sendVideoRtp;
 	RtpBinding *receiveAudioRtp, *receiveVideoRtp;
+	bool recording;
+	QFile *recordFile;
 
 	MainWin() :
 		producer(this),
 		receiver(this),
+		recorder(this),
 		sendAudioRtp(0),
 		sendVideoRtp(0),
 		receiveAudioRtp(0),
-		receiveVideoRtp(0)
+		receiveVideoRtp(0),
+		recording(false),
+		recordFile(0)
 	{
 		ui.setupUi(this);
 		setWindowTitle(tr("PsiMedia Test"));
@@ -673,6 +679,7 @@ public:
 		ui.pb_transmit->setEnabled(false);
 		ui.pb_stopSend->setEnabled(false);
 		ui.pb_stopReceive->setEnabled(false);
+		ui.pb_record->setEnabled(false);
 		ui.le_sendConfig->setReadOnly(true);
 		ui.lb_sendConfig->setEnabled(false);
 		ui.le_sendConfig->setEnabled(false);
@@ -691,6 +698,7 @@ public:
 		connect(ui.pb_stopSend, SIGNAL(clicked()), SLOT(stop_send()));
 		connect(ui.pb_startReceive, SIGNAL(clicked()), SLOT(start_receive()));
 		connect(ui.pb_stopReceive, SIGNAL(clicked()), SLOT(stop_receive()));
+		connect(ui.pb_record, SIGNAL(clicked()), SLOT(record_toggle()));
 		connect(ui.sl_mic, SIGNAL(valueChanged(int)), SLOT(change_volume_mic(int)));
 		connect(ui.sl_spk, SIGNAL(valueChanged(int)), SLOT(change_volume_spk(int)));
 		connect(&producer, SIGNAL(started()), SLOT(producer_started()));
@@ -725,6 +733,13 @@ public:
 		int goodWidth = (heightEstimate * 4) / 3;
 		ui.vw_remote->setMinimumSize(goodWidth, heightEstimate);
 		ui.vw_self->setMinimumSize(goodWidth, heightEstimate);
+	}
+
+	~MainWin()
+	{
+		cleanup_send_rtp();
+		cleanup_receive_rtp();
+		cleanup_record();
 	}
 
 	void setSendFieldsEnabled(bool b)
@@ -804,6 +819,18 @@ public:
 		receiveAudioRtp = 0;
 		delete receiveVideoRtp;
 		receiveVideoRtp = 0;
+	}
+
+	void cleanup_record()
+	{
+		if(recording)
+		{
+			receiver.setRecorder(0);
+			recorder.setDevice(0);
+			delete recordFile;
+			recordFile = 0;
+			recording = false;
+		}
 	}
 
 private slots:
@@ -1119,29 +1146,61 @@ private slots:
 
 	void receiver_started()
 	{
-		// nothing to do
+		ui.pb_record->setEnabled(true);
 	}
 
 	void receiver_stopped()
 	{
 		cleanup_receive_rtp();
+		cleanup_record();
 
 		setReceiveFieldsEnabled(true);
 		ui.pb_startReceive->setEnabled(true);
+		ui.pb_record->setEnabled(false);
 	}
 
 	void receiver_error()
 	{
 		cleanup_receive_rtp();
+		cleanup_record();
 
 		setReceiveFieldsEnabled(true);
 		ui.pb_startReceive->setEnabled(true);
 		ui.pb_stopReceive->setEnabled(false);
+		ui.pb_record->setEnabled(false);
 
 		QMessageBox::critical(this, tr("Error"), tr(
 			"An error occurred while trying to receive:\n%1."
 			).arg(receiverErrorToString(receiver.errorCode())
 			));
+	}
+
+	void record_toggle()
+	{
+		if(!recording)
+		{
+			QString fileName = QFileDialog::getSaveFileName(this,
+				tr("Save File"),
+				QDir::homePath(),
+				tr("Ogg Audio/Video (*.ogg)"));
+
+			recordFile = new QFile(fileName, this);
+			if(!recordFile->open(QIODevice::WriteOnly | QIODevice::Truncate))
+			{
+				delete recordFile;
+
+				QMessageBox::critical(this, tr("Error"), tr(
+					"Unable to create file for recording."
+					));
+				return;
+			}
+
+			recorder.setDevice(recordFile);
+			receiver.setRecorder(&recorder);
+			recording = true;
+		}
+		else
+			cleanup_record();
 	}
 };
 
