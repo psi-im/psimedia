@@ -31,6 +31,9 @@
 #include "ui_mainwin.h"
 #include "ui_config.h"
 
+#define BASE_PORT_MIN 1
+#define BASE_PORT_MAX 65534
+
 static QString urlishEncode(const QString &in)
 {
 	QString out;
@@ -545,6 +548,101 @@ private slots:
 	}
 };
 
+// bind a channel to a socket group.
+// takes ownership of socket group.
+class RtpBinding : public QObject
+{
+	Q_OBJECT
+
+public:
+	enum Mode
+	{
+		Send,
+		Receive
+	};
+
+	Mode mode;
+	PsiMedia::RtpChannel *channel;
+	RtpSocketGroup *socketGroup;
+	QHostAddress sendAddress;
+	int sendBasePort;
+
+	RtpBinding(Mode _mode, PsiMedia::RtpChannel *_channel, RtpSocketGroup *_socketGroup, QObject *parent = 0) :
+		QObject(parent),
+		mode(_mode),
+		channel(_channel),
+		socketGroup(_socketGroup),
+		sendBasePort(-1)
+	{
+		socketGroup->setParent(this);
+		connect(socketGroup, SIGNAL(readyRead(int)), SLOT(net_ready(int)));
+		connect(socketGroup, SIGNAL(datagramWritten(int)), SLOT(net_written(int)));
+		connect(channel, SIGNAL(readyRead()), SLOT(app_ready()));
+		connect(channel, SIGNAL(written(int)), SLOT(app_written(int)));
+	}
+
+private:
+	void net_ready(int offset)
+	{
+		// here we handle packets received from the network, that
+		//   we need to give to psimedia
+
+		while(socketGroup->socket[offset].hasPendingDatagrams())
+		{
+			int size = (int)socketGroup->socket[offset].pendingDatagramSize();
+			QByteArray rawValue(size, offset);
+			QHostAddress fromAddr;
+			quint16 fromPort;
+			if(socketGroup->socket[offset].readDatagram(rawValue.data(), size, &fromAddr, &fromPort) == -1)
+				continue;
+
+			// if we are sending RTP, we should not be receiving
+			//   anything on offset 0
+			if(mode == Send && offset == 0)
+				continue;
+
+			PsiMedia::RtpPacket packet(rawValue, offset);
+			channel->write(packet);
+		}
+	}
+
+	void net_written(int offset)
+	{
+		Q_UNUSED(offset);
+		// do nothing
+	}
+
+	void app_ready()
+	{
+		// here we handle packets that psimedia wants to send out,
+		//   that we need to give to the network
+
+		while(channel->packetsAvailable() > 0)
+		{
+			PsiMedia::RtpPacket packet = channel->read();
+			int offset = packet.portOffset();
+			if(offset < 0 || offset > 1)
+				continue;
+
+			// if we are receiving RTP, we should not be sending
+			//   anything on offset 0
+			if(mode == Receive && offset == 0)
+				continue;
+
+			if(sendAddress.isNull() || sendBasePort < BASE_PORT_MIN || sendBasePort > BASE_PORT_MAX)
+				continue;
+
+			socketGroup->socket[offset].writeDatagram(packet.rawValue(), sendAddress, sendBasePort + offset);
+		}
+	}
+
+	void app_written(int count)
+	{
+		Q_UNUSED(count);
+		// do nothing
+	}
+};
+
 class MainWin : public QMainWindow
 {
 	Q_OBJECT
@@ -556,10 +654,8 @@ public:
 	Configuration config;
 	bool transmitAudio, transmitVideo, transmitting;
 	bool receiveAudio, receiveVideo;
-	QHostAddress sendAddress;
-	int sendAudioBasePort, sendVideoBasePort;
-	RtpSocketGroup *sendAudioRtp, *sendVideoRtp;
-	RtpSocketGroup *receiveAudioRtp, *receiveVideoRtp;
+	RtpBinding *sendAudioRtp, *sendVideoRtp;
+	RtpBinding *receiveAudioRtp, *receiveVideoRtp;
 
 	MainWin() :
 		producer(this),
@@ -694,6 +790,22 @@ public:
 		return str;
 	}
 
+	void cleanup_send_rtp()
+	{
+		delete sendAudioRtp;
+		sendAudioRtp = 0;
+		delete sendVideoRtp;
+		sendVideoRtp = 0;
+	}
+
+	void cleanup_receive_rtp()
+	{
+		delete receiveAudioRtp;
+		receiveAudioRtp = 0;
+		delete receiveVideoRtp;
+		receiveVideoRtp = 0;
+	}
+
 private slots:
 	void doConfigure()
 	{
@@ -788,7 +900,7 @@ private slots:
 		{
 			bool ok;
 			audioPort = ui.le_remoteAudioPort->text().toInt(&ok);
-			if(!ok || audioPort < 1 || audioPort > 65535)
+			if(!ok || audioPort < BASE_PORT_MIN || audioPort > BASE_PORT_MAX)
 			{
 				QMessageBox::critical(this, tr("Error"), tr(
 					"Invalid send audio port."
@@ -802,7 +914,7 @@ private slots:
 		{
 			bool ok;
 			videoPort = ui.le_remoteVideoPort->text().toInt(&ok);
-			if(!ok || videoPort < 1 || videoPort > 65535)
+			if(!ok || videoPort < BASE_PORT_MIN || videoPort > BASE_PORT_MAX)
 			{
 				QMessageBox::critical(this, tr("Error"), tr(
 					"Invalid send video port."
@@ -811,15 +923,15 @@ private slots:
 			}
 		}
 
-		sendAddress = addr;
-		sendAudioBasePort = audioPort;
-		sendVideoBasePort = videoPort;
-		sendAudioRtp = new RtpSocketGroup(this);
-		sendVideoRtp = new RtpSocketGroup(this);
-		connect(sendAudioRtp, SIGNAL(datagramWritten(int)), SLOT(rtp_net_audio_out_written(int)));
-		connect(sendVideoRtp, SIGNAL(datagramWritten(int)), SLOT(rtp_net_video_out_written(int)));
-		connect(producer.audioRtpSource(), SIGNAL(readyRead()), SLOT(rtp_producer_audio_in_ready()));
-		connect(producer.videoRtpSource(), SIGNAL(readyRead()), SLOT(rtp_producer_video_in_ready()));
+		RtpSocketGroup *audioSocketGroup = new RtpSocketGroup;
+		sendAudioRtp = new RtpBinding(RtpBinding::Send, producer.audioRtpChannel(), audioSocketGroup, this);
+		sendAudioRtp->sendAddress = addr;
+		sendAudioRtp->sendBasePort = audioPort;
+
+		RtpSocketGroup *videoSocketGroup = new RtpSocketGroup;
+		sendVideoRtp = new RtpBinding(RtpBinding::Send, producer.videoRtpChannel(), videoSocketGroup, this);
+		sendVideoRtp->sendAddress = addr;
+		sendVideoRtp->sendBasePort = videoPort;
 
 		setSendFieldsEnabled(false);
 		ui.pb_transmit->setEnabled(false);
@@ -865,7 +977,7 @@ private slots:
 		{
 			bool ok;
 			audioPort = ui.le_localAudioPort->text().toInt(&ok);
-			if(!ok || audioPort < 1 || audioPort > 65535)
+			if(!ok || audioPort < BASE_PORT_MIN || audioPort > BASE_PORT_MAX)
 			{
 				QMessageBox::critical(this, tr("Error"), tr(
 					"Invalid receive audio port."
@@ -879,7 +991,7 @@ private slots:
 		{
 			bool ok;
 			videoPort = ui.le_localVideoPort->text().toInt(&ok);
-			if(!ok || videoPort < 1 || videoPort > 65535)
+			if(!ok || videoPort < BASE_PORT_MIN || videoPort > BASE_PORT_MAX)
 			{
 				QMessageBox::critical(this, tr("Error"), tr(
 					"Invalid receive video port."
@@ -904,24 +1016,26 @@ private slots:
 			receiver.setVideoParams(videoParamsList);
 		}
 
-		receiveAudioRtp = new RtpSocketGroup(this);
-		receiveVideoRtp = new RtpSocketGroup(this);
-		if(!receiveAudioRtp->bind(audioPort))
+		RtpSocketGroup *audioSocketGroup = new RtpSocketGroup(this);
+		RtpSocketGroup *videoSocketGroup = new RtpSocketGroup(this);
+		if(!audioSocketGroup->bind(audioPort))
 		{
-			delete sendAudioRtp;
-			sendAudioRtp = 0;
+			delete audioSocketGroup;
+			audioSocketGroup = 0;
+			delete videoSocketGroup;
+			videoSocketGroup = 0;
 
 			QMessageBox::critical(this, tr("Error"), tr(
 				"Unable to bind to receive audio ports."
 				));
 			return;
 		}
-		if(!receiveVideoRtp->bind(videoPort))
+		if(!videoSocketGroup->bind(videoPort))
 		{
-			delete sendVideoRtp;
-			sendVideoRtp = 0;
-			delete sendAudioRtp;
-			sendAudioRtp = 0;
+			delete audioSocketGroup;
+			audioSocketGroup = 0;
+			delete videoSocketGroup;
+			videoSocketGroup = 0;
 
 			QMessageBox::critical(this, tr("Error"), tr(
 				"Unable to bind to receive video ports."
@@ -929,10 +1043,8 @@ private slots:
 			return;
 		}
 
-		connect(receiveAudioRtp, SIGNAL(readyRead(int)), SLOT(rtp_net_audio_in_ready(int)));
-		connect(receiveVideoRtp, SIGNAL(readyRead(int)), SLOT(rtp_net_video_in_ready(int)));
-		connect(receiver.audioRtpSink(), SIGNAL(packetsWritten(int)), SLOT(rtp_receiver_audio_out_written(int)));
-		connect(receiver.videoRtpSink(), SIGNAL(packetsWritten(int)), SLOT(rtp_receiver_video_out_written(int)));
+		receiveAudioRtp = new RtpBinding(RtpBinding::Receive, receiver.audioRtpChannel(), audioSocketGroup, this);
+		receiveVideoRtp = new RtpBinding(RtpBinding::Receive, receiver.videoRtpChannel(), videoSocketGroup, this);
 
 		setReceiveFieldsEnabled(false);
 		ui.pb_startReceive->setEnabled(false);
@@ -982,10 +1094,7 @@ private slots:
 
 	void producer_stopped()
 	{
-		delete sendAudioRtp;
-		sendAudioRtp = 0;
-		delete sendVideoRtp;
-		sendVideoRtp = 0;
+		cleanup_send_rtp();
 
 		setSendFieldsEnabled(true);
 		setSendConfig(QString());
@@ -994,10 +1103,7 @@ private slots:
 
 	void producer_error()
 	{
-		delete sendAudioRtp;
-		sendAudioRtp = 0;
-		delete sendVideoRtp;
-		sendVideoRtp = 0;
+		cleanup_send_rtp();
 
 		setSendFieldsEnabled(true);
 		setSendConfig(QString());
@@ -1018,10 +1124,7 @@ private slots:
 
 	void receiver_stopped()
 	{
-		delete receiveAudioRtp;
-		receiveAudioRtp = 0;
-		delete receiveVideoRtp;
-		receiveVideoRtp = 0;
+		cleanup_receive_rtp();
 
 		setReceiveFieldsEnabled(true);
 		ui.pb_startReceive->setEnabled(true);
@@ -1029,10 +1132,7 @@ private slots:
 
 	void receiver_error()
 	{
-		delete receiveAudioRtp;
-		receiveAudioRtp = 0;
-		delete receiveVideoRtp;
-		receiveVideoRtp = 0;
+		cleanup_receive_rtp();
 
 		setReceiveFieldsEnabled(true);
 		ui.pb_startReceive->setEnabled(true);
@@ -1042,88 +1142,6 @@ private slots:
 			"An error occurred while trying to receive:\n%1."
 			).arg(receiverErrorToString(receiver.errorCode())
 			));
-	}
-
-	void rtp_net_audio_out_written(int offset)
-	{
-		Q_UNUSED(offset);
-		// do nothing
-	}
-
-	void rtp_net_video_out_written(int offset)
-	{
-		Q_UNUSED(offset);
-		// do nothing
-	}
-
-	void rtp_producer_audio_in_ready()
-	{
-		while(producer.audioRtpSource()->packetsAvailable() > 0)
-		{
-			PsiMedia::RtpPacket packet = producer.audioRtpSource()->read();
-			int offset = packet.portOffset();
-			if(offset < 0 || offset > 1)
-				continue;
-
-			sendAudioRtp->socket[offset].writeDatagram(packet.rawValue(), sendAddress, sendAudioBasePort + offset);
-		}
-	}
-
-	void rtp_producer_video_in_ready()
-	{
-		while(producer.videoRtpSource()->packetsAvailable() > 0)
-		{
-			PsiMedia::RtpPacket packet = producer.videoRtpSource()->read();
-			int offset = packet.portOffset();
-			if(offset < 0 || offset > 1)
-				continue;
-
-			sendVideoRtp->socket[offset].writeDatagram(packet.rawValue(), sendAddress, sendVideoBasePort + offset);
-		}
-	}
-
-	void rtp_net_audio_in_ready(int offset)
-	{
-		while(receiveAudioRtp->socket[offset].hasPendingDatagrams())
-		{
-			int size = (int)receiveAudioRtp->socket[offset].pendingDatagramSize();
-			QByteArray rawValue(size, offset);
-			QHostAddress fromAddr;
-			quint16 fromPort;
-			if(receiveAudioRtp->socket[offset].readDatagram(rawValue.data(), size, &fromAddr, &fromPort) == -1)
-				continue;
-
-			PsiMedia::RtpPacket packet(rawValue, offset);
-			receiver.audioRtpSink()->write(packet);
-		}
-	}
-
-	void rtp_net_video_in_ready(int offset)
-	{
-		while(receiveVideoRtp->socket[offset].hasPendingDatagrams())
-		{
-			int size = (int)receiveVideoRtp->socket[offset].pendingDatagramSize();
-			QByteArray rawValue(size, offset);
-			QHostAddress fromAddr;
-			quint16 fromPort;
-			if(receiveVideoRtp->socket[offset].readDatagram(rawValue.data(), size, &fromAddr, &fromPort) == -1)
-				continue;
-
-			PsiMedia::RtpPacket packet(rawValue, offset);
-			receiver.videoRtpSink()->write(packet);
-		}
-	}
-
-	void rtp_receive_audio_out_written(int count)
-	{
-		Q_UNUSED(count);
-		// do nothing
-	}
-
-	void rtp_receive_video_out_written(int count)
-	{
-		Q_UNUSED(count);
-		// do nothing
 	}
 };
 

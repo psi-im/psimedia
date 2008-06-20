@@ -450,44 +450,33 @@ int RtpPacket::portOffset() const
 }
 
 //----------------------------------------------------------------------------
-// RtpSource
+// RtpChannel
 //----------------------------------------------------------------------------
-RtpSource::RtpSource()
+RtpChannel::RtpChannel()
 {
 }
 
-RtpSource::~RtpSource()
+RtpChannel::~RtpChannel()
 {
 }
 
-int RtpSource::packetsAvailable() const
+int RtpChannel::packetsAvailable() const
 {
 }
 
-RtpPacket RtpSource::read()
+RtpPacket RtpChannel::read()
 {
 }
 
-void RtpSource::connectNotify(const char *signal)
+void RtpChannel::write(const RtpPacket &rtp)
 {
 }
 
-void RtpSource::disconnectNotify(const char *signal)
+void RtpChannel::connectNotify(const char *signal)
 {
 }
 
-//----------------------------------------------------------------------------
-// RtpSink
-//----------------------------------------------------------------------------
-RtpSink::RtpSink()
-{
-}
-
-RtpSink::~RtpSink()
-{
-}
-
-void RtpSink::write(const RtpPacket &rtp)
+void RtpChannel::disconnectNotify(const char *signal)
 {
 }
 
@@ -672,11 +661,11 @@ Receiver::Error Receiver::errorCode() const
 {
 }
 
-RtpSink *Receiver::audioRtpSink()
+RtpChannel *Receiver::audioRtpChannel()
 {
 }
 
-RtpSink *Receiver::videoRtpSink()
+RtpChannel *Receiver::videoRtpChannel()
 {
 }
 
@@ -783,11 +772,11 @@ Producer::Error Producer::errorCode() const
 {
 }
 
-RtpSource *Producer::audioRtpSource()
+RtpChannel *Producer::audioRtpChannel()
 {
 }
 
-RtpSource *Producer::videoRtpSource()
+RtpChannel *Producer::videoRtpChannel()
 {
 }
 

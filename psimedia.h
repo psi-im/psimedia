@@ -168,45 +168,27 @@ private:
 
 // may drop packets if not read fast enough.
 // may queue no packets at all, if nobody is listening to readyRead.
-class RtpSource : public QObject
+class RtpChannel : public QObject
 {
 	Q_OBJECT
 
 public:
 	int packetsAvailable() const;
 	RtpPacket read();
+	void write(const RtpPacket &rtp);
 
 signals:
 	void readyRead();
+	void packetsWritten(int count);
 
 protected:
 	virtual void connectNotify(const char *signal);
 	virtual void disconnectNotify(const char *signal);
 
 private:
-	RtpSource();
-	~RtpSource();
-	Q_DISABLE_COPY(RtpSource);
-
-	class Private;
-	friend class Private;
-	Private *d;
-};
-
-class RtpSink : public QObject
-{
-	Q_OBJECT
-
-public:
-	void write(const RtpPacket &rtp);
-
-signals:
-	void packetsWritten(int count);
-
-private:
-	RtpSink();
-	~RtpSink();
-	Q_DISABLE_COPY(RtpSink);
+	RtpChannel();
+	~RtpChannel();
+	Q_DISABLE_COPY(RtpChannel);
 
 	class Private;
 	friend class Private;
@@ -319,8 +301,9 @@ public:
 
 	Error errorCode() const;
 
-	RtpSink *audioRtpSink();
-	RtpSink *videoRtpSink();
+	// offset 0 is write-only, offset 1 is read-write
+	RtpChannel *audioRtpChannel();
+	RtpChannel *videoRtpChannel();
 
 signals:
 	void started();
@@ -378,8 +361,9 @@ public:
 
 	Error errorCode() const;
 
-	RtpSource *audioRtpSource();
-	RtpSource *videoRtpSource();
+	// offset 0 is read-only, offset 1 is read-write
+	RtpChannel *audioRtpChannel();
+	RtpChannel *videoRtpChannel();
 
 signals:
 	void started();
