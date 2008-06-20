@@ -231,6 +231,13 @@ public:
 	int sampleRate;
 	int sampleSize;
 	int channels;
+
+	Private() :
+		sampleRate(0),
+		sampleSize(0),
+		channels(0)
+	{
+	}
 };
 
 AudioParams::AudioParams() :
@@ -294,6 +301,19 @@ void AudioParams::setChannels(int n)
 	d->channels = n;
 }
 
+bool AudioParams::operator==(const AudioParams &other) const
+{
+	if(d->codec == other.d->codec &&
+		d->sampleRate == other.d->sampleRate &&
+		d->sampleSize == other.d->sampleSize &&
+		d->channels == other.d->channels)
+	{
+		return true;
+	}
+	else
+		return false;
+}
+
 //----------------------------------------------------------------------------
 // VideoParams
 //----------------------------------------------------------------------------
@@ -303,6 +323,11 @@ public:
 	QString codec;
 	QSize size;
 	int fps;
+
+	Private() :
+		fps(0)
+	{
+	}
 };
 
 VideoParams::VideoParams() :
@@ -354,6 +379,18 @@ void VideoParams::setSize(const QSize &s)
 void VideoParams::setFps(int n)
 {
 	d->fps = n;
+}
+
+bool VideoParams::operator==(const VideoParams &other) const
+{
+	if(d->codec == other.d->codec &&
+		d->size == other.d->size &&
+		d->fps == other.d->fps)
+	{
+		return true;
+	}
+	else
+		return false;
 }
 
 //----------------------------------------------------------------------------
@@ -492,6 +529,10 @@ PayloadInfo & PayloadInfo::operator=(const PayloadInfo &other)
 {
 }
 
+bool PayloadInfo::isNull() const
+{
+}
+
 int PayloadInfo::id() const
 {
 }
@@ -548,6 +589,10 @@ void PayloadInfo::setParameters(const QList<PayloadInfo::Parameter> &params)
 {
 }
 
+bool PayloadInfo::operator==(const PayloadInfo &other) const
+{
+}
+
 //----------------------------------------------------------------------------
 // Receiver
 //----------------------------------------------------------------------------
@@ -559,15 +604,7 @@ Receiver::~Receiver()
 {
 }
 
-void Receiver::setAudioOutputDevice(const Device &dev)
-{
-}
-
-void Receiver::setAudioPayloadInfo(const PayloadInfo &info)
-{
-}
-
-void Receiver::setVideoPayloadInfo(const PayloadInfo &info)
+void Receiver::setAudioOutputDevice(const QString &deviceId)
 {
 }
 
@@ -581,27 +618,45 @@ void Receiver::setRecorder(Recorder *recorder)
 {
 }
 
+void Receiver::setAudioPayloadInfo(const QList<PayloadInfo> &info)
+{
+}
+
+void Receiver::setVideoPayloadInfo(const QList<PayloadInfo> &info)
+{
+}
+
+void Receiver::setAudioParams(const QList<AudioParams> &params)
+{
+}
+
+void Receiver::setVideoParams(const QList<VideoParams> &params)
+{
+}
+
 void Receiver::start()
 {
+	QTimer::singleShot(1000, this, SIGNAL(started()));
 }
 
 void Receiver::stop()
 {
+	QTimer::singleShot(1000, this, SIGNAL(stopped()));
 }
 
-bool Receiver::hasAudio() const
+QList<PayloadInfo> Receiver::audioPayloadInfo() const
 {
 }
 
-bool Receiver::hasVideo() const
+QList<PayloadInfo> Receiver::videoPayloadInfo() const
 {
 }
 
-AudioParams Receiver::audioParams() const
+QList<AudioParams> Receiver::audioParams() const
 {
 }
 
-VideoParams Receiver::videoParams() const
+QList<VideoParams> Receiver::videoParams() const
 {
 }
 
@@ -636,11 +691,11 @@ Producer::~Producer()
 {
 }
 
-void Producer::setAudioInputDevice(const Device &dev)
+void Producer::setAudioInputDevice(const QString &deviceId)
 {
 }
 
-void Producer::setVideoInputDevice(const Device &dev)
+void Producer::setVideoInputDevice(const QString &deviceId)
 {
 }
 
@@ -658,31 +713,61 @@ void Producer::setVideoWidget(VideoWidget *widget)
 }
 #endif
 
-void Producer::setAudioParams(const AudioParams &params)
+void Producer::setAudioPayloadInfo(const QList<PayloadInfo> &info)
 {
 }
 
-void Producer::setVideoParams(const VideoParams &params)
+void Producer::setVideoPayloadInfo(const QList<PayloadInfo> &info)
+{
+}
+
+void Producer::setAudioParams(const QList<AudioParams> &params)
+{
+}
+
+void Producer::setVideoParams(const QList<VideoParams> &params)
 {
 }
 
 void Producer::start()
 {
+	QTimer::singleShot(1000, this, SIGNAL(started()));
 }
 
-void Producer::beginTransmitting()
+void Producer::transmitAudio(int paramsIndex)
+{
+}
+
+void Producer::transmitVideo(int paramsIndex)
+{
+}
+
+void Producer::pauseAudio()
+{
+}
+
+void Producer::pauseVideo()
 {
 }
 
 void Producer::stop()
 {
+	QTimer::singleShot(1000, this, SIGNAL(stopped()));
 }
 
-PayloadInfo Producer::audioPayloadInfo() const
+QList<PayloadInfo> Producer::audioPayloadInfo() const
 {
 }
 
-PayloadInfo Producer::videoPayloadInfo() const
+QList<PayloadInfo> Producer::videoPayloadInfo() const
+{
+}
+
+QList<AudioParams> Producer::audioParams() const
+{
+}
+
+QList<VideoParams> Producer::videoParams() const
 {
 }
 

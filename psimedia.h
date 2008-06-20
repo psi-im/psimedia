@@ -101,6 +101,13 @@ public:
 	void setSampleSize(int n);
 	void setChannels(int n);
 
+	bool operator==(const AudioParams &other) const;
+
+	inline bool operator!=(const AudioParams &other) const
+	{
+		return !(*this == other);
+	}
+
 private:
 	class Private;
 	Private *d;
@@ -121,6 +128,13 @@ public:
 	void setCodec(const QString &s);
 	void setSize(const QSize &s);
 	void setFps(int n);
+
+	bool operator==(const VideoParams &other) const;
+
+	inline bool operator!=(const VideoParams &other) const
+	{
+		return !(*this == other);
+	}
 
 private:
 	class Private;
@@ -236,6 +250,8 @@ public:
 	~PayloadInfo();
 	PayloadInfo & operator=(const PayloadInfo &other);
 
+	bool isNull() const;
+
 	int id() const;
 	QString name() const;
 	int clockrate() const;
@@ -251,7 +267,14 @@ public:
 	void setPtime(int i);
 	void setMaxptime(int i);
 	void setParameters(const QList<Parameter> &params);
- 
+
+	bool operator==(const PayloadInfo &other) const;
+
+	inline bool operator!=(const PayloadInfo &other) const
+	{
+		return !(*this == other);
+	}
+
 private:
 	class Private;
 	Private *d;
@@ -272,21 +295,24 @@ public:
 	Receiver(QObject *parent = 0);
 	~Receiver();
 
-	void setAudioOutputDevice(const Device &dev);
-	void setAudioPayloadInfo(const PayloadInfo &info);
-	void setVideoPayloadInfo(const PayloadInfo &info);
+	void setAudioOutputDevice(const QString &deviceId);
 #ifdef QT_GUI_LIB
 	void setVideoWidget(VideoWidget *widget);
 #endif
 	void setRecorder(Recorder *recorder);
 
+	void setAudioPayloadInfo(const QList<PayloadInfo> &info);
+	void setVideoPayloadInfo(const QList<PayloadInfo> &info);
+	void setAudioParams(const QList<AudioParams> &params);
+	void setVideoParams(const QList<VideoParams> &params);
+
 	void start();
 	void stop();
 
-	bool hasAudio() const;
-	bool hasVideo() const;
-	AudioParams audioParams() const;
-	VideoParams videoParams() const;
+	QList<PayloadInfo> audioPayloadInfo() const;
+	QList<PayloadInfo> videoPayloadInfo() const;
+	QList<AudioParams> audioParams() const;
+	QList<VideoParams> videoParams() const;
 
 	int volume() const; // 0 (mute) to 100
 	void setVolume(int level);
@@ -322,23 +348,30 @@ public:
 	Producer(QObject *parent = 0);
 	~Producer();
 
-	void setAudioInputDevice(const Device &dev);
-	void setVideoInputDevice(const Device &dev);
+	void setAudioInputDevice(const QString &deviceId);
+	void setVideoInputDevice(const QString &deviceId);
 	void setFileInput(const QString &fileName);
 	void setFileDataInput(const QByteArray &fileData);
 #ifdef QT_GUI_LIB
 	void setVideoWidget(VideoWidget *widget);
 #endif
 
-	void setAudioParams(const AudioParams &params);
-	void setVideoParams(const VideoParams &params);
+	void setAudioPayloadInfo(const QList<PayloadInfo> &info);
+	void setVideoPayloadInfo(const QList<PayloadInfo> &info);
+	void setAudioParams(const QList<AudioParams> &params);
+	void setVideoParams(const QList<VideoParams> &params);
 
 	void start();
-	void beginTransmitting();
+	void transmitAudio(int paramsIndex = -1);
+	void transmitVideo(int paramsIndex = -1);
+	void pauseAudio();
+	void pauseVideo();
 	void stop();
 
-	PayloadInfo audioPayloadInfo() const;
-	PayloadInfo videoPayloadInfo() const;
+	QList<PayloadInfo> audioPayloadInfo() const;
+	QList<PayloadInfo> videoPayloadInfo() const;
+	QList<AudioParams> audioParams() const;
+	QList<VideoParams> videoParams() const;
 
 	int volume() const; // 0 (mute) to 100
 	void setVolume(int level);
@@ -351,6 +384,7 @@ public:
 signals:
 	void started();
 	void stopped();
+	void finished(); // for file playback only
 	void error();
 
 private:
