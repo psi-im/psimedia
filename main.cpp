@@ -578,10 +578,10 @@ public:
 		connect(socketGroup, SIGNAL(readyRead(int)), SLOT(net_ready(int)));
 		connect(socketGroup, SIGNAL(datagramWritten(int)), SLOT(net_written(int)));
 		connect(channel, SIGNAL(readyRead()), SLOT(app_ready()));
-		connect(channel, SIGNAL(written(int)), SLOT(app_written(int)));
+		connect(channel, SIGNAL(packetsWritten(int)), SLOT(app_written(int)));
 	}
 
-private:
+private slots:
 	void net_ready(int offset)
 	{
 		// here we handle packets received from the network, that
