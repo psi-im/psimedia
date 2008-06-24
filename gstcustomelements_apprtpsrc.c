@@ -20,6 +20,7 @@
 
 #include "gstcustomelements.h"
 
+#include "gstboilerplatefixed.h"
 #include <string.h>
 
 GST_BOILERPLATE(GstAppRtpSrc, gst_apprtpsrc, GstPushSrc, GST_TYPE_PUSH_SRC);

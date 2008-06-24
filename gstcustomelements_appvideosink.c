@@ -20,6 +20,8 @@
 
 #include "gstcustomelements.h"
 
+#include "gstboilerplatefixed.h"
+
 GST_BOILERPLATE(GstAppVideoSink, gst_appvideosink, GstVideoSink, GST_TYPE_VIDEO_SINK);
 
 static GstFlowReturn gst_appvideosink_render(GstBaseSink *sink, GstBuffer *buffer);

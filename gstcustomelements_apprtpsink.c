@@ -20,6 +20,8 @@
 
 #include "gstcustomelements.h"
 
+#include "gstboilerplatefixed.h"
+
 GST_BOILERPLATE(GstAppRtpSink, gst_apprtpsink, GstBaseSink, GST_TYPE_BASE_SINK);
 
 static GstFlowReturn gst_apprtpsink_render(GstBaseSink *sink, GstBuffer *buffer);
