@@ -39,7 +39,7 @@ static QString urlishEncode(const QString &in)
 	QString out;
 	for(int n = 0; n < in.length(); ++n)
 	{
-		if(in[n] == '%' || in[n] == ',' || in[n] == '=' || in[n] == '\n')
+		if(in[n] == '%' || in[n] == ';' || in[n] == ':' || in[n] == '\n')
 		{
 			unsigned char c = (unsigned char)in[n].toLatin1();
 			out += QString().sprintf("%%%02x", c);
@@ -158,24 +158,23 @@ static QString payloadInfoToCodecString(const PsiMedia::PayloadInfo *audio, cons
 {
 	QStringList list;
 	if(audio)
-		list += QString("A=") + urlishEncode(payloadInfoToString(*audio));
+		list += QString("A:") + payloadInfoToString(*audio);
 	if(video)
-		list += QString("V=") + urlishEncode(payloadInfoToString(*video));
-	return list.join(",");
+		list += QString("V:") + payloadInfoToString(*video);
+	return list.join(";");
 }
 
 static bool codecStringToPayloadInfo(const QString &in, PsiMedia::PayloadInfo *audio, PsiMedia::PayloadInfo *video)
 {
-	QStringList list = in.split(',');
+	QStringList list = in.split(';');
 	foreach(const QString &s, list)
 	{
-		int x = s.indexOf('=');
+		int x = s.indexOf(':');
 		if(x == -1)
 			return false;
 
 		QString var = s.mid(0, x);
 		QString val = s.mid(x + 1);
-		val = urlishDecode(val);
 		if(val.isEmpty())
 			return false;
 
