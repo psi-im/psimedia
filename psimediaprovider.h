@@ -38,24 +38,23 @@ class QIODevice;
 
 namespace PsiMedia {
 
+class Provider;
 class ProducerContext;
 class ReceiverContext;
 
-class Provider
+class Plugin
 {
 public:
-	virtual ~Provider() {}
+	virtual ~Plugin() {}
+	virtual Provider *createProvider() = 0;
+};
 
-	virtual bool init(const QString &resourcePath) = 0;
-	virtual QString creditName() = 0;
-	virtual QString creditText() = 0;
+class QObjectInterface
+{
+public:
+	virtual ~QObjectInterface() {}
 
-	virtual void initEngine() = 0;
-	virtual ProducerContext *createProducer() = 0;
-	virtual ReceiverContext *createReceiver() = 0;
-
-HINT_SIGNALS:
-	HINT_METHOD(initEngineFinished())
+	virtual QObject *qobject() = 0;
 };
 
 class PDevice
@@ -80,6 +79,13 @@ public:
 	int sampleRate;
 	int sampleSize;
 	int channels;
+
+	inline PAudioParams() :
+		sampleRate(0),
+		sampleSize(0),
+		channels(0)
+	{
+	}
 };
 
 class PVideoParams
@@ -88,6 +94,11 @@ public:
 	QString codec;
 	QSize size;
 	int fps;
+
+	inline PVideoParams() :
+		fps(0)
+	{
+	}
 };
 
 class PPayloadInfo
@@ -107,6 +118,15 @@ public:
 	int ptime;
 	int maxptime;
 	QList<Parameter> parameters;
+
+	inline PPayloadInfo() :
+		id(-1),
+		clockrate(-1),
+		channels(-1),
+		ptime(-1),
+		maxptime(-1)
+	{
+	}
 };
 
 class PRtpPacket
@@ -114,9 +134,32 @@ class PRtpPacket
 public:
 	QByteArray rawValue;
 	int portOffset;
+
+	inline PRtpPacket() :
+		portOffset(0)
+	{
+	}
 };
 
-class RtpChannelContext
+class Provider : public QObjectInterface
+{
+public:
+	virtual ~Provider() {}
+
+	virtual bool init(const QString &resourcePath) = 0;
+	virtual QString creditName() = 0;
+	virtual QString creditText() = 0;
+
+	virtual QList<PAudioParams> supportedAudioModes() = 0;
+	virtual QList<PVideoParams> supportedVideoModes() = 0;
+	virtual QList<PDevice> audioOutputDevices() = 0;
+	virtual QList<PDevice> audioInputDevices() = 0;
+	virtual QList<PDevice> videoInputDevices() = 0;
+	virtual ProducerContext *createProducer() = 0;
+	virtual ReceiverContext *createReceiver() = 0;
+};
+
+class RtpChannelContext : public QObjectInterface
 {
 public:
 	virtual ~RtpChannelContext() {}
@@ -143,7 +186,7 @@ public:
 };
 #endif
 
-class ProducerContext
+class ProducerContext : public QObjectInterface
 {
 public:
 	enum Error
@@ -167,8 +210,11 @@ public:
 	virtual void setVideoParams(const QList<PVideoParams> &params) = 0;
 
 	virtual void start() = 0;
+
+	// if -1 is passed for paramsIndex, pick the best one to transmit
 	virtual void transmitAudio(int paramsIndex) = 0;
 	virtual void transmitVideo(int paramsIndex) = 0;
+
 	virtual void pauseAudio() = 0;
 	virtual void pauseVideo() = 0;
 	virtual void stop() = 0;
@@ -193,7 +239,7 @@ HINT_SIGNALS:
 	HINT_METHOD(error())
 };
 
-class ReceiverContext
+class ReceiverContext : public QObjectInterface
 {
 public:
 	enum Error
@@ -240,6 +286,7 @@ HINT_SIGNALS:
 
 }
 
+Q_DECLARE_INTERFACE(PsiMedia::Plugin, "org.psi-im.psimedia.Plugin/1.0")
 Q_DECLARE_INTERFACE(PsiMedia::Provider, "org.psi-im.psimedia.Provider/1.0")
 Q_DECLARE_INTERFACE(PsiMedia::RtpChannelContext, "org.psi-im.psimedia.RtpChannelContext/1.0")
 Q_DECLARE_INTERFACE(PsiMedia::ProducerContext, "org.psi-im.psimedia.ProducerContext/1.0")

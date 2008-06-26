@@ -7,6 +7,9 @@ SOURCES += psimedia.cpp main.cpp
 
 FORMS += mainwin.ui config.ui
 
+DEFINES += GSTPROVIDER_STATIC
+
+# gstreamer stuff
 DEFINES += QT_STATICPLUGIN
 HEADERS += gstcustomelements.h
 SOURCES += \
@@ -16,7 +19,6 @@ SOURCES += \
 	gstcustomelements_apprtpsink.c \
 	gstprovider.cpp
 
-# gstreamer
 INCLUDEPATH += \
 	/usr/include/glib-2.0 \
 	/usr/lib/glib-2.0/include \

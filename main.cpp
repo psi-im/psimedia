@@ -27,6 +27,7 @@
 #include <QDir>
 #include <QHostAddress>
 #include <QUdpSocket>
+#include <QtPlugin>
 #include "psimedia.h"
 #include "ui_mainwin.h"
 #include "ui_config.h"
@@ -1222,9 +1223,31 @@ private slots:
 	}
 };
 
+#ifdef GSTPROVIDER_STATIC
+Q_IMPORT_PLUGIN(gstprovider)
+#endif
+
 int main(int argc, char **argv)
 {
 	QApplication qapp(argc, argv);
+
+#ifndef GSTPROVIDER_STATIC
+# ifdef GSTBUNDLE_PATH
+	PsiMedia::loadPlugin("gstprovider", GSTBUNDLE_PATH);
+# else
+	PsiMedia::loadPlugin("gstprovider", QString());
+# endif
+#endif
+
+	if(!PsiMedia::isSupported())
+	{
+		QMessageBox::critical(0, MainWin::tr("PsiMedia Test"),
+			MainWin::tr(
+			"Error: Could not load PsiMedia subsystem."
+			));
+		return 1;
+	}
+
 	MainWin mainWin;
 
 	// give mainWin a chance to fix its layout before showing

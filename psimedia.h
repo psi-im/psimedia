@@ -44,6 +44,7 @@ enum PluginResult
 	ErrorInit
 };
 
+bool isSupported();
 PluginResult loadPlugin(const QString &fname, const QString &resourcePath);
 void unloadPlugin();
 QString creditName();
@@ -91,7 +92,8 @@ private:
 	Q_DISABLE_COPY(VideoWidget);
 
 	friend class VideoWidgetPrivate;
-	friend class ProducerPrivate;
+	friend class Receiver;
+	friend class Producer;
 	VideoWidgetPrivate *d;
 };
 #endif
@@ -208,6 +210,7 @@ private:
 	friend class ProducerPrivate;
 	friend class Receiver;
 	friend class ReceiverPrivate;
+	friend class RtpChannelPrivate;
 	RtpChannelPrivate *d;
 };
 
@@ -227,6 +230,7 @@ private:
 	Q_DISABLE_COPY(Recorder);
 
 	class Private;
+	friend class ReceiverPrivate;
 	Private *d;
 };
 
