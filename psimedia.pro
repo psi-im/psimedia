@@ -2,17 +2,19 @@ CONFIG += console
 CONFIG -= app_bundle
 QT += network
 
-HEADERS += psimedia.h
+HEADERS += psimedia.h psimediaprovider.h
 SOURCES += psimedia.cpp main.cpp
 
 FORMS += mainwin.ui config.ui
 
+DEFINES += QT_STATICPLUGIN
 HEADERS += gstcustomelements.h
 SOURCES += \
 	gstcustomelements.c \
 	gstcustomelements_appvideosink.c \
 	gstcustomelements_apprtpsrc.c \
-	gstcustomelements_apprtpsink.c
+	gstcustomelements_apprtpsink.c \
+	gstprovider.cpp
 
 # gstreamer
 INCLUDEPATH += \

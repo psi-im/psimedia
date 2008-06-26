@@ -648,6 +648,8 @@ class MainWin : public QMainWindow
 
 public:
 	Ui::MainWin ui;
+	QAction *action_AboutProvider;
+	QString creditName;
 	PsiMedia::Producer producer;
 	PsiMedia::Receiver receiver;
 	PsiMedia::Recorder recorder;
@@ -660,6 +662,7 @@ public:
 	QFile *recordFile;
 
 	MainWin() :
+		action_AboutProvider(0),
 		producer(this),
 		receiver(this),
 		recorder(this),
@@ -672,6 +675,15 @@ public:
 	{
 		ui.setupUi(this);
 		setWindowTitle(tr("PsiMedia Test"));
+
+		creditName = PsiMedia::creditName();
+		if(!creditName.isEmpty())
+		{
+			action_AboutProvider = new QAction(this);
+			action_AboutProvider->setText(tr("About %1").arg(creditName));
+			ui.menu_Help->addAction(action_AboutProvider);
+			connect(action_AboutProvider, SIGNAL(triggered()), SLOT(doAboutProvider()));
+		}
 
 		config = getDefaultConfiguration();
 
@@ -848,6 +860,13 @@ private slots:
 			"\n"
 			"Copyright (C) 2008  Barracuda Networks, Inc."
 			));
+	}
+
+	void doAboutProvider()
+	{
+		QMessageBox::about(this, tr("About %1").arg(creditName),
+			PsiMedia::creditText()
+			);
 	}
 
 	void start_send()

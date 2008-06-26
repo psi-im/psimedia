@@ -29,9 +29,16 @@
 
 namespace PsiMedia {
 
+class Producer;
+class ProducerPrivate;
+class Receiver;
+class ReceiverPrivate;
+class VideoWidgetPrivate;
+class RtpChannelPrivate;
+
 enum PluginResult
 {
-	Success,
+	PluginSuccess,
 	ErrorLoad,
 	ErrorVersion,
 	ErrorInit
@@ -39,6 +46,8 @@ enum PluginResult
 
 PluginResult loadPlugin(const QString &fname, const QString &resourcePath);
 void unloadPlugin();
+QString creditName();
+QString creditText();
 
 class Device
 {
@@ -75,11 +84,15 @@ public:
 	VideoWidget(QWidget *parent = 0);
 	~VideoWidget();
 
+protected:
+	virtual void paintEvent(QPaintEvent *event);
+
 private:
 	Q_DISABLE_COPY(VideoWidget);
 
-	class Private;
-	Private *d;
+	friend class VideoWidgetPrivate;
+	friend class ProducerPrivate;
+	VideoWidgetPrivate *d;
 };
 #endif
 
@@ -190,9 +203,12 @@ private:
 	~RtpChannel();
 	Q_DISABLE_COPY(RtpChannel);
 
-	class Private;
 	friend class Private;
-	Private *d;
+	friend class Producer;
+	friend class ProducerPrivate;
+	friend class Receiver;
+	friend class ReceiverPrivate;
+	RtpChannelPrivate *d;
 };
 
 // records in ogg theora+vorbis format
@@ -225,6 +241,13 @@ public:
 	public:
 		QString name;
 		QString value;
+
+		bool operator==(const Parameter &other) const;
+
+		inline bool operator!=(const Parameter &other) const
+		{
+			return !(*this == other);
+		}
 	};
 
 	PayloadInfo();
@@ -313,9 +336,8 @@ signals:
 private:
 	Q_DISABLE_COPY(Receiver);
 
-	class Private;
-	friend class Private;
-	Private *d;
+	friend class ReceiverPrivate;
+	ReceiverPrivate *d;
 };
 
 class Producer : public QObject
@@ -374,9 +396,8 @@ signals:
 private:
 	Q_DISABLE_COPY(Producer);
 
-	class Private;
-	friend class Private;
-	Private *d;
+	friend class ProducerPrivate;
+	ProducerPrivate *d;
 };
 
 }

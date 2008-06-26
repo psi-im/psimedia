@@ -21,18 +21,92 @@
 #include "psimedia.h"
 
 #include <QtCore>
+#include "psimediaprovider.h"
+
+Q_IMPORT_PLUGIN(gstprovider)
 
 namespace PsiMedia {
 
 //----------------------------------------------------------------------------
 // Global
 //----------------------------------------------------------------------------
+static Provider *g_provider = 0;
+static QPluginLoader *g_pluginLoader = 0;
+
+static Provider *provider()
+{
+	if(!g_provider)
+	{
+		// static plugin around?
+		Provider *instance;
+		QObjectList list = QPluginLoader::staticInstances();
+		foreach(QObject *obj, list)
+		{
+			Provider *p = qobject_cast<Provider *>(obj);
+			if(p)
+			{
+				instance = p;
+				break;
+			}
+		}
+
+		if(instance && instance->init(QString()))
+			g_provider = instance;
+	}
+
+	return g_provider;
+}
+
 PluginResult loadPlugin(const QString &fname, const QString &resourcePath)
 {
+	if(g_provider)
+		return PluginSuccess;
+
+	QPluginLoader *loader = new QPluginLoader(fname);
+	if(!loader->load())
+	{
+		delete loader;
+		return ErrorLoad;
+	}
+
+	Provider *instance = qobject_cast<Provider *>(loader->instance());
+	if(!instance)
+	{
+		delete loader;
+		return ErrorVersion;
+	}
+
+	if(!instance->init(resourcePath))
+	{
+		loader->unload();
+		delete loader;
+		return ErrorInit;
+	}
+
+	g_provider = instance;
+	g_pluginLoader = loader;
+	return PluginSuccess;
 }
 
 void unloadPlugin()
 {
+	if(!g_pluginLoader)
+		return;
+
+	g_pluginLoader->unload();
+	delete g_pluginLoader;
+	g_pluginLoader = 0;
+	g_provider = 0;
+}
+
+QString creditName()
+{
+	return provider()->creditName();
+}
+
+QString creditText()
+{
+	return provider()->creditText();
 }
 
 QList<AudioParams> supportedAudioModes()
@@ -218,6 +292,11 @@ VideoWidget::VideoWidget(QWidget *parent)
 
 VideoWidget::~VideoWidget()
 {
+}
+
+void VideoWidget::paintEvent(QPaintEvent *event)
+{
+	Q_UNUSED(event);
 }
 #endif
 
