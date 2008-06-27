@@ -113,6 +113,8 @@ static PPayloadInfo exportPayloadInfo(const PayloadInfo &p)
 static Provider *g_provider = 0;
 static QPluginLoader *g_pluginLoader = 0;
 
+static void cleanupProvider();
+
 static Provider *provider()
 {
 	if(!g_provider)
@@ -143,6 +145,7 @@ static Provider *provider()
 			}
 
 			g_provider = provider;
+			qAddPostRoutine(cleanupProvider);
 		}
 	}
 
@@ -191,11 +194,15 @@ PluginResult loadPlugin(const QString &fname, const QString &resourcePath)
 
 	g_provider = provider;
 	g_pluginLoader = loader;
+	qAddPostRoutine(cleanupProvider);
 	return PluginSuccess;
 }
 
-void unloadPlugin()
+void cleanupProvider()
 {
+	if(!g_provider)
+		return;
+
 	delete g_provider;
 	g_provider = 0;
 
@@ -205,6 +212,11 @@ void unloadPlugin()
 		delete g_pluginLoader;
 		g_pluginLoader = 0;
 	}
+}
+
+void unloadPlugin()
+{
+	cleanupProvider();
 }
 
 QString creditName()
