@@ -25,3 +25,15 @@ INCLUDEPATH += \
 	/usr/include/libxml2 \
 	/usr/include/gstreamer-0.10
 LIBS += -lgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lrt -lgstvideo-0.10
+
+# device enum
+windows: {
+        SOURCES += deviceenum_win.cpp
+}
+unix:!mac: {
+        SOURCES += deviceenum_unix.cpp
+}
+mac: {
+        SOURCES += deviceenum_mac.cpp
+        LIBS += -framework CoreAudio
+}
