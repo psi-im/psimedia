@@ -668,6 +668,7 @@ private:
 		GstElement *audioin = 0;
 		GstElement *videoin = 0;
 		fileSource = 0;
+		GstCaps *videoincaps;
 
 		if(!infile.isEmpty())
 		{
@@ -708,6 +709,10 @@ private:
 					// TODO
 					printf("failed to create video input element\n");
 				}
+
+				videoincaps = gst_caps_new_simple("video/x-raw-yuv",
+					"width", G_TYPE_INT, 640,
+					"height", G_TYPE_INT, 480, NULL);
 			}
 		}
 
@@ -735,6 +740,7 @@ private:
 		}
 		GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videosink;
 		appVideoSink->show_frame = gst_show_frame;
+		//g_object_set(G_OBJECT(appVideoSink), "sync", FALSE, NULL);
 
 		GstElement *videoconvertpre = gst_element_factory_make("ffmpegcolorspace", NULL);
 		GstElement *videotee = gst_element_factory_make("tee", NULL);
@@ -774,7 +780,7 @@ private:
 		if(audioin)
 			gst_element_link_many(audioin, audioTarget, NULL);
 		if(videoin)
-			gst_element_link_many(videoin, videoTarget, NULL);
+			gst_element_link_filtered(videoin, videoTarget, videoincaps);
 
 		//GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(e_pipeline));
 		//gst_bus_add_watch(bus, bus_call, loop);
