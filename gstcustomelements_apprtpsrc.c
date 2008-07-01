@@ -25,6 +25,17 @@
 
 GST_BOILERPLATE(GstAppRtpSrc, gst_apprtpsrc, GstPushSrc, GST_TYPE_PUSH_SRC);
 
+enum
+{
+	PROP_0,
+
+	PROP_CAPS,
+
+	PROP_LAST
+};
+
+static void gst_apprtpsrc_set_property(GObject *obj, guint prop_id, const GValue *value, GParamSpec *pspec);
+static void gst_apprtpsrc_get_property(GObject *obj, guint prop_id, GValue *value, GParamSpec *pspec);
 static void gst_apprtpsrc_finalize(GObject *obj);
 static gboolean gst_apprtpsrc_stop(GstBaseSrc *src);
 static GstFlowReturn gst_apprtpsrc_create(GstBaseSrc *src, guint64 offset, guint size, GstBuffer **buf);
@@ -57,11 +68,18 @@ void gst_apprtpsrc_class_init(GstAppRtpSrcClass *klass)
 	GstBaseSrcClass *basesrc_class;
 
 	gobject_class = (GObjectClass *)klass;
+	gobject_class->set_property = gst_apprtpsrc_set_property;
+	gobject_class->get_property = gst_apprtpsrc_get_property;
 	gobject_class->finalize = gst_apprtpsrc_finalize;
 
 	basesrc_class = (GstBaseSrcClass *)klass;
 	basesrc_class->stop = gst_apprtpsrc_stop;
 	basesrc_class->create = gst_apprtpsrc_create;
+
+	g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_CAPS,
+		g_param_spec_boxed("caps", "Caps",
+		"The caps of the source pad", GST_TYPE_CAPS,
+		G_PARAM_READWRITE));
 }
 
 // instance init
@@ -73,6 +91,7 @@ void gst_apprtpsrc_init(GstAppRtpSrc *src, GstAppRtpSrcClass *gclass)
 	src->push_mutex = g_mutex_new();
 	src->push_cond = g_cond_new();
 	src->quit = FALSE;
+	src->caps = 0;
 }
 
 // destruct
@@ -152,4 +171,47 @@ void gst_apprtpsrc_packet_push(GstAppRtpSrc *src, const unsigned char *buf, int 
 
 	g_cond_signal(src->push_cond);
 	g_mutex_unlock(src->push_mutex);
+}
+
+void gst_apprtpsrc_set_property(GObject *obj, guint prop_id, const GValue *value, GParamSpec *pspec)
+{
+	(void)pspec;
+	GstAppRtpSrc *src = (GstAppRtpSrc *)obj;
+
+	switch(prop_id)
+	{
+		case PROP_CAPS:
+		{
+			const GstCaps *new_caps_val = gst_value_get_caps(value);
+			GstCaps *new_caps;
+			GstCaps *old_caps;
+			if(new_caps_val == NULL)
+				new_caps = gst_caps_new_any();
+			else
+				new_caps = gst_caps_copy(new_caps_val);
+			old_caps = src->caps;
+			src->caps = new_caps;
+			if(old_caps)
+				gst_caps_unref(old_caps);
+			gst_pad_set_caps(GST_BASE_SRC(src)->srcpad, new_caps);
+			break;
+		}
+		default:
+			break;
+	}
+}
+
+void gst_apprtpsrc_get_property(GObject *obj, guint prop_id, GValue *value, GParamSpec *pspec)
+{
+	GstAppRtpSrc *src = (GstAppRtpSrc *)obj;
+
+	switch(prop_id)
+	{
+		case PROP_CAPS:
+			gst_value_set_caps(value, src->caps);
+			break;
+		default:
+			G_OBJECT_WARN_INVALID_PROPERTY_ID(obj, prop_id, pspec);
+			break;
+	}
 }

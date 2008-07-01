@@ -108,6 +108,8 @@ struct _GstAppRtpSrc
 	GMutex *push_mutex;
 	GCond *push_cond;
 	gboolean quit;
+
+	GstCaps *caps;
 };
 
 struct _GstAppRtpSrcClass
