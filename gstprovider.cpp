@@ -448,6 +448,11 @@ class GstProducerContext;
 static GstProducerContext *g_producer = 0;
 static QList<QImage> *g_images = 0;
 
+class GstReceiverContext;
+class GstRtpChannel;
+static GstReceiverContext *g_receiver = 0;
+static void receiver_write(GstRtpChannel *from, const PRtpPacket &rtp);
+
 static void gst_show_frame(int width, int height, const unsigned char *rgb24, gpointer appdata)
 {
 	Q_UNUSED(appdata);
@@ -496,7 +501,8 @@ static void gst_packet_ready_audio(const unsigned char *buf, int size, gpointer 
 	PRtpPacket packet;
 	packet.rawValue = ba;
 	packet.portOffset = 0;
-	g_in_packets_audio->append(packet);
+	if(g_in_packets_audio->count() < 5)
+		g_in_packets_audio->append(packet);
 	QMetaObject::invokeMethod((QObject *)g_producer, "packetReadyAudio", Qt::QueuedConnection);
 }
 
@@ -511,7 +517,8 @@ static void gst_packet_ready(const unsigned char *buf, int size, gpointer data)
 	PRtpPacket packet;
 	packet.rawValue = ba;
 	packet.portOffset = 0;
-	g_in_packets->append(packet);
+	if(g_in_packets->count() < 5)
+		g_in_packets->append(packet);
 	QMetaObject::invokeMethod((QObject *)g_producer, "packetReady", Qt::QueuedConnection);
 }
 
@@ -549,7 +556,7 @@ public:
 		return self;
 	}
 
-	QString ain, aout, vin;
+	QString ain, vin;
 	QString infile;
 
 	GstElement *pipeline;
@@ -560,6 +567,13 @@ public:
 
 	PPayloadInfo audioPayloadInfo;
 	PPayloadInfo videoPayloadInfo;
+
+	QString aout;
+	GstElement *rpipeline;
+	GstElement *audiortpsrc;
+
+	PPayloadInfo raudioPayloadInfo;
+	PPayloadInfo rvideoPayloadInfo;
 
 	void start(const QString &_pluginPath = QString())
 	{
@@ -589,11 +603,20 @@ public:
 		g_source_set_callback(timer, cb_doStartProducer, this, NULL);
 	}
 
+	void startReceiver()
+	{
+		GSource *timer = g_timeout_source_new(0);
+		g_source_attach(timer, mainContext);
+		g_source_set_callback(timer, cb_doStartReceiver, this, NULL);
+	}
+
 signals:
 	void producer_started();
 	void producer_stopped();
 	void producer_finished();
 	void producer_error();
+
+	void receiver_started();
 
 protected:
 	virtual void run()
@@ -642,6 +665,11 @@ private:
 	static gboolean cb_doStartProducer(gpointer data)
 	{
 		return ((GstThread *)data)->doStartProducer();
+	}
+
+	static gboolean cb_doStartReceiver(gpointer data)
+	{
+		return ((GstThread *)data)->doStartReceiver();
 	}
 
 	static void cb_fileDemux_pad_added(GstElement *element, GstPad *pad, gpointer data)
@@ -988,6 +1016,45 @@ private:
 		printf("pad-removed: %s\n", name);
 		g_free(name);
 	}
+
+	gboolean doStartReceiver()
+	{
+		rpipeline = gst_pipeline_new(NULL);
+
+		audiortpsrc = gst_element_factory_make("apprtpsrc", NULL);
+
+		const char *capstr = "application/x-rtp, media=(string)audio, clock-rate=(int)16000, encoding-name=(string)SPEEX, encoding-params=(string)1, payload=(int)110";
+		g_object_set(G_OBJECT(audiortpsrc), "caps", capstr, NULL);
+
+		GstElement *audiortpdepay = gst_element_factory_make("rtpspeexdepay", NULL);
+		GstElement *audiodec = gst_element_factory_make("speexdec", NULL);
+		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
+		GstElement *audioout = 0;
+
+		gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpdepay, audiodec, audioconvert, audioout, NULL);
+		gst_element_link_many(audiortpsrc, audiortpdepay, audiodec, audioconvert, audioout, NULL);
+
+		if(!aout.isEmpty())
+		{
+			printf("creating audioout\n");
+
+			audioout = make_device_element(aout, PDevice::AudioOut);
+			if(!audioout)
+			{
+				// TODO
+				printf("failed to create audio output element\n");
+			}
+		}
+
+		gst_element_set_state(rpipeline, GST_STATE_PLAYING);
+		gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+		printf("receive pipeline started\n");
+
+		emit receiver_started();
+
+		return FALSE;
+	}
 };
 
 GstThread *GstThread::self = 0;
@@ -1031,6 +1098,7 @@ public:
 	{
 		// TODO
 		Q_UNUSED(rtp);
+		receiver_write(this, rtp);
 	}
 
 signals:
@@ -1263,9 +1331,18 @@ class GstReceiverContext : public QObject, public ReceiverContext
 	Q_INTERFACES(PsiMedia::ReceiverContext)
 
 public:
+	QString audioOutId;
+	VideoWidgetContext *videoWidget;
+	int audioOutVolume;
+	int code;
+
+	GstRtpChannel audioRtp;
+	GstRtpChannel videoRtp;
+
 	GstReceiverContext(QObject *parent = 0) :
 		QObject(parent)
 	{
+		g_receiver = this;
 	}
 
 	virtual QObject *qobject()
@@ -1275,15 +1352,15 @@ public:
 
 	virtual void setAudioOutputDevice(const QString &deviceId)
 	{
-		// TODO
-		Q_UNUSED(deviceId);
+		audioOutId = deviceId;
+		// TODO: if active, switch to that device
 	}
 
 #ifdef QT_GUI_LIB
 	virtual void setVideoWidget(VideoWidgetContext *widget)
 	{
-		// TODO
-		Q_UNUSED(widget);
+		videoWidget = widget;
+		// TODO: if active, switch to using (or not using)
 	}
 #endif
 	virtual void setRecorder(QIODevice *recordDevice)
@@ -1295,13 +1372,13 @@ public:
 	virtual void setAudioPayloadInfo(const QList<PPayloadInfo> &info)
 	{
 		// TODO
-		Q_UNUSED(info);
+		GstThread::instance()->raudioPayloadInfo = info.first();
 	}
 
 	virtual void setVideoPayloadInfo(const QList<PPayloadInfo> &info)
 	{
 		// TODO
-		Q_UNUSED(info);
+		GstThread::instance()->rvideoPayloadInfo = info.first();
 	}
 
 	virtual void setAudioParams(const QList<PAudioParams> &params)
@@ -1318,8 +1395,10 @@ public:
 
 	virtual void start()
 	{
-		// TODO: for now we have no receive support, so just throw error
-		QMetaObject::invokeMethod(this, "error", Qt::QueuedConnection);
+		// TODO
+		connect(GstThread::instance(), SIGNAL(receiver_started()), SIGNAL(started()));
+		GstThread::instance()->aout = audioOutId;
+		GstThread::instance()->startReceiver();
 	}
 
 	virtual void stop()
@@ -1372,20 +1451,36 @@ public:
 	virtual RtpChannelContext *audioRtpChannel()
 	{
 		// TODO
-		return 0;
+		return &audioRtp;
 	}
 
 	virtual RtpChannelContext *videoRtpChannel()
 	{
 		// TODO
-		return 0;
+		return &videoRtp;
 	}
 
 signals:
 	void started();
 	void stopped();
 	void error();
+
+public:
+	void doWrite(GstRtpChannel *from, const PRtpPacket &rtp)
+	{
+		if(from == &audioRtp && rtp.portOffset == 0)
+		{
+			GstAppRtpSrc *src = (GstAppRtpSrc *)GstThread::instance()->audiortpsrc;
+			gst_apprtpsrc_packet_push(src, (const unsigned char *)rtp.rawValue.data(), rtp.rawValue.size());
+		}
+	}
 };
+
+void receiver_write(GstRtpChannel *from, const PRtpPacket &rtp)
+{
+	if(g_receiver)
+		g_receiver->doWrite(from, rtp);
+}
 
 //----------------------------------------------------------------------------
 // GstProvider
