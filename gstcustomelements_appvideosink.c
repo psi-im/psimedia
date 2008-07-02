@@ -26,7 +26,7 @@ GST_BOILERPLATE(GstAppVideoSink, gst_appvideosink, GstVideoSink, GST_TYPE_VIDEO_
 
 static GstFlowReturn gst_appvideosink_render(GstBaseSink *sink, GstBuffer *buffer);
 
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE("sink",
+static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE("sink",
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
@@ -41,14 +41,14 @@ void gst_appvideosink_base_init(gpointer gclass)
 {
 	static GstElementDetails element_details = GST_ELEMENT_DETAILS(
 		"Application Video Sink",
-		"Generic/PluginTemplate",
-		"Generic Template Element",
-		"AUTHOR_NAME AUTHOR_EMAIL"
+		"Generic/Sink",
+		"Send raw video frames to the application",
+		"Justin Karneges <justin@affinix.com>"
 	);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 
 	gst_element_class_add_pad_template(element_class,
-		gst_static_pad_template_get(&sink_factory));
+		gst_static_pad_template_get(&sink_template));
 	gst_element_class_set_details(element_class, &element_details);
 }
 

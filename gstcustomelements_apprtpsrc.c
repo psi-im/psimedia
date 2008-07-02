@@ -52,7 +52,7 @@ void gst_apprtpsrc_base_init(gpointer gclass)
 {
 	static GstElementDetails element_details = GST_ELEMENT_DETAILS(
 		"Application RTP Source",
-		"Source/Network",
+		"Generic/Source",
 		"Receive RTP packets from the application",
 		"Justin Karneges <justin@affinix.com>"
 	);
