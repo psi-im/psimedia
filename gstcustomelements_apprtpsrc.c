@@ -37,10 +37,12 @@ enum
 static void gst_apprtpsrc_set_property(GObject *obj, guint prop_id, const GValue *value, GParamSpec *pspec);
 static void gst_apprtpsrc_get_property(GObject *obj, guint prop_id, GValue *value, GParamSpec *pspec);
 static void gst_apprtpsrc_finalize(GObject *obj);
-static gboolean gst_apprtpsrc_stop(GstBaseSrc *src);
-static GstFlowReturn gst_apprtpsrc_create(GstBaseSrc *src, guint64 offset, guint size, GstBuffer **buf);
+static gboolean gst_apprtpsrc_unlock(GstBaseSrc *src);
+static gboolean gst_apprtpsrc_unlock_stop(GstBaseSrc *src);
+static GstCaps *gst_apprtpsrc_get_caps(GstBaseSrc *src);
+static GstFlowReturn gst_apprtpsrc_create(GstPushSrc *src, GstBuffer **buf);
 
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE("src",
+static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE("src",
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS_ANY
@@ -50,14 +52,14 @@ void gst_apprtpsrc_base_init(gpointer gclass)
 {
 	static GstElementDetails element_details = GST_ELEMENT_DETAILS(
 		"Application RTP Source",
-		"Generic/PluginTemplate",
-		"Generic Template Element",
-		"AUTHOR_NAME AUTHOR_EMAIL"
+		"Source/Network",
+		"Receive RTP packets from the application",
+		"Justin Karneges <justin@affinix.com>"
 	);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(gclass);
 
 	gst_element_class_add_pad_template(element_class,
-		gst_static_pad_template_get(&src_factory));
+		gst_static_pad_template_get(&src_template));
 	gst_element_class_set_details(element_class, &element_details);
 }
 
@@ -66,20 +68,26 @@ void gst_apprtpsrc_class_init(GstAppRtpSrcClass *klass)
 {
 	GObjectClass *gobject_class;
 	GstBaseSrcClass *basesrc_class;
+	GstPushSrcClass *pushsrc_class;
 
 	gobject_class = (GObjectClass *)klass;
+	basesrc_class = (GstBaseSrcClass *)klass;
+	pushsrc_class = (GstPushSrcClass *)klass;
+
 	gobject_class->set_property = gst_apprtpsrc_set_property;
 	gobject_class->get_property = gst_apprtpsrc_get_property;
 	gobject_class->finalize = gst_apprtpsrc_finalize;
 
-	basesrc_class = (GstBaseSrcClass *)klass;
-	basesrc_class->stop = gst_apprtpsrc_stop;
-	basesrc_class->create = gst_apprtpsrc_create;
-
-	g_object_class_install_property(G_OBJECT_CLASS(klass), PROP_CAPS,
+	g_object_class_install_property(gobject_class, PROP_CAPS,
 		g_param_spec_boxed("caps", "Caps",
 		"The caps of the source pad", GST_TYPE_CAPS,
 		G_PARAM_READWRITE));
+
+	basesrc_class->unlock = gst_apprtpsrc_unlock;
+	basesrc_class->unlock_stop = gst_apprtpsrc_unlock_stop;
+	basesrc_class->get_caps = gst_apprtpsrc_get_caps;
+
+	pushsrc_class->create = gst_apprtpsrc_create;
 }
 
 // instance init
@@ -90,8 +98,18 @@ void gst_apprtpsrc_init(GstAppRtpSrc *src, GstAppRtpSrcClass *gclass)
 	src->cur_buf = 0;
 	src->push_mutex = g_mutex_new();
 	src->push_cond = g_cond_new();
-	src->quit = FALSE;
+	src->quit = FALSE; // not flushing
 	src->caps = 0;
+
+	// set up the base (adapted from udpsrc)
+
+	// configure basesrc to be a live source
+	gst_base_src_set_live(GST_BASE_SRC(src), TRUE);
+	// make basesrc output a segment in time
+	gst_base_src_set_format(GST_BASE_SRC(src), GST_FORMAT_TIME);
+	// make basesrc set timestamps on outgoing buffers based on the
+	//   running_time when they were captured
+	gst_base_src_set_do_timestamp(GST_BASE_SRC(src), TRUE);
 }
 
 // destruct
@@ -103,26 +121,48 @@ void gst_apprtpsrc_finalize(GObject *obj)
 		gst_buffer_unref(src->cur_buf);
 	g_mutex_free(src->push_mutex);
 	g_cond_free(src->push_cond);
+	if(src->caps)
+		gst_caps_unref(src->caps);
+
+	G_OBJECT_CLASS(parent_class)->finalize(obj);
 }
 
-gboolean gst_apprtpsrc_stop(GstBaseSrc *bsrc)
+gboolean gst_apprtpsrc_unlock(GstBaseSrc *bsrc)
 {
 	GstAppRtpSrc *src = (GstAppRtpSrc *)bsrc;
 
 	g_mutex_lock(src->push_mutex);
-	src->quit = TRUE;
+	src->quit = TRUE; // flushing
 	g_cond_signal(src->push_cond);
 	g_mutex_unlock(src->push_mutex);
 
 	return TRUE;
 }
 
-GstFlowReturn gst_apprtpsrc_create(GstBaseSrc *bsrc, guint64 offset, guint size, GstBuffer **buf)
+gboolean gst_apprtpsrc_unlock_stop(GstBaseSrc *bsrc)
 {
 	GstAppRtpSrc *src = (GstAppRtpSrc *)bsrc;
 
-	(void)offset;
-	(void)size;
+	g_mutex_lock(src->push_mutex);
+	src->quit = FALSE; // not flushing
+	g_mutex_unlock(src->push_mutex);
+
+	return TRUE;
+}
+
+GstCaps *gst_apprtpsrc_get_caps(GstBaseSrc *bsrc)
+{
+	GstAppRtpSrc *src = (GstAppRtpSrc *)bsrc;
+
+	if(src->caps)
+		return gst_caps_ref(src->caps);
+	else
+		return gst_caps_new_any();
+}
+
+GstFlowReturn gst_apprtpsrc_create(GstPushSrc *bsrc, GstBuffer **buf)
+{
+	GstAppRtpSrc *src = (GstAppRtpSrc *)bsrc;
 
 	// the assumption here is that every buffer is a complete rtp
 	//   packet, ready for processing
@@ -135,13 +175,15 @@ GstFlowReturn gst_apprtpsrc_create(GstBaseSrc *bsrc, guint64 offset, guint size,
 	while(!src->cur_buf && !src->quit)
 		g_cond_wait(src->push_cond, src->push_mutex);
 
+	// flushing?
 	if(src->quit)
 	{
 		g_mutex_unlock(src->push_mutex);
-		return GST_FLOW_ERROR;
+		return GST_FLOW_WRONG_STATE;
 	}
 
 	*buf = src->cur_buf;
+	gst_buffer_set_caps(*buf, src->caps);
 	src->cur_buf = 0;
 
 	g_mutex_unlock(src->push_mutex);
