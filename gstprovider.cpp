@@ -502,8 +502,10 @@ static void gst_packet_ready_audio(const unsigned char *buf, int size, gpointer 
 	packet.rawValue = ba;
 	packet.portOffset = 0;
 	if(g_in_packets_audio->count() < 5)
+	{
 		g_in_packets_audio->append(packet);
-	QMetaObject::invokeMethod((QObject *)g_producer, "packetReadyAudio", Qt::QueuedConnection);
+		QMetaObject::invokeMethod((QObject *)g_producer, "packetReadyAudio", Qt::QueuedConnection);
+	}
 }
 
 static void gst_packet_ready(const unsigned char *buf, int size, gpointer data)
@@ -518,8 +520,10 @@ static void gst_packet_ready(const unsigned char *buf, int size, gpointer data)
 	packet.rawValue = ba;
 	packet.portOffset = 0;
 	if(g_in_packets->count() < 5)
+	{
 		g_in_packets->append(packet);
-	QMetaObject::invokeMethod((QObject *)g_producer, "packetReady", Qt::QueuedConnection);
+		QMetaObject::invokeMethod((QObject *)g_producer, "packetReady", Qt::QueuedConnection);
+	}
 }
 
 class GstThread : public QThread
@@ -1024,15 +1028,19 @@ private:
 		audiortpsrc = gst_element_factory_make("apprtpsrc", NULL);
 
 		const char *capstr = "application/x-rtp, media=(string)audio, clock-rate=(int)16000, encoding-name=(string)SPEEX, encoding-params=(string)1, payload=(int)110";
-		g_object_set(G_OBJECT(audiortpsrc), "caps", capstr, NULL);
+		GstCaps *caps = gst_caps_from_string(capstr);
+		if(!caps)
+			printf("cannot convert string\n");
+		g_object_set(G_OBJECT(audiortpsrc), "caps", caps, NULL);
+		gst_caps_unref(caps);
 
 		GstElement *audiortpdepay = gst_element_factory_make("rtpspeexdepay", NULL);
 		GstElement *audiodec = gst_element_factory_make("speexdec", NULL);
 		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
 		GstElement *audioout = 0;
 
-		gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpdepay, audiodec, audioconvert, audioout, NULL);
-		gst_element_link_many(audiortpsrc, audiortpdepay, audiodec, audioconvert, audioout, NULL);
+		gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpdepay, audiodec, audioconvert, NULL);
+		gst_element_link_many(audiortpsrc, audiortpdepay, audiodec, audioconvert, NULL);
 
 		if(!aout.isEmpty())
 		{
@@ -1046,8 +1054,13 @@ private:
 			}
 		}
 
-		gst_element_set_state(rpipeline, GST_STATE_PLAYING);
+		gst_bin_add(GST_BIN(rpipeline), audioout);
+		gst_element_link_many(audioconvert, audioout, NULL);
+
+		gst_element_set_state(rpipeline, GST_STATE_READY);
 		gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+		gst_element_set_state(rpipeline, GST_STATE_PLAYING);
 
 		printf("receive pipeline started\n");
 
@@ -1097,7 +1110,6 @@ public:
 	virtual void write(const PRtpPacket &rtp)
 	{
 		// TODO
-		Q_UNUSED(rtp);
 		receiver_write(this, rtp);
 	}
 
