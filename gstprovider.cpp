@@ -442,8 +442,8 @@ static GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QStr
 	{
 		GValue gv;
 		memset(&gv, 0, sizeof(GValue));
-		g_value_init(&gv, G_TYPE_INT);
-		g_value_set_int(&gv, info.channels);
+		g_value_init(&gv, G_TYPE_STRING);
+		g_value_set_string(&gv, QString::number(info.channels).toLatin1().data());
 		gst_structure_set_value(out, "encoding-params", &gv);
 	}
 
@@ -808,6 +808,7 @@ public:
 	QString aout;
 	GstElement *rpipeline;
 	GstElement *audiortpsrc;
+	GstElement *videortpsrc;
 
 	PPayloadInfo raudioPayloadInfo;
 	PPayloadInfo rvideoPayloadInfo;
@@ -836,15 +837,15 @@ public:
 	void startProducer()
 	{
 		GSource *timer = g_timeout_source_new(0);
-		g_source_attach(timer, mainContext);
 		g_source_set_callback(timer, cb_doStartProducer, this, NULL);
+		g_source_attach(timer, mainContext);
 	}
 
 	void startReceiver()
 	{
 		GSource *timer = g_timeout_source_new(0);
-		g_source_attach(timer, mainContext);
 		g_source_set_callback(timer, cb_doStartReceiver, this, NULL);
+		g_source_attach(timer, mainContext);
 	}
 
 signals:
@@ -986,6 +987,7 @@ private:
 		GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
 		GstElement *audioenc = gst_element_factory_make("speexenc", NULL);
 		GstElement *audiortppay = gst_element_factory_make("rtpspeexpay", NULL);
+		//g_object_set(G_OBJECT(audiortppay), "min-ptime", (guint64)1000000000, NULL);
 		//GstElement *audiosink = gst_element_factory_make("alsasink", NULL);
 		GstElement *audiortpsink = gst_element_factory_make("apprtpsink", NULL);
 		GstAppRtpSink *appRtpSink = (GstAppRtpSink *)audiortpsink;
@@ -1205,9 +1207,13 @@ private:
 	gboolean doStartReceiver()
 	{
 		rpipeline = gst_pipeline_new(NULL);
+		GstElement *rvpipeline = gst_pipeline_new(NULL);
 
 		audiortpsrc = gst_element_factory_make("apprtpsrc", NULL);
+		//audiortpsrc = gst_element_factory_make("udpsrc", NULL);
+		//g_object_set(G_OBJECT(audiortpsrc), "port", 60000, NULL);
 
+		//GstStructure *cs = gst_structure_from_string("application/x-rtp, media=(string)audio, clock-rate=(int)16000, encoding-name=(string)SPEEX, encoding-params=(string)1, payload=(int)110", NULL);
 		GstStructure *cs = payloadInfoToStructure(raudioPayloadInfo, "audio");
 		if(!cs)
 		{
@@ -1220,6 +1226,22 @@ private:
 		g_object_set(G_OBJECT(audiortpsrc), "caps", caps, NULL);
 		gst_caps_unref(caps);
 
+		videortpsrc = gst_element_factory_make("apprtpsrc", NULL);
+		//videortpsrc = gst_element_factory_make("udpsrc", NULL);
+		//g_object_set(G_OBJECT(videortpsrc), "port", 60002, NULL);
+		cs = payloadInfoToStructure(rvideoPayloadInfo, "video");
+		if(!cs)
+		{
+			// TODO: handle error
+			printf("cannot parse payload info\n");
+		}
+
+		caps = gst_caps_new_empty();
+		gst_caps_append_structure(caps, cs);
+		g_object_set(G_OBJECT(videortpsrc), "caps", caps, NULL);
+		gst_caps_unref(caps);
+
+		//GstElement *audioqueue = gst_element_factory_make("queue", NULL);
 		GstElement *audiortpdepay = gst_element_factory_make("rtpspeexdepay", NULL);
 		GstElement *audiodec = gst_element_factory_make("speexdec", NULL);
 		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
@@ -1242,6 +1264,11 @@ private:
 		else
 			audioout = gst_element_factory_make("fakesink", NULL);
 
+		//GstElement *videoqueue = gst_element_factory_make("queue", NULL);
+		GstElement *videortpdepay = gst_element_factory_make("rtptheoradepay", NULL);
+		GstElement *videodec = gst_element_factory_make("theoradec", NULL);
+		GstElement *videoconvert = gst_element_factory_make("ffmpegcolorspace", NULL);
+		//GstElement *videosink = gst_element_factory_make("ximagesink", NULL);
 		GstElement *videosink = gst_element_factory_make("appvideosink", NULL);
 		if(!videosink)
 		{
@@ -1250,13 +1277,21 @@ private:
 		GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videosink;
 		appVideoSink->show_frame = gst_show_rframe;
 
+		gst_bin_add_many(GST_BIN(rvpipeline), videortpsrc, /*videoqueue,*/ videortpdepay, videodec, videoconvert, videosink, NULL);
+		gst_element_link_many(videortpsrc, /*videoqueue,*/ videortpdepay, videodec, videoconvert, videosink, NULL);
+
 		gst_bin_add(GST_BIN(rpipeline), audioout);
 		gst_element_link_many(audioconvert, audioout, NULL);
 
 		gst_element_set_state(rpipeline, GST_STATE_READY);
 		gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 
+		gst_element_set_state(rvpipeline, GST_STATE_READY);
+		gst_element_get_state(rvpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
 		gst_element_set_state(rpipeline, GST_STATE_PLAYING);
+
+		gst_element_set_state(rvpipeline, GST_STATE_PLAYING);
 
 		printf("receive pipeline started\n");
 
@@ -1513,7 +1548,7 @@ public slots:
 		PRtpPacket packet = g_in_packets_audio->takeFirst();
 		in_mutex()->unlock();
 
-		//printf("audio packet ready\n");
+		//printf("audio packet ready (%d bytes)\n", packet.rawValue.size());
 		audioRtp.in += packet;
 		emit audioRtp.readyRead();
 	}
@@ -1679,6 +1714,11 @@ public:
 		if(from == &audioRtp && rtp.portOffset == 0)
 		{
 			GstAppRtpSrc *src = (GstAppRtpSrc *)GstThread::instance()->audiortpsrc;
+			gst_apprtpsrc_packet_push(src, (const unsigned char *)rtp.rawValue.data(), rtp.rawValue.size());
+		}
+		else if(from == &videoRtp && rtp.portOffset == 0)
+		{
+			GstAppRtpSrc *src = (GstAppRtpSrc *)GstThread::instance()->videortpsrc;
 			gst_apprtpsrc_packet_push(src, (const unsigned char *)rtp.rawValue.data(), rtp.rawValue.size());
 		}
 	}
