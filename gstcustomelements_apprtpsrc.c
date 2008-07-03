@@ -23,6 +23,8 @@
 #include "gstboilerplatefixed.h"
 #include <string.h>
 
+#define APPRTPSRC_MAX_BUF_COUNT 32
+
 GST_BOILERPLATE(GstAppRtpSrc, gst_apprtpsrc, GstPushSrc, GST_TYPE_PUSH_SRC);
 
 enum
@@ -95,7 +97,7 @@ void gst_apprtpsrc_init(GstAppRtpSrc *src, GstAppRtpSrcClass *gclass)
 {
 	(void)gclass;
 
-	src->cur_buf = 0;
+	src->buffers = g_queue_new();
 	src->push_mutex = g_mutex_new();
 	src->push_cond = g_cond_new();
 	src->quit = FALSE; // not flushing
@@ -113,12 +115,19 @@ void gst_apprtpsrc_init(GstAppRtpSrc *src, GstAppRtpSrcClass *gclass)
 }
 
 // destruct
+static void my_foreach_func(gpointer data, gpointer user_data)
+{
+	(void)user_data;
+	GstBuffer *buf = (GstBuffer *)data;
+	gst_buffer_unref(buf);
+}
+
 void gst_apprtpsrc_finalize(GObject *obj)
 {
 	GstAppRtpSrc *src = (GstAppRtpSrc *)obj;
 
-	if(src->cur_buf)
-		gst_buffer_unref(src->cur_buf);
+	g_queue_foreach(src->buffers, my_foreach_func, NULL);
+	g_queue_free(src->buffers);
 	g_mutex_free(src->push_mutex);
 	g_cond_free(src->push_cond);
 	if(src->caps)
@@ -172,7 +181,7 @@ GstFlowReturn gst_apprtpsrc_create(GstPushSrc *bsrc, GstBuffer **buf)
 
 	g_mutex_lock(src->push_mutex);
 
-	while(!src->cur_buf && !src->quit)
+	while(g_queue_is_empty(src->buffers) && !src->quit)
 		g_cond_wait(src->push_cond, src->push_mutex);
 
 	// flushing?
@@ -182,9 +191,8 @@ GstFlowReturn gst_apprtpsrc_create(GstPushSrc *bsrc, GstBuffer **buf)
 		return GST_FLOW_WRONG_STATE;
 	}
 
-	*buf = src->cur_buf;
+	*buf = (GstBuffer *)g_queue_pop_head(src->buffers);
 	gst_buffer_set_caps(*buf, src->caps);
-	src->cur_buf = 0;
 
 	g_mutex_unlock(src->push_mutex);
 
@@ -193,12 +201,14 @@ GstFlowReturn gst_apprtpsrc_create(GstPushSrc *bsrc, GstBuffer **buf)
 
 void gst_apprtpsrc_packet_push(GstAppRtpSrc *src, const unsigned char *buf, int size)
 {
+	GstBuffer *newbuf;
+
 	g_mutex_lock(src->push_mutex);
 
-	if(src->cur_buf)
+	if(g_queue_get_length(src->buffers) >= APPRTPSRC_MAX_BUF_COUNT)
 	{
-		gst_buffer_unref(src->cur_buf);
-		src->cur_buf = 0;
+		g_mutex_unlock(src->push_mutex);
+		return;
 	}
 
 	// ignore zero-byte packets
@@ -208,8 +218,9 @@ void gst_apprtpsrc_packet_push(GstAppRtpSrc *src, const unsigned char *buf, int 
 		return;
 	}
 
-	src->cur_buf = gst_buffer_new_and_alloc(size);
-	memcpy(GST_BUFFER_DATA(src->cur_buf), buf, size);
+	newbuf = gst_buffer_new_and_alloc(size);
+	memcpy(GST_BUFFER_DATA(newbuf), buf, size);
+	g_queue_push_tail(src->buffers, newbuf);
 
 	g_cond_signal(src->push_cond);
 	g_mutex_unlock(src->push_mutex);

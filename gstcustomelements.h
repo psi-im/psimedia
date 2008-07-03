@@ -104,7 +104,7 @@ struct _GstAppRtpSrc
 {
 	GstPushSrc parent;
 
-	GstBuffer *cur_buf;
+	GQueue *buffers;
 	GMutex *push_mutex;
 	GCond *push_cond;
 	gboolean quit;
