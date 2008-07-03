@@ -1053,6 +1053,10 @@ private slots:
 			QList<PsiMedia::AudioParams> audioParamsList;
 			audioParamsList += config.audioParams;
 			receiver.setAudioParams(audioParamsList);
+
+			QList<PsiMedia::PayloadInfo> payloadInfoList;
+			payloadInfoList += audio;
+			receiver.setAudioPayloadInfo(payloadInfoList);
 		}
 
 		if(receiveVideo)
@@ -1060,6 +1064,10 @@ private slots:
 			QList<PsiMedia::VideoParams> videoParamsList;
 			videoParamsList += config.videoParams;
 			receiver.setVideoParams(videoParamsList);
+
+			QList<PsiMedia::PayloadInfo> payloadInfoList;
+			payloadInfoList += video;
+			receiver.setVideoPayloadInfo(payloadInfoList);
 		}
 
 		RtpSocketGroup *audioSocketGroup = new RtpSocketGroup(this);
