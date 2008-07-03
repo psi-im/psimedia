@@ -241,7 +241,7 @@ static QString hexEncode(const QByteArray &in)
 	return out;
 }
 
-/*static int hexValue(char c)
+static int hexValue(char c)
 {
 	if(c >= '0' && c <= '9')
 		return c - '0';
@@ -253,19 +253,226 @@ static QString hexEncode(const QByteArray &in)
 		return -1;
 }
 
-static unsigned char hexByte(char hi, char lo)
+static int hexByte(char hi, char lo)
 {
+	int nhi = hexValue(hi);
+	if(nhi < 0)
+		return -1;
+	int nlo = hexValue(lo);
+	if(nlo < 0)
+		return -1;
 	int value = (hexValue(hi) << 4) + hexValue(lo);
-	return (unsigned char)value;
+	return value;
 }
 
 static QByteArray hexDecode(const QString &in)
 {
 	QByteArray out;
 	for(int n = 0; n + 1 < in.length(); n += 2)
-		out += hexByte(in[n].toLatin1(), in[n + 1].toLatin1());
+	{
+		int value = hexByte(in[n].toLatin1(), in[n + 1].toLatin1());
+		if(value < 0)
+			return QByteArray(); // error
+		out += (unsigned char)value;
+	}
 	return out;
-}*/
+}
+
+class my_foreach_state
+{
+public:
+	PPayloadInfo *out;
+	QStringList *whitelist;
+	QList<PPayloadInfo::Parameter> *list;
+};
+
+gboolean my_foreach_func(GQuark field_id, const GValue *value, gpointer user_data)
+{
+	my_foreach_state &state = *((my_foreach_state *)user_data);
+
+	QString name = QString::fromLatin1(g_quark_to_string(field_id));
+	if(G_VALUE_TYPE(value) == G_TYPE_STRING && state.whitelist->contains(name))
+	{
+		QString svalue = QString::fromLatin1(g_value_get_string(value));
+
+		// FIXME: is there a better way to detect when we should do this conversion?
+		if(name == "configuration" && (state.out->name == "THEORA" || state.out->name == "VORBIS"))
+		{
+			QByteArray config = QByteArray::fromBase64(svalue.toLatin1());
+			svalue = hexEncode(config);
+		}
+
+		PPayloadInfo::Parameter i;
+		i.name = name;
+		i.value = svalue;
+		state.list->append(i);
+	}
+
+	return TRUE;
+}
+
+static PPayloadInfo structureToPayloadInfo(GstStructure *structure, QString *_media = 0)
+{
+	PPayloadInfo out;
+	QString media;
+
+	gint x;
+	const gchar *str;
+
+	str = gst_structure_get_name(structure);
+	QString sname = QString::fromLatin1(str);
+	if(sname != "application/x-rtp")
+		return PPayloadInfo();
+
+	str = gst_structure_get_string(structure, "media");
+	if(!str)
+		return PPayloadInfo();
+	media = QString::fromLatin1(str);
+
+	// payload field is required
+	if(!gst_structure_get_int(structure, "payload", &x))
+		return PPayloadInfo();
+
+	out.id = x;
+
+	str = gst_structure_get_string(structure, "encoding-name");
+	if(str)
+	{
+		out.name = QString::fromLatin1(str);
+	}
+	else
+	{
+		// encoding-name field is required for payload values 96 or greater
+		if(out.id >= 96)
+			return PPayloadInfo();
+	}
+
+	if(gst_structure_get_int(structure, "clock-rate", &x))
+		out.clockrate = x;
+
+	str = gst_structure_get_string(structure, "encoding-params");
+	if(str)
+	{
+		QString qstr = QString::fromLatin1(str);
+		bool ok;
+		int n = qstr.toInt(&ok);
+		if(!ok)
+			return PPayloadInfo();
+		out.channels = n;
+	}
+
+	// TODO: vbr, cng, mode?
+	// see: http://tools.ietf.org/html/draft-ietf-avt-rtp-speex-05
+
+	// note: if we ever change away from the whitelist approach, be sure
+	//   not to grab the earlier static fields (e.g. clock-rate) as
+	//   dynamic parameters
+	QStringList whitelist;
+	whitelist << "sampling" << "width" << "height" << "delivery-method" << "configuration";
+
+	QList<PPayloadInfo::Parameter> list;
+
+	my_foreach_state state;
+	state.out = &out;
+	state.whitelist = &whitelist;
+	state.list = &list;
+	if(!gst_structure_foreach(structure, my_foreach_func, &state))
+		return PPayloadInfo();
+
+	out.parameters = list;
+
+	if(_media)
+		*_media = media;
+
+	return out;
+}
+
+static GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &media)
+{
+	GstStructure *out = gst_structure_empty_new("application/x-rtp");
+
+	{
+		GValue gv;
+		memset(&gv, 0, sizeof(GValue));
+		g_value_init(&gv, G_TYPE_STRING);
+		g_value_set_string(&gv, media.toLatin1().data());
+		gst_structure_set_value(out, "media", &gv);
+	}
+
+	// payload id field required
+	if(info.id == -1)
+	{
+		gst_structure_free(out);
+		return 0;
+	}
+
+	{
+		GValue gv;
+		memset(&gv, 0, sizeof(GValue));
+		g_value_init(&gv, G_TYPE_INT);
+		g_value_set_int(&gv, info.id);
+		gst_structure_set_value(out, "payload", &gv);
+	}
+
+	// name required for payload values 96 or greater
+	if(info.id >= 96 && info.name.isEmpty())
+	{
+		gst_structure_free(out);
+		return 0;
+	}
+
+	{
+		GValue gv;
+		memset(&gv, 0, sizeof(GValue));
+		g_value_init(&gv, G_TYPE_STRING);
+		g_value_set_string(&gv, info.name.toLatin1().data());
+		gst_structure_set_value(out, "encoding-name", &gv);
+	}
+
+	if(info.clockrate != -1)
+	{
+		GValue gv;
+		memset(&gv, 0, sizeof(GValue));
+		g_value_init(&gv, G_TYPE_INT);
+		g_value_set_int(&gv, info.clockrate);
+		gst_structure_set_value(out, "clock-rate", &gv);
+	}
+
+	if(info.channels != -1)
+	{
+		GValue gv;
+		memset(&gv, 0, sizeof(GValue));
+		g_value_init(&gv, G_TYPE_INT);
+		g_value_set_int(&gv, info.channels);
+		gst_structure_set_value(out, "encoding-params", &gv);
+	}
+
+	foreach(const PPayloadInfo::Parameter &i, info.parameters)
+	{
+		QString value = i.value;
+
+		// FIXME: is there a better way to detect when we should do this conversion?
+		if(i.name == "configuration" && (info.name == "THEORA" || info.name == "VORBIS"))
+		{
+			QByteArray config = hexDecode(value);
+			if(config.isEmpty())
+			{
+				gst_structure_free(out);
+				return 0;
+			}
+
+			value = QString::fromLatin1(config.toBase64());
+		}
+
+		GValue gv;
+		memset(&gv, 0, sizeof(GValue));
+		g_value_init(&gv, G_TYPE_STRING);
+		g_value_set_string(&gv, value.toLatin1().data());
+		gst_structure_set_value(out, i.name.toLatin1().data(), &gv);
+	}
+
+	return out;
+}
 
 //----------------------------------------------------------------------------
 // GstSession
@@ -452,6 +659,7 @@ class GstReceiverContext;
 class GstRtpChannel;
 static GstReceiverContext *g_receiver = 0;
 static void receiver_write(GstRtpChannel *from, const PRtpPacket &rtp);
+static QList<QImage> *g_rimages = 0;
 
 static void gst_show_frame(int width, int height, const unsigned char *rgb24, gpointer appdata)
 {
@@ -476,6 +684,31 @@ static void gst_show_frame(int width, int height, const unsigned char *rgb24, gp
 		g_images = new QList<QImage>;
 	g_images->append(image);
 	QMetaObject::invokeMethod((QObject *)g_producer, "imageReady", Qt::QueuedConnection);
+}
+
+static void gst_show_rframe(int width, int height, const unsigned char *rgb24, gpointer appdata)
+{
+	Q_UNUSED(appdata);
+
+	QImage image(width, height, QImage::Format_RGB32);
+	int at = 0;
+	for(int y = 0; y < height; ++y)
+	{
+		for(int x = 0; x < width; ++x)
+		{
+			unsigned char r = rgb24[at++];
+			unsigned char g = rgb24[at++];
+			unsigned char b = rgb24[at++];
+			QRgb color = qRgb(r, g, b);
+			image.setPixel(x, y, color);
+		}
+	}
+
+	QMutexLocker locker(render_mutex());
+	if(!g_rimages)
+		g_rimages = new QList<QImage>;
+	g_rimages->append(image);
+	QMetaObject::invokeMethod((QObject *)g_receiver, "imageReady", Qt::QueuedConnection);
 }
 
 Q_GLOBAL_STATIC(QMutex, in_mutex)
@@ -833,21 +1066,11 @@ private:
 
 		GstStructure *cs = gst_caps_get_structure(caps, 0);
 
-		PPayloadInfo p;
-		gint x;
-		gst_structure_get_int(cs, "payload", &x);
-		p.id = x;
-		QString str = gst_structure_get_string(cs, "encoding-name");
-		p.name = str;
-		gst_structure_get_int(cs, "clock-rate", &x);
-		p.clockrate = x;
-		p.channels = 1; // FIXME: how do we get this value?
-		QList<PPayloadInfo::Parameter> list;
-		// TODO: vbr, cng, mode?
-		// see: http://tools.ietf.org/html/draft-ietf-avt-rtp-speex-05
-		p.parameters = list;
-
-		audioPayloadInfo = p;
+		audioPayloadInfo = structureToPayloadInfo(cs);
+		if(audioPayloadInfo.id == -1)
+		{
+			// TODO: handle error
+		}
 
 		gst_caps_unref(caps);
 
@@ -861,53 +1084,11 @@ private:
 
 		cs = gst_caps_get_structure(caps, 0);
 
-		p = PPayloadInfo();
-		gst_structure_get_int(cs, "payload", &x);
-		p.id = x;
-		str = gst_structure_get_string(cs, "encoding-name");
-		p.name = str;
-		gst_structure_get_int(cs, "clock-rate", &x);
-		p.clockrate = x;
-		list.clear();
+		videoPayloadInfo = structureToPayloadInfo(cs);
+		if(videoPayloadInfo.id == -1)
 		{
-			str = gst_structure_get_string(cs, "sampling");
-			PPayloadInfo::Parameter i;
-			i.name = "sampling";
-			i.value = str;
-			list += i;
+			// TODO: handle error
 		}
-		{
-			str = gst_structure_get_string(cs, "width");
-			PPayloadInfo::Parameter i;
-			i.name = "width";
-			i.value = str;
-			list += i;
-		}
-		{
-			str = gst_structure_get_string(cs, "height");
-			PPayloadInfo::Parameter i;
-			i.name = "height";
-			i.value = str;
-			list += i;
-		}
-		{
-			PPayloadInfo::Parameter i;
-			i.name = "delivery-method";
-			i.value = "inline";
-			list += i;
-		}
-		{
-			str = gst_structure_get_string(cs, "configuration");
-			QByteArray config = QByteArray::fromBase64(str.toLatin1());
-			str = hexEncode(config);
-			PPayloadInfo::Parameter i;
-			i.name = "configuration";
-			i.value = str;
-			list += i;
-		}
-		p.parameters = list;
-
-		videoPayloadInfo = p;
 
 		gst_caps_unref(caps);
 
@@ -1027,10 +1208,15 @@ private:
 
 		audiortpsrc = gst_element_factory_make("apprtpsrc", NULL);
 
-		const char *capstr = "application/x-rtp, media=(string)audio, clock-rate=(int)16000, encoding-name=(string)SPEEX, encoding-params=(string)1, payload=(int)110";
-		GstCaps *caps = gst_caps_from_string(capstr);
-		if(!caps)
-			printf("cannot convert string\n");
+		GstStructure *cs = payloadInfoToStructure(raudioPayloadInfo, "audio");
+		if(!cs)
+		{
+			// TODO: handle error
+			printf("cannot parse payload info\n");
+		}
+
+		GstCaps *caps = gst_caps_new_empty();
+		gst_caps_append_structure(caps, cs);
 		g_object_set(G_OBJECT(audiortpsrc), "caps", caps, NULL);
 		gst_caps_unref(caps);
 
@@ -1053,6 +1239,16 @@ private:
 				printf("failed to create audio output element\n");
 			}
 		}
+		else
+			audioout = gst_element_factory_make("fakesink", NULL);
+
+		GstElement *videosink = gst_element_factory_make("appvideosink", NULL);
+		if(!videosink)
+		{
+			printf("could not make videosink!!\n");
+		}
+		GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videosink;
+		appVideoSink->show_frame = gst_show_rframe;
 
 		gst_bin_add(GST_BIN(rpipeline), audioout);
 		gst_element_link_many(audioconvert, audioout, NULL);
@@ -1485,6 +1681,17 @@ public:
 			GstAppRtpSrc *src = (GstAppRtpSrc *)GstThread::instance()->audiortpsrc;
 			gst_apprtpsrc_packet_push(src, (const unsigned char *)rtp.rawValue.data(), rtp.rawValue.size());
 		}
+	}
+
+public slots:
+	void imageReady()
+	{
+		render_mutex()->lock();
+		QImage image = g_rimages->takeFirst();
+		render_mutex()->unlock();
+
+		if(videoWidget)
+			videoWidget->show_frame(image);
 	}
 };
 
