@@ -30,8 +30,8 @@ QList<Item> audioOutputItems(const QString &driver)
 	{
 		// hardcode a default output device
 		Item i;
-		i.type = Audio;
-		i.dir = Output;
+		i.type = Item::Audio;
+		i.dir = Item::Output;
 		i.name = "Default";
 		i.driver = "directsound";
 		i.id = QString(); // unspecified
