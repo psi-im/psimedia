@@ -26,6 +26,12 @@
 #include "gstcustomelements.h"
 #include "deviceenum.h"
 
+//#define UDP_LOOPBACK
+
+#ifdef UDP_LOOPBACK
+# include <QUdpSocket>
+#endif
+
 namespace PsiMedia {
 
 class GstDevice
@@ -1209,11 +1215,15 @@ private:
 		rpipeline = gst_pipeline_new(NULL);
 		GstElement *rvpipeline = gst_pipeline_new(NULL);
 
+#ifdef UDP_LOOPBACK
+		audiortpsrc = gst_element_factory_make("udpsrc", NULL);
+		g_object_set(G_OBJECT(audiortpsrc), "port", 61000, NULL);
+#else
 		audiortpsrc = gst_element_factory_make("apprtpsrc", NULL);
-		//audiortpsrc = gst_element_factory_make("udpsrc", NULL);
-		//g_object_set(G_OBJECT(audiortpsrc), "port", 60000, NULL);
+#endif
 
 		//GstStructure *cs = gst_structure_from_string("application/x-rtp, media=(string)audio, clock-rate=(int)16000, encoding-name=(string)SPEEX, encoding-params=(string)1, payload=(int)110", NULL);
+		//GstStructure *cs = gst_structure_from_string("application/x-rtp, media=(string)audio, clock-rate=(int)8000, encoding-name=(string)PCMU, payload=(int)0", NULL);
 		GstStructure *cs = payloadInfoToStructure(raudioPayloadInfo, "audio");
 		if(!cs)
 		{
@@ -1226,9 +1236,12 @@ private:
 		g_object_set(G_OBJECT(audiortpsrc), "caps", caps, NULL);
 		gst_caps_unref(caps);
 
+#ifdef UDP_LOOPBACK
+		videortpsrc = gst_element_factory_make("udpsrc", NULL);
+		g_object_set(G_OBJECT(videortpsrc), "port", 61002, NULL);
+#else
 		videortpsrc = gst_element_factory_make("apprtpsrc", NULL);
-		//videortpsrc = gst_element_factory_make("udpsrc", NULL);
-		//g_object_set(G_OBJECT(videortpsrc), "port", 60002, NULL);
+#endif
 		cs = payloadInfoToStructure(rvideoPayloadInfo, "video");
 		if(!cs)
 		{
@@ -1582,10 +1595,19 @@ public:
 	GstRtpChannel audioRtp;
 	GstRtpChannel videoRtp;
 
+#ifdef UDP_LOOPBACK
+	QUdpSocket *audioloop, *videoloop;
+#endif
+
 	GstReceiverContext(QObject *parent = 0) :
 		QObject(parent)
 	{
 		g_receiver = this;
+
+#ifdef UDP_LOOPBACK
+		audioloop = new QUdpSocket(this);
+		videoloop = new QUdpSocket(this);
+#endif
 	}
 
 	virtual QObject *qobject()
@@ -1713,13 +1735,21 @@ public:
 	{
 		if(from == &audioRtp && rtp.portOffset == 0)
 		{
+#ifdef UDP_LOOPBACK
+			audioloop->writeDatagram(rtp.rawValue, QHostAddress("127.0.0.1"), 61000);
+#else
 			GstAppRtpSrc *src = (GstAppRtpSrc *)GstThread::instance()->audiortpsrc;
 			gst_apprtpsrc_packet_push(src, (const unsigned char *)rtp.rawValue.data(), rtp.rawValue.size());
+#endif
 		}
 		else if(from == &videoRtp && rtp.portOffset == 0)
 		{
+#ifdef UDP_LOOPBACK
+			videoloop->writeDatagram(rtp.rawValue, QHostAddress("127.0.0.1"), 61002);
+#else
 			GstAppRtpSrc *src = (GstAppRtpSrc *)GstThread::instance()->videortpsrc;
 			gst_apprtpsrc_packet_push(src, (const unsigned char *)rtp.rawValue.data(), rtp.rawValue.size());
+#endif
 		}
 	}
 
