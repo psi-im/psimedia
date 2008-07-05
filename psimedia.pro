@@ -19,6 +19,20 @@ SOURCES += \
 	gstcustomelements_apprtpsink.c \
 	gstprovider.cpp
 
+windows {
+	INCLUDEPATH += \
+		"C:\Program Files\Common Files\gtk+\include\glib-2.0" \
+		"C:\Program Files\Common Files\gtk+\lib\glib-2.0\include" \
+		"C:\Program Files\Common Files\libxml2\include" \
+		"C:\Program Files\Common Files\GStreamer\0.10\include" \
+		"C:\Program Files\Common Files\iconv\include" \
+		"C:\Program Files\Common Files\zlib\include"
+	LIBPATH += \
+		"C:\Progra~1\Common~1\gtk+\lib" \
+		"C:\Progra~1\Common~1\GStreamer\0.10\lib"
+	LIBS += -llibgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lgobject-2.0 -llibgstvideo-0.10 -llibgstbase-0.10
+}
+
 unix:!mac {
 	INCLUDEPATH += \
 		/usr/include/glib-2.0 \
