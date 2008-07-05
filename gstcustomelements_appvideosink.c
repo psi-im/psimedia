@@ -71,13 +71,16 @@ void gst_appvideosink_init(GstAppVideoSink *sink, GstAppVideoSinkClass *gclass)
 
 GstFlowReturn gst_appvideosink_render(GstBaseSink *sink, GstBuffer *buffer)
 {
+	int size;
+	int width, height;
+	GstCaps *caps;
+	GstStructure *structure;
 	GstAppVideoSink *self = (GstAppVideoSink *)sink;
 
-	GstCaps *caps = GST_BUFFER_CAPS(buffer);
-	GstStructure *structure = gst_caps_get_structure(caps, 0);
+	caps = GST_BUFFER_CAPS(buffer);
+	structure = gst_caps_get_structure(caps, 0);
 
 	// get width and height
-	int width, height;
 	if(!gst_structure_get_int(structure, "width", &width) ||
 		!gst_structure_get_int(structure, "height", &height))
 	{
@@ -85,7 +88,7 @@ GstFlowReturn gst_appvideosink_render(GstBaseSink *sink, GstBuffer *buffer)
 	}
 
 	// make sure buffer size matches width * height * 24 bit rgb
-	int size = GST_BUFFER_SIZE(buffer);
+	size = GST_BUFFER_SIZE(buffer);
 	if(width * height * 3 != size)
 		return GST_FLOW_ERROR;
 

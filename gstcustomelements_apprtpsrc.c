@@ -117,8 +117,8 @@ void gst_apprtpsrc_init(GstAppRtpSrc *src, GstAppRtpSrcClass *gclass)
 // destruct
 static void my_foreach_func(gpointer data, gpointer user_data)
 {
-	(void)user_data;
 	GstBuffer *buf = (GstBuffer *)data;
+	(void)user_data;
 	gst_buffer_unref(buf);
 }
 
@@ -228,8 +228,8 @@ void gst_apprtpsrc_packet_push(GstAppRtpSrc *src, const unsigned char *buf, int 
 
 void gst_apprtpsrc_set_property(GObject *obj, guint prop_id, const GValue *value, GParamSpec *pspec)
 {
-	(void)pspec;
 	GstAppRtpSrc *src = (GstAppRtpSrc *)obj;
+	(void)pspec;
 
 	switch(prop_id)
 	{
