@@ -1287,13 +1287,23 @@ private:
 		gst_caps_unref(caps);
 
 		//GstElement *audioqueue = gst_element_factory_make("queue", NULL);
+		GstElement *audiortpjitterbuffer = gst_element_factory_make("gstrtpjitterbuffer", NULL);
 		GstElement *audiortpdepay = gst_element_factory_make("rtpspeexdepay", NULL);
 		GstElement *audiodec = gst_element_factory_make("speexdec", NULL);
 		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
 		GstElement *audioout = 0;
 
-		gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpdepay, audiodec, audioconvert, NULL);
-		gst_element_link_many(audiortpsrc, audiortpdepay, audiodec, audioconvert, NULL);
+		if(audiortpjitterbuffer)
+		{
+			gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, NULL);
+			gst_element_link_many(audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, NULL);
+			g_object_set(G_OBJECT(audiortpjitterbuffer), "latency", (unsigned int)400, NULL);
+		}
+		else
+		{
+			gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpdepay, audiodec, audioconvert, NULL);
+			gst_element_link_many(audiortpsrc, audiortpdepay, audiodec, audioconvert, NULL);
+		}
 
 		if(!aout.isEmpty())
 		{
@@ -1310,6 +1320,7 @@ private:
 			audioout = gst_element_factory_make("fakesink", NULL);
 
 		//GstElement *videoqueue = gst_element_factory_make("queue", NULL);
+		//GstElement *videortpjitterbuffer = gst_element_factory_make("gstrtpjitterbuffer", NULL);
 		GstElement *videortpdepay = gst_element_factory_make("rtptheoradepay", NULL);
 		GstElement *videodec = gst_element_factory_make("theoradec", NULL);
 		GstElement *videoconvert = gst_element_factory_make("ffmpegcolorspace", NULL);
