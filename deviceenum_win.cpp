@@ -26,14 +26,14 @@ QList<Item> audioOutputItems(const QString &driver)
 {
 	QList<Item> out;
 
-	if(driver == "directsound")
+	if(driver == "directshow")
 	{
 		// hardcode a default output device
 		Item i;
 		i.type = Item::Audio;
 		i.dir = Item::Output;
 		i.name = "Default";
-		i.driver = "directsound";
+		i.driver = "directshow";
 		i.id = QString(); // unspecified
 		out += i;
 	}
@@ -43,17 +43,39 @@ QList<Item> audioOutputItems(const QString &driver)
 
 QList<Item> audioInputItems(const QString &driver)
 {
-	// TODO: windows audio input
-	Q_UNUSED(driver);
 	QList<Item> out;
+
+	if(driver == "directshow")
+	{
+		// hardcode a default input device
+		Item i;
+		i.type = Item::Audio;
+		i.dir = Item::Input;
+		i.name = "Default";
+		i.driver = "directshow";
+		i.id = QString(); // unspecified
+		out += i;
+	}
+
 	return out;
 }
 
 QList<Item> videoInputItems(const QString &driver)
 {
-	// TODO: windows video input
-	Q_UNUSED(driver);
 	QList<Item> out;
+
+	if(driver == "directshow")
+	{
+		// hardcode a default input device
+		Item i;
+		i.type = Item::Video;
+		i.dir = Item::Input;
+		i.name = "Default";
+		i.driver = "directshow";
+		i.id = QString(); // unspecified
+		out += i;
+	}
+
 	return out;
 }
 

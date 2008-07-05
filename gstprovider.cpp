@@ -62,6 +62,12 @@ static QList<GstDevice> gstAudioInputDevices()
 		supportedDrivers += "osxaudio";
 		g_object_unref(G_OBJECT(e));
 	}
+	e = gst_element_factory_make("dshowaudiosrc", NULL);
+	if(e)
+	{
+		supportedDrivers += "directshow";
+		g_object_unref(G_OBJECT(e));
+	}
 
 	foreach(QString driver, supportedDrivers)
 	{
@@ -78,6 +84,8 @@ static QList<GstDevice> gstAudioInputDevices()
 				dev.element_name = "alsasrc";
 			else if(i.driver == "osxaudio")
 				dev.element_name = "osxaudiosrc";
+			else if(i.driver == "directshow")
+				dev.element_name = "dshowaudiosrc";
 			out += dev;
 			first = false;
 		}
@@ -107,7 +115,7 @@ static QList<GstDevice> gstAudioOutputDevices()
 	e = gst_element_factory_make("directsoundsink", NULL);
 	if(e)
 	{
-		supportedDrivers += "directsound";
+		supportedDrivers += "directshow";
 		g_object_unref(G_OBJECT(e));
 	}
 
@@ -126,7 +134,7 @@ static QList<GstDevice> gstAudioOutputDevices()
 				dev.element_name = "alsasink";
 			else if(i.driver == "osxaudio")
 				dev.element_name = "osxaudiosink";
-			else if(i.driver == "directsound")
+			else if(i.driver == "directshow")
 				dev.element_name = "directsoundsink";
 			out += dev;
 			first = false;
@@ -154,6 +162,12 @@ static QList<GstDevice> gstVideoInputDevices()
 		supportedDrivers += "v4l2";
 		g_object_unref(G_OBJECT(e));
 	}
+	e = gst_element_factory_make("dshowvideosrc", NULL);
+	if(e)
+	{
+		supportedDrivers += "directshow";
+		g_object_unref(G_OBJECT(e));
+	}
 
 	foreach(QString driver, supportedDrivers)
 	{
@@ -170,6 +184,8 @@ static QList<GstDevice> gstVideoInputDevices()
 				dev.element_name = "v4lsrc";
 			else if(i.driver == "v4l2")
 				dev.element_name = "v4l2src";
+			else if(i.driver == "directshow")
+				dev.element_name = "dshowvideosrc";
 			out += dev;
 			first = false;
 		}
@@ -202,8 +218,6 @@ static GstElement *make_device_element(const QString &id, PDevice::Type type)
 			element_name = "alsasink";
 		else if(type == PDevice::AudioIn)
 			element_name = "alsasrc";
-		else
-			return 0;
 	}
 	else if(driver == "osxaudio")
 	{
@@ -211,30 +225,29 @@ static GstElement *make_device_element(const QString &id, PDevice::Type type)
 			element_name = "osxaudiosink";
 		else if(type == PDevice::AudioIn)
 			element_name = "osxaudiosrc";
-		else
-			return 0;
-	}
-	else if(driver == "directsound")
-	{
-		if(type == PDevice::AudioOut)
-			element_name = "directsoundsink";
-		else
-			return 0;
 	}
 	else if(driver == "v4l")
 	{
 		if(type == PDevice::VideoIn)
 			element_name = "v4lsrc";
-		else
-			return 0;
 	}
 	else if(driver == "v4l2")
 	{
 		if(type == PDevice::VideoIn)
 			element_name = "v4l2src";
-		else
-			return 0;
 	}
+	else if(driver == "directshow")
+	{
+		if(type == PDevice::AudioOut)
+			element_name = "directsoundsink";
+		else if(type == PDevice::AudioIn)
+			element_name = "dshowaudiosrc";
+		else if(type == PDevice::VideoIn)
+			element_name = "dshowvideosrc";
+	}
+
+	if(element_name.isEmpty())
+		return 0;
 
 	GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), NULL);
 	if(!e)
