@@ -43,16 +43,18 @@ static gboolean register_elements(GstPlugin *plugin)
 	return TRUE;
 }
 
-#define PACKAGE "my-application"
-
-GST_PLUGIN_DEFINE_STATIC (
-  GST_VERSION_MAJOR,
-  GST_VERSION_MINOR,
-  "my-private-plugins",
-  "Private elements of my application",
-  register_elements,
-  "1.0.0",
-  "LGPL",
-  "my-application",
-  "http://www.my-application.net/"
-)
+void gstcustomelements_register()
+{
+	gst_plugin_register_static(
+		GST_VERSION_MAJOR,
+		GST_VERSION_MINOR,
+		"my-private-plugins",
+		"Private elements of my application",
+		register_elements,
+		"1.0.0",
+		"LGPL",
+		"my-application",
+		"my-application",
+		"http://www.my-application.net/"
+		);
+}

@@ -620,6 +620,8 @@ public:
 		// manually load plugins?
 		if(!pluginPath.isEmpty())
 			loadPlugins(pluginPath);
+
+		gstcustomelements_register();
 	}
 
 	~GstSession()

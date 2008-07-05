@@ -137,6 +137,8 @@ struct _GstAppRtpSinkClass
 
 GType gst_apprtpsink_get_type(void);
 
+void gstcustomelements_register();
+
 G_END_DECLS
 
 #endif
