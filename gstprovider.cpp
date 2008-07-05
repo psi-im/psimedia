@@ -540,7 +540,7 @@ public:
 			for(int n = 0; n < count; ++n)
 			{
 				QByteArray cs = args[n].toLocal8Bit();
-				data[n] = (char *)strdup(cs.data());
+				data[n] = (char *)qstrdup(cs.data());
 				argv[n] = data[n];
 			}
 			argc = count;
