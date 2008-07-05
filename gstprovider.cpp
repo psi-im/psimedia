@@ -104,10 +104,10 @@ static QList<GstDevice> gstAudioOutputDevices()
 		supportedDrivers += "osxaudio";
 		g_object_unref(G_OBJECT(e));
 	}
-	e = gst_element_factory_make("directaudiosink", NULL);
+	e = gst_element_factory_make("directsoundsink", NULL);
 	if(e)
 	{
-		supportedDrivers += "directaudio";
+		supportedDrivers += "directsound";
 		g_object_unref(G_OBJECT(e));
 	}
 
@@ -217,7 +217,7 @@ static GstElement *make_device_element(const QString &id, PDevice::Type type)
 	else if(driver == "directsound")
 	{
 		if(type == PDevice::AudioOut)
-			element_name = "directaudiosink";
+			element_name = "directsoundsink";
 		else
 			return 0;
 	}

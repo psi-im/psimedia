@@ -35,6 +35,7 @@ QList<Item> audioOutputItems(const QString &driver)
 		i.name = "Default";
 		i.driver = "directsound";
 		i.id = QString(); // unspecified
+		out += i;
 	}
 
 	return out;
