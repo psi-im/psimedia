@@ -62,6 +62,7 @@ static QList<GstDevice> gstAudioInputDevices()
 		supportedDrivers += "osxaudio";
 		g_object_unref(G_OBJECT(e));
 	}
+
 	foreach(QString driver, supportedDrivers)
 	{
 		QList<DeviceEnum::Item> list = DeviceEnum::audioInputItems(driver);
@@ -103,6 +104,12 @@ static QList<GstDevice> gstAudioOutputDevices()
 		supportedDrivers += "osxaudio";
 		g_object_unref(G_OBJECT(e));
 	}
+	e = gst_element_factory_make("directaudiosink", NULL);
+	if(e)
+	{
+		supportedDrivers += "directaudio";
+		g_object_unref(G_OBJECT(e));
+	}
 
 	foreach(QString driver, supportedDrivers)
 	{
@@ -119,6 +126,8 @@ static QList<GstDevice> gstAudioOutputDevices()
 				dev.element_name = "alsasink";
 			else if(i.driver == "osxaudio")
 				dev.element_name = "osxaudiosink";
+			else if(i.driver == "directsound")
+				dev.element_name = "directsoundsink";
 			out += dev;
 			first = false;
 		}
@@ -145,6 +154,7 @@ static QList<GstDevice> gstVideoInputDevices()
 		supportedDrivers += "v4l2";
 		g_object_unref(G_OBJECT(e));
 	}
+
 	foreach(QString driver, supportedDrivers)
 	{
 		QList<DeviceEnum::Item> list = DeviceEnum::videoInputItems(driver);
@@ -201,6 +211,13 @@ static GstElement *make_device_element(const QString &id, PDevice::Type type)
 			element_name = "osxaudiosink";
 		else if(type == PDevice::AudioIn)
 			element_name = "osxaudiosrc";
+		else
+			return 0;
+	}
+	else if(driver == "directsound")
+	{
+		if(type == PDevice::AudioOut)
+			element_name = "directaudiosink";
 		else
 			return 0;
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006  Justin Karneges
+ * Copyright (C) 2008  Justin Karneges
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -24,9 +24,19 @@ namespace DeviceEnum {
 
 QList<Item> audioOutputItems(const QString &driver)
 {
-	// TODO: windows audio output
-	Q_UNUSED(driver);
 	QList<Item> out;
+
+	if(driver == "directsound")
+	{
+		// hardcode a default output device
+		Item i;
+		i.type = Audio;
+		i.dir = Output;
+		i.name = "Default";
+		i.driver = "directsound";
+		i.id = QString(); // unspecified
+	}
+
 	return out;
 }
 
