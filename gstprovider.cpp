@@ -1355,18 +1355,19 @@ private:
 		GstElement *audiortpdepay = gst_element_factory_make("rtpspeexdepay", NULL);
 		GstElement *audiodec = gst_element_factory_make("speexdec", NULL);
 		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
+		GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
 		GstElement *audioout = 0;
 
 		if(audiortpjitterbuffer)
 		{
-			gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, NULL);
-			gst_element_link_many(audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, NULL);
+			gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
+			gst_element_link_many(audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
 			g_object_set(G_OBJECT(audiortpjitterbuffer), "latency", (unsigned int)400, NULL);
 		}
 		else
 		{
-			gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpdepay, audiodec, audioconvert, NULL);
-			gst_element_link_many(audiortpsrc, audiortpdepay, audiodec, audioconvert, NULL);
+			gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
+			gst_element_link_many(audiortpsrc, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
 		}
 
 		if(!aout.isEmpty())
@@ -1410,7 +1411,7 @@ private:
 		}
 
 		gst_bin_add(GST_BIN(rpipeline), audioout);
-		gst_element_link_many(audioconvert, audioout, NULL);
+		gst_element_link_many(audioresample, audioout, NULL);
 
 		gst_element_set_state(rpipeline, GST_STATE_READY);
 		gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
