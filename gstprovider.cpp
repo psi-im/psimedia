@@ -844,7 +844,7 @@ public:
 	PPayloadInfo videoPayloadInfo;
 
 	QString aout;
-	GstElement *rpipeline;
+	GstElement *rpipeline, *rvpipeline;
 	GstElement *audiortpsrc;
 	GstElement *videortpsrc;
 
@@ -886,6 +886,20 @@ public:
 		g_source_attach(timer, mainContext);
 	}
 
+	void stopProducer()
+	{
+		GSource *timer = g_timeout_source_new(0);
+		g_source_set_callback(timer, cb_doStopProducer, this, NULL);
+		g_source_attach(timer, mainContext);
+	}
+
+	void stopReceiver()
+	{
+		GSource *timer = g_timeout_source_new(0);
+		g_source_set_callback(timer, cb_doStopReceiver, this, NULL);
+		g_source_attach(timer, mainContext);
+	}
+
 signals:
 	void producer_started();
 	void producer_stopped();
@@ -893,6 +907,7 @@ signals:
 	void producer_error();
 
 	void receiver_started();
+	void receiver_stopped();
 
 protected:
 	virtual void run()
@@ -946,6 +961,16 @@ private:
 	static gboolean cb_doStartReceiver(gpointer data)
 	{
 		return ((GstThread *)data)->doStartReceiver();
+	}
+
+	static gboolean cb_doStopProducer(gpointer data)
+	{
+		return ((GstThread *)data)->doStopProducer();
+	}
+
+	static gboolean cb_doStopReceiver(gpointer data)
+	{
+		return ((GstThread *)data)->doStopReceiver();
 	}
 
 	static void cb_fileDemux_pad_added(GstElement *element, GstPad *pad, gpointer data)
@@ -1140,6 +1165,24 @@ private:
 		return FALSE;
 	}
 
+	gboolean doStopProducer()
+	{
+		cleanup_producer();
+
+		emit producer_stopped();
+
+		return FALSE;
+	}
+
+	gboolean doStopReceiver()
+	{
+		cleanup_receiver();
+
+		emit receiver_stopped();
+
+		return FALSE;
+	}
+
 	void cleanup_producer()
 	{
 		if(!pipeline)
@@ -1150,6 +1193,27 @@ private:
 
 		gst_object_unref(GST_OBJECT(pipeline));
 		pipeline = 0;
+	}
+
+	void cleanup_receiver()
+	{
+		if(rpipeline)
+		{
+			gst_element_set_state(rpipeline, GST_STATE_NULL);
+			gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+			gst_object_unref(GST_OBJECT(rpipeline));
+			rpipeline = 0;
+		}
+
+		if(rvpipeline)
+		{
+			gst_element_set_state(rvpipeline, GST_STATE_NULL);
+			gst_element_get_state(rvpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+			gst_object_unref(GST_OBJECT(rvpipeline));
+			rvpipeline = 0;
+		}
 	}
 
 	void fileDemux_pad_added(GstElement *element, GstPad *pad)
@@ -1245,7 +1309,7 @@ private:
 	gboolean doStartReceiver()
 	{
 		rpipeline = gst_pipeline_new(NULL);
-		GstElement *rvpipeline = gst_pipeline_new(NULL);
+		rvpipeline = gst_pipeline_new(NULL);
 
 #ifdef UDP_LOOPBACK
 		audiortpsrc = gst_element_factory_make("udpsrc", NULL);
@@ -1440,6 +1504,9 @@ public:
 		code(-1)
 	{
 		g_producer = this;
+
+		connect(GstThread::instance(), SIGNAL(producer_started()), SIGNAL(started()));
+		connect(GstThread::instance(), SIGNAL(producer_stopped()), SIGNAL(stopped()));
 	}
 
 	virtual QObject *qobject()
@@ -1506,7 +1573,6 @@ public:
 	virtual void start()
 	{
 		// TODO
-		connect(GstThread::instance(), SIGNAL(producer_started()), SIGNAL(started()));
 		GstThread::instance()->ain = audioInId;
 		GstThread::instance()->vin = videoInId;
 		GstThread::instance()->infile = fileIn;
@@ -1538,6 +1604,7 @@ public:
 	virtual void stop()
 	{
 		// TODO
+		GstThread::instance()->stopProducer();
 	}
 
 	virtual QList<PPayloadInfo> audioPayloadInfo() const
@@ -1656,6 +1723,9 @@ public:
 	{
 		g_receiver = this;
 
+		connect(GstThread::instance(), SIGNAL(receiver_started()), SIGNAL(started()));
+		connect(GstThread::instance(), SIGNAL(receiver_stopped()), SIGNAL(stopped()));
+
 #ifdef UDP_LOOPBACK
 		audioloop = new QUdpSocket(this);
 		videoloop = new QUdpSocket(this);
@@ -1713,7 +1783,6 @@ public:
 	virtual void start()
 	{
 		// TODO
-		connect(GstThread::instance(), SIGNAL(receiver_started()), SIGNAL(started()));
 		GstThread::instance()->aout = audioOutId;
 		GstThread::instance()->startReceiver();
 	}
@@ -1721,6 +1790,7 @@ public:
 	virtual void stop()
 	{
 		// TODO
+		GstThread::instance()->stopReceiver();
 	}
 
 	virtual QList<PPayloadInfo> audioPayloadInfo() const
