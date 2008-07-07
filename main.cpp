@@ -801,7 +801,7 @@ public:
 		}
 		return str;
 	}
-	
+
 	static QString receiverErrorToString(PsiMedia::Receiver::Error e)
 	{
 		QString str;
