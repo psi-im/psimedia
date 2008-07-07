@@ -1045,43 +1045,57 @@ private:
 			}
 		}
 
-		GstElement *audioqueue = gst_element_factory_make("queue", NULL);
-		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-		GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
-		GstElement *audioenc = gst_element_factory_make("speexenc", NULL);
-		GstElement *audiortppay = gst_element_factory_make("rtpspeexpay", NULL);
-		//g_object_set(G_OBJECT(audiortppay), "min-ptime", (guint64)1000000000, NULL);
-		//GstElement *audiosink = gst_element_factory_make("alsasink", NULL);
-		GstElement *audiortpsink = gst_element_factory_make("apprtpsink", NULL);
-		GstAppRtpSink *appRtpSink = (GstAppRtpSink *)audiortpsink;
-		appRtpSink->packet_ready = gst_packet_ready_audio;
+		GstElement *audioqueue, *audioconvert, *audioresample, *audioenc, *audiortppay, *audiortpsink;
+		GstAppRtpSink *appRtpSink;
+		GstCaps *caps5;
 
-		GstCaps *caps5 = gst_caps_new_simple("audio/x-raw-int",
-			"rate", G_TYPE_INT, 16000,
-			"channels", G_TYPE_INT, 1, NULL);
-
-		GstElement *videoqueue = gst_element_factory_make("queue", NULL);
-		GstElement *videoconvert = gst_element_factory_make("ffmpegcolorspace", NULL);
-		//GstElement *videosink = gst_element_factory_make("ximagesink", NULL);
-		GstElement *videosink = gst_element_factory_make("appvideosink", NULL);
-		if(!videosink)
+		if(audioin || fileSource)
 		{
-			printf("could not make videosink!!\n");
-		}
-		GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videosink;
-		appVideoSink->show_frame = gst_show_frame;
-		//g_object_set(G_OBJECT(appVideoSink), "sync", FALSE, NULL);
+			audioqueue = gst_element_factory_make("queue", NULL);
+			audioconvert = gst_element_factory_make("audioconvert", NULL);
+			audioresample = gst_element_factory_make("audioresample", NULL);
+			audioenc = gst_element_factory_make("speexenc", NULL);
+			audiortppay = gst_element_factory_make("rtpspeexpay", NULL);
+			//g_object_set(G_OBJECT(audiortppay), "min-ptime", (guint64)1000000000, NULL);
+			//audiosink = gst_element_factory_make("alsasink", NULL);
+			audiortpsink = gst_element_factory_make("apprtpsink", NULL);
+			appRtpSink = (GstAppRtpSink *)audiortpsink;
+			appRtpSink->packet_ready = gst_packet_ready_audio;
 
-		GstElement *videoconvertpre = gst_element_factory_make("ffmpegcolorspace", NULL);
-		GstElement *videotee = gst_element_factory_make("tee", NULL);
-		GstElement *videortpqueue = gst_element_factory_make("queue", NULL);
-		GstElement *videoenc = gst_element_factory_make("theoraenc", NULL);
-		GstElement *videortppay = gst_element_factory_make("rtptheorapay", NULL);
-		GstElement *videortpsink = gst_element_factory_make("apprtpsink", NULL);
-		if(!videotee || !videortpqueue || !videoenc || !videortppay || !videortpsink)
-			printf("error making some video stuff\n");
-		appRtpSink = (GstAppRtpSink *)videortpsink;
-		appRtpSink->packet_ready = gst_packet_ready;
+			caps5 = gst_caps_new_simple("audio/x-raw-int",
+				"rate", G_TYPE_INT, 16000,
+				"channels", G_TYPE_INT, 1, NULL);
+		}
+
+		GstElement *videoqueue, *videoconvert, *videosink;
+		GstAppVideoSink *appVideoSink;
+		GstElement *videoconvertpre, *videotee, *videortpqueue, *videoenc, *videortppay, *videortpsink;
+
+		if(videoin || fileSource)
+		{
+			videoqueue = gst_element_factory_make("queue", NULL);
+			videoconvert = gst_element_factory_make("ffmpegcolorspace", NULL);
+			//videosink = gst_element_factory_make("ximagesink", NULL);
+			videosink = gst_element_factory_make("appvideosink", NULL);
+			if(!videosink)
+			{
+				printf("could not make videosink!!\n");
+			}
+			appVideoSink = (GstAppVideoSink *)videosink;
+			appVideoSink->show_frame = gst_show_frame;
+			//g_object_set(G_OBJECT(appVideoSink), "sync", FALSE, NULL);
+
+			videoconvertpre = gst_element_factory_make("ffmpegcolorspace", NULL);
+			videotee = gst_element_factory_make("tee", NULL);
+			videortpqueue = gst_element_factory_make("queue", NULL);
+			videoenc = gst_element_factory_make("theoraenc", NULL);
+			videortppay = gst_element_factory_make("rtptheorapay", NULL);
+			videortpsink = gst_element_factory_make("apprtpsink", NULL);
+			if(!videotee || !videortpqueue || !videoenc || !videortppay || !videortpsink)
+				printf("error making some video stuff\n");
+			appRtpSink = (GstAppRtpSink *)videortpsink;
+			appRtpSink->packet_ready = gst_packet_ready;
+		}
 
 		if(audioin)
 			gst_bin_add(GST_BIN(pipeline), audioin);
@@ -1091,21 +1105,33 @@ private:
 		if(fileSource)
 			gst_bin_add_many(GST_BIN(pipeline), fileSource, fileDemux, NULL);
 
-		gst_bin_add_many(GST_BIN(pipeline), audioqueue, audioconvert, audioresample, audioenc, audiortppay, audiortpsink, NULL);
-		gst_bin_add_many(GST_BIN(pipeline), videoconvertpre, videotee, videoqueue, videoconvert, videosink, NULL);
-		gst_bin_add_many(GST_BIN(pipeline), videortpqueue, videoenc, videortppay, videortpsink, NULL);
+		if(audioin || fileSource)
+			gst_bin_add_many(GST_BIN(pipeline), audioqueue, audioconvert, audioresample, audioenc, audiortppay, audiortpsink, NULL);
+		if(videoin || fileSource)
+		{
+			gst_bin_add_many(GST_BIN(pipeline), videoconvertpre, videotee, videoqueue, videoconvert, videosink, NULL);
+			gst_bin_add_many(GST_BIN(pipeline), videortpqueue, videoenc, videortppay, videortpsink, NULL);
+		}
 
 		if(fileSource)
 			gst_element_link_many(fileSource, fileDemux, NULL);
 
-		gst_element_link_many(audioqueue, audioconvert, audioresample, NULL);
-		gst_element_link_filtered(audioresample, audioenc, caps5);
-		gst_element_link_many(audioenc, audiortppay, audiortpsink, NULL);
-		gst_element_link_many(videoconvertpre, videotee, videoqueue, videoconvert, videosink, NULL);
-		gst_element_link_many(videotee, videortpqueue, videoenc, videortppay, videortpsink, NULL);
+		if(audioin || fileSource)
+		{
+			gst_element_link_many(audioqueue, audioconvert, audioresample, NULL);
+			gst_element_link_filtered(audioresample, audioenc, caps5);
+			gst_element_link_many(audioenc, audiortppay, audiortpsink, NULL);
+		}
+		if(videoin || fileSource)
+		{
+			gst_element_link_many(videoconvertpre, videotee, videoqueue, videoconvert, videosink, NULL);
+			gst_element_link_many(videotee, videortpqueue, videoenc, videortppay, videortpsink, NULL);
+		}
 
-		audioTarget = audioqueue;
-		videoTarget = videoconvertpre;
+		if(audioin || fileSource)
+			audioTarget = audioqueue;
+		if(videoin || fileSource)
+			videoTarget = videoconvertpre;
 
 		if(audioin)
 			gst_element_link_many(audioin, audioTarget, NULL);
@@ -1121,41 +1147,47 @@ private:
 		gst_element_set_state(pipeline, GST_STATE_PLAYING);
 		gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 
-		GstPad *pad = gst_element_get_pad(audiortppay, "src");
-		GstCaps *caps = gst_pad_get_negotiated_caps(pad);
-		gchar *gstr = gst_caps_to_string(caps);
-		QString capsString = QString::fromUtf8(gstr);
-		g_free(gstr);
-		printf("rtppay caps audio: [%s]\n", qPrintable(capsString));
-		g_object_unref(pad);
-
-		GstStructure *cs = gst_caps_get_structure(caps, 0);
-
-		audioPayloadInfo = structureToPayloadInfo(cs);
-		if(audioPayloadInfo.id == -1)
+		if(audioin || fileSource)
 		{
-			// TODO: handle error
+			GstPad *pad = gst_element_get_pad(audiortppay, "src");
+			GstCaps *caps = gst_pad_get_negotiated_caps(pad);
+			gchar *gstr = gst_caps_to_string(caps);
+			QString capsString = QString::fromUtf8(gstr);
+			g_free(gstr);
+			printf("rtppay caps audio: [%s]\n", qPrintable(capsString));
+			g_object_unref(pad);
+
+			GstStructure *cs = gst_caps_get_structure(caps, 0);
+
+			audioPayloadInfo = structureToPayloadInfo(cs);
+			if(audioPayloadInfo.id == -1)
+			{
+				// TODO: handle error
+			}
+
+			gst_caps_unref(caps);
 		}
 
-		gst_caps_unref(caps);
-
-		pad = gst_element_get_pad(videortppay, "src");
-		caps = gst_pad_get_negotiated_caps(pad);
-		gstr = gst_caps_to_string(caps);
-		capsString = QString::fromUtf8(gstr);
-		g_free(gstr);
-		printf("rtppay caps video: [%s]\n", qPrintable(capsString));
-		gst_object_unref(pad);
-
-		cs = gst_caps_get_structure(caps, 0);
-
-		videoPayloadInfo = structureToPayloadInfo(cs);
-		if(videoPayloadInfo.id == -1)
+		if(videoin || fileSource)
 		{
-			// TODO: handle error
-		}
+			GstPad *pad = gst_element_get_pad(videortppay, "src");
+			GstCaps *caps = gst_pad_get_negotiated_caps(pad);
+			gchar *gstr = gst_caps_to_string(caps);
+			QString capsString = QString::fromUtf8(gstr);
+			g_free(gstr);
+			printf("rtppay caps video: [%s]\n", qPrintable(capsString));
+			gst_object_unref(pad);
 
-		gst_caps_unref(caps);
+			GstStructure *cs = gst_caps_get_structure(caps, 0);
+
+			videoPayloadInfo = structureToPayloadInfo(cs);
+			if(videoPayloadInfo.id == -1)
+			{
+				// TODO: handle error
+			}
+
+			gst_caps_unref(caps);
+		}
 
 		//gst_element_set_state(pipeline, GST_STATE_PLAYING);
 		//gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
