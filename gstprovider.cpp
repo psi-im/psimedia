@@ -815,7 +815,9 @@ public:
 		gstSession(0),
 		mainContext(0),
 		mainLoop(0),
-		pipeline(0)
+		pipeline(0),
+		rpipeline(0),
+		rvpipeline(0)
 	{
 		self = this;
 	}
