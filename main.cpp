@@ -715,6 +715,7 @@ public:
 		connect(ui.sl_spk, SIGNAL(valueChanged(int)), SLOT(change_volume_spk(int)));
 		connect(&producer, SIGNAL(started()), SLOT(producer_started()));
 		connect(&producer, SIGNAL(stopped()), SLOT(producer_stopped()));
+		connect(&producer, SIGNAL(finished()), SLOT(producer_finished()));
 		connect(&producer, SIGNAL(error()), SLOT(producer_error()));
 		connect(&receiver, SIGNAL(started()), SLOT(receiver_started()));
 		connect(&receiver, SIGNAL(stopped()), SLOT(receiver_stopped()));
@@ -1153,6 +1154,17 @@ private slots:
 		setSendFieldsEnabled(true);
 		setSendConfig(QString());
 		ui.pb_startSend->setEnabled(true);
+	}
+
+	void producer_finished()
+	{
+		cleanup_send_rtp();
+
+		setSendFieldsEnabled(true);
+		setSendConfig(QString());
+		ui.pb_startSend->setEnabled(true);
+		ui.pb_transmit->setEnabled(false);
+		ui.pb_stopSend->setEnabled(false);
 	}
 
 	void producer_error()
