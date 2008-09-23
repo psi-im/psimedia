@@ -21,8 +21,12 @@
 #include "psimedia.h"
 
 #include <QtCore>
+
+#ifdef QT_GUI_LIB
 #include <QPainter>
 #include <QImage>
+#endif
+
 #include "psimediaprovider.h"
 
 namespace PsiMedia {

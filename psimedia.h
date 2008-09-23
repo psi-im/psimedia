@@ -21,10 +21,12 @@
 #ifndef PSIMEDIA_H
 #define PSIMEDIA_H
 
-#ifdef QT_GUI_LIB
-#include <QWidget>
+#include <QSize>
 #include <QStringList>
 #include <QSharedDataPointer>
+
+#ifdef QT_GUI_LIB
+#include <QWidget>
 #endif
 
 namespace PsiMedia {
