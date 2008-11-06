@@ -87,6 +87,8 @@ public:
 	VideoWidget(QWidget *parent = 0);
 	~VideoWidget();
 
+	virtual QSize sizeHint() const;
+
 protected:
 	virtual void paintEvent(QPaintEvent *event);
 

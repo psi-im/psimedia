@@ -403,6 +403,14 @@ VideoWidget::~VideoWidget()
 	delete d;
 }
 
+QSize VideoWidget::sizeHint() const
+{
+	if(!d->curImage.isNull())
+		return d->curImage.size();
+	else
+		return QSize();
+}
+
 void VideoWidget::paintEvent(QPaintEvent *event)
 {
 	Q_UNUSED(event);
