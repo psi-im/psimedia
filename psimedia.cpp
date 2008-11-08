@@ -810,6 +810,7 @@ void RtpChannel::disconnectNotify(const char *signal)
 	}
 }
 
+#if 0
 //----------------------------------------------------------------------------
 // Recorder
 //----------------------------------------------------------------------------
@@ -839,6 +840,7 @@ void Recorder::setDevice(QIODevice *dev)
 {
 	d->device = dev;
 }
+#endif
 
 //----------------------------------------------------------------------------
 // PayloadInfo
@@ -1008,229 +1010,33 @@ bool PayloadInfo::operator==(const PayloadInfo &other) const
 }
 
 //----------------------------------------------------------------------------
-// Receiver
+// RtpSession
 //----------------------------------------------------------------------------
-class ReceiverPrivate : public QObject
+class RtpSessionPrivate : public QObject
 {
 	Q_OBJECT
 
 public:
-	Receiver *q;
+	RtpSession *q;
 
-	ReceiverContext *c;
-	Recorder *recorder;
+	RtpSessionContext *c;
 	RtpChannel audioRtpChannel;
 	RtpChannel videoRtpChannel;
 
-	ReceiverPrivate(Receiver *_q) :
-		QObject(_q),
-		q(_q),
-		recorder(0)
-	{
-		c = provider()->createReceiver();
-		c->qobject()->setParent(this);
-		connect(c->qobject(), SIGNAL(started()), SLOT(c_started()));
-		connect(c->qobject(), SIGNAL(stopped()), SLOT(c_stopped()));
-		connect(c->qobject(), SIGNAL(error()), SLOT(c_error()));
-	}
-
-	~ReceiverPrivate()
-	{
-		delete c;
-	}
-
-	void setRecorder(Recorder *rec)
-	{
-		if(recorder)
-		{
-			c->setRecorder(0);
-			recorder = 0;
-		}
-
-		if(rec)
-		{
-			recorder = rec;
-			c->setRecorder(recorder->d->device);
-		}
-	}
-
-private slots:
-	void c_started()
-	{
-		audioRtpChannel.d->setContext(c->audioRtpChannel());
-		videoRtpChannel.d->setContext(c->videoRtpChannel());
-		emit q->started();
-	}
-
-	void c_stopped()
-	{
-		audioRtpChannel.d->setContext(0);
-		videoRtpChannel.d->setContext(0);
-		emit q->stopped();
-	}
-
-	void c_error()
-	{
-		audioRtpChannel.d->setContext(0);
-		videoRtpChannel.d->setContext(0);
-		emit q->error();
-	}
-};
-
-Receiver::Receiver(QObject *parent) :
-	QObject(parent)
-{
-	d = new ReceiverPrivate(this);
-}
-
-Receiver::~Receiver()
-{
-	delete d;
-}
-
-void Receiver::setAudioOutputDevice(const QString &deviceId)
-{
-	d->c->setAudioOutputDevice(deviceId);
-}
-
-#ifdef QT_GUI_LIB
-void Receiver::setVideoWidget(VideoWidget *widget)
-{
-	d->c->setVideoWidget(widget->d);
-}
-#endif
-
-void Receiver::setRecorder(Recorder *recorder)
-{
-	d->setRecorder(recorder);
-}
-
-void Receiver::setAudioPayloadInfo(const QList<PayloadInfo> &info)
-{
-	QList<PPayloadInfo> list;
-	foreach(const PayloadInfo &p, info)
-		list += exportPayloadInfo(p);
-	d->c->setAudioPayloadInfo(list);
-}
-
-void Receiver::setVideoPayloadInfo(const QList<PayloadInfo> &info)
-{
-	QList<PPayloadInfo> list;
-	foreach(const PayloadInfo &p, info)
-		list += exportPayloadInfo(p);
-	d->c->setVideoPayloadInfo(list);
-}
-
-void Receiver::setAudioParams(const QList<AudioParams> &params)
-{
-	QList<PAudioParams> list;
-	foreach(const AudioParams &p, params)
-		list += exportAudioParams(p);
-	d->c->setAudioParams(list);
-}
-
-void Receiver::setVideoParams(const QList<VideoParams> &params)
-{
-	QList<PVideoParams> list;
-	foreach(const VideoParams &p, params)
-		list += exportVideoParams(p);
-	d->c->setVideoParams(list);
-}
-
-void Receiver::start()
-{
-	d->c->start();
-}
-
-void Receiver::stop()
-{
-	d->c->stop();
-}
-
-QList<PayloadInfo> Receiver::audioPayloadInfo() const
-{
-	QList<PayloadInfo> out;
-	foreach(const PPayloadInfo &pp, d->c->audioPayloadInfo())
-		out += importPayloadInfo(pp);
-	return out;
-}
-
-QList<PayloadInfo> Receiver::videoPayloadInfo() const
-{
-	QList<PayloadInfo> out;
-	foreach(const PPayloadInfo &pp, d->c->videoPayloadInfo())
-		out += importPayloadInfo(pp);
-	return out;
-}
-
-QList<AudioParams> Receiver::audioParams() const
-{
-	QList<AudioParams> out;
-	foreach(const PAudioParams &pp, d->c->audioParams())
-		out += importAudioParams(pp);
-	return out;
-}
-
-QList<VideoParams> Receiver::videoParams() const
-{
-	QList<VideoParams> out;
-	foreach(const PVideoParams &pp, d->c->videoParams())
-		out += importVideoParams(pp);
-	return out;
-}
-
-int Receiver::volume() const
-{
-	return d->c->volume();
-}
-
-void Receiver::setVolume(int level)
-{
-	d->c->setVolume(level);
-}
-
-Receiver::Error Receiver::errorCode() const
-{
-	return (Receiver::Error)d->c->errorCode();
-}
-
-RtpChannel *Receiver::audioRtpChannel()
-{
-	return &d->audioRtpChannel;
-}
-
-RtpChannel *Receiver::videoRtpChannel()
-{
-	return &d->videoRtpChannel;
-}
-
-//----------------------------------------------------------------------------
-// Producer
-//----------------------------------------------------------------------------
-class ProducerPrivate : public QObject
-{
-	Q_OBJECT
-
-public:
-	Producer *q;
-
-	ProducerContext *c;
-	RtpChannel audioRtpChannel;
-	RtpChannel videoRtpChannel;
-
-	ProducerPrivate(Producer *_q) :
+	RtpSessionPrivate(RtpSession *_q) :
 		QObject(_q),
 		q(_q)
 	{
-		c = provider()->createProducer();
+		c = provider()->createRtpSession();
 		c->qobject()->setParent(this);
 		connect(c->qobject(), SIGNAL(started()), SLOT(c_started()));
+		connect(c->qobject(), SIGNAL(preferencesUpdated()), SLOT(c_preferencesUpdated()));
 		connect(c->qobject(), SIGNAL(stopped()), SLOT(c_stopped()));
 		connect(c->qobject(), SIGNAL(finished()), SLOT(c_finished()));
 		connect(c->qobject(), SIGNAL(error()), SLOT(c_error()));
 	}
 
-	~ProducerPrivate()
+	~RtpSessionPrivate()
 	{
 		delete c;
 	}
@@ -1241,6 +1047,11 @@ private slots:
 		audioRtpChannel.d->setContext(c->audioRtpChannel());
 		videoRtpChannel.d->setContext(c->videoRtpChannel());
 		emit q->started();
+	}
+
+	void c_preferencesUpdated()
+	{
+		emit q->preferencesUpdated();
 	}
 
 	void c_stopped()
@@ -1265,107 +1076,145 @@ private slots:
 	}
 };
 
-Producer::Producer(QObject *parent) :
+RtpSession::RtpSession(QObject *parent) :
 	QObject(parent)
 {
-	d = new ProducerPrivate(this);
+	d = new RtpSessionPrivate(this);
 }
 
-Producer::~Producer()
+RtpSession::~RtpSession()
 {
 	delete d;
 }
 
-void Producer::setAudioInputDevice(const QString &deviceId)
+void RtpSession::setAudioOutputDevice(const QString &deviceId)
+{
+	d->c->setAudioOutputDevice(deviceId);
+}
+
+#ifdef QT_GUI_LIB
+void RtpSession::setVideoOutputWidget(VideoWidget *widget)
+{
+	d->c->setVideoOutputWidget(widget->d);
+}
+#endif
+
+void RtpSession::setAudioInputDevice(const QString &deviceId)
 {
 	d->c->setAudioInputDevice(deviceId);
 }
 
-void Producer::setVideoInputDevice(const QString &deviceId)
+void RtpSession::setVideoInputDevice(const QString &deviceId)
 {
 	d->c->setVideoInputDevice(deviceId);
 }
 
-void Producer::setFileInput(const QString &fileName)
+void RtpSession::setFileInput(const QString &fileName)
 {
 	d->c->setFileInput(fileName);
 }
 
-void Producer::setFileDataInput(const QByteArray &fileData)
+void RtpSession::setFileDataInput(const QByteArray &fileData)
 {
 	d->c->setFileDataInput(fileData);
 }
 
 #ifdef QT_GUI_LIB
-void Producer::setVideoWidget(VideoWidget *widget)
+void RtpSession::setVideoPreviewWidget(VideoWidget *widget)
 {
-	d->c->setVideoWidget(widget->d);
+	d->c->setVideoPreviewWidget(widget->d);
 }
 #endif
 
-void Producer::setAudioPayloadInfo(const QList<PayloadInfo> &info)
+void RtpSession::setRecordingQIODevice(QIODevice *dev)
 {
-	QList<PPayloadInfo> list;
-	foreach(const PayloadInfo &p, info)
-		list += exportPayloadInfo(p);
-	d->c->setAudioPayloadInfo(list);
+	d->c->setRecorder(dev);
 }
 
-void Producer::setVideoPayloadInfo(const QList<PayloadInfo> &info)
-{
-	QList<PPayloadInfo> list;
-	foreach(const PayloadInfo &p, info)
-		list += exportPayloadInfo(p);
-	d->c->setVideoPayloadInfo(list);
-}
-
-void Producer::setAudioParams(const QList<AudioParams> &params)
+void RtpSession::setLocalAudioPreferences(const QList<AudioParams> &params)
 {
 	QList<PAudioParams> list;
 	foreach(const AudioParams &p, params)
 		list += exportAudioParams(p);
-	d->c->setAudioParams(list);
+	d->c->setLocalAudioPreferences(list);
 }
 
-void Producer::setVideoParams(const QList<VideoParams> &params)
+void RtpSession::setLocalAudioPreferences(const QList<PayloadInfo> &info)
+{
+	QList<PPayloadInfo> list;
+	foreach(const PayloadInfo &p, info)
+		list += exportPayloadInfo(p);
+	d->c->setLocalAudioPreferences(list);
+}
+
+void RtpSession::setLocalVideoPreferences(const QList<VideoParams> &params)
 {
 	QList<PVideoParams> list;
 	foreach(const VideoParams &p, params)
 		list += exportVideoParams(p);
-	d->c->setVideoParams(list);
+	d->c->setLocalVideoPreferences(list);
 }
 
-void Producer::start()
+void RtpSession::setLocalVideoPreferences(const QList<PayloadInfo> &info)
+{
+	QList<PPayloadInfo> list;
+	foreach(const PayloadInfo &p, info)
+		list += exportPayloadInfo(p);
+	d->c->setLocalVideoPreferences(list);
+}
+
+void RtpSession::setRemoteAudioPreferences(const QList<PayloadInfo> &info)
+{
+	QList<PPayloadInfo> list;
+	foreach(const PayloadInfo &p, info)
+		list += exportPayloadInfo(p);
+	d->c->setRemoteAudioPreferences(list);
+}
+
+void RtpSession::setRemoteVideoPreferences(const QList<PayloadInfo> &info)
+{
+	QList<PPayloadInfo> list;
+	foreach(const PayloadInfo &p, info)
+		list += exportPayloadInfo(p);
+	d->c->setRemoteVideoPreferences(list);
+}
+
+void RtpSession::start()
 {
 	d->c->start();
 }
 
-void Producer::transmitAudio(int paramsIndex)
+void RtpSession::updatePreferences()
 {
-	d->c->transmitAudio(paramsIndex);
+	d->c->updatePreferences();
 }
 
-void Producer::transmitVideo(int paramsIndex)
+void RtpSession::transmitAudio(int index)
 {
-	d->c->transmitVideo(paramsIndex);
+	d->c->transmitAudio(index);
 }
 
-void Producer::pauseAudio()
+void RtpSession::transmitVideo(int index)
+{
+	d->c->transmitVideo(index);
+}
+
+void RtpSession::pauseAudio()
 {
 	d->c->pauseAudio();
 }
 
-void Producer::pauseVideo()
+void RtpSession::pauseVideo()
 {
 	d->c->pauseVideo();
 }
 
-void Producer::stop()
+void RtpSession::stop()
 {
 	d->c->stop();
 }
 
-QList<PayloadInfo> Producer::audioPayloadInfo() const
+QList<PayloadInfo> RtpSession::audioPayloadInfo() const
 {
 	QList<PayloadInfo> out;
 	foreach(const PPayloadInfo &pp, d->c->audioPayloadInfo())
@@ -1373,7 +1222,7 @@ QList<PayloadInfo> Producer::audioPayloadInfo() const
 	return out;
 }
 
-QList<PayloadInfo> Producer::videoPayloadInfo() const
+QList<PayloadInfo> RtpSession::videoPayloadInfo() const
 {
 	QList<PayloadInfo> out;
 	foreach(const PPayloadInfo &pp, d->c->videoPayloadInfo())
@@ -1381,7 +1230,7 @@ QList<PayloadInfo> Producer::videoPayloadInfo() const
 	return out;
 }
 
-QList<AudioParams> Producer::audioParams() const
+QList<AudioParams> RtpSession::audioParams() const
 {
 	QList<AudioParams> out;
 	foreach(const PAudioParams &pp, d->c->audioParams())
@@ -1389,7 +1238,7 @@ QList<AudioParams> Producer::audioParams() const
 	return out;
 }
 
-QList<VideoParams> Producer::videoParams() const
+QList<VideoParams> RtpSession::videoParams() const
 {
 	QList<VideoParams> out;
 	foreach(const PVideoParams &pp, d->c->videoParams())
@@ -1397,27 +1246,37 @@ QList<VideoParams> Producer::videoParams() const
 	return out;
 }
 
-int Producer::volume() const
+int RtpSession::outputVolume() const
 {
-	return d->c->volume();
+	return d->c->outputVolume();
 }
 
-void Producer::setVolume(int level)
+void RtpSession::setOutputVolume(int level)
 {
-	d->c->setVolume(level);
+	d->c->setOutputVolume(level);
 }
 
-Producer::Error Producer::errorCode() const
+int RtpSession::inputVolume() const
 {
-	return (Producer::Error)d->c->errorCode();
+	return d->c->inputVolume();
 }
 
-RtpChannel *Producer::audioRtpChannel()
+void RtpSession::setInputVolume(int level)
+{
+	d->c->setInputVolume(level);
+}
+
+RtpSession::Error RtpSession::errorCode() const
+{
+	return (RtpSession::Error)d->c->errorCode();
+}
+
+RtpChannel *RtpSession::audioRtpChannel()
 {
 	return &d->audioRtpChannel;
 }
 
-RtpChannel *Producer::videoRtpChannel()
+RtpChannel *RtpSession::videoRtpChannel()
 {
 	return &d->videoRtpChannel;
 }

@@ -31,10 +31,8 @@
 
 namespace PsiMedia {
 
-class Producer;
-class ProducerPrivate;
-class Receiver;
-class ReceiverPrivate;
+class RtpSession;
+class RtpSessionPrivate;
 class VideoWidgetPrivate;
 class RtpChannelPrivate;
 
@@ -96,8 +94,7 @@ private:
 	Q_DISABLE_COPY(VideoWidget);
 
 	friend class VideoWidgetPrivate;
-	friend class Receiver;
-	friend class Producer;
+	friend class RtpSession;
 	VideoWidgetPrivate *d;
 };
 #endif
@@ -210,32 +207,10 @@ private:
 	Q_DISABLE_COPY(RtpChannel);
 
 	friend class Private;
-	friend class Producer;
-	friend class ProducerPrivate;
-	friend class Receiver;
-	friend class ReceiverPrivate;
+	friend class RtpSession;
+	friend class RtpSessionPrivate;
 	friend class RtpChannelPrivate;
 	RtpChannelPrivate *d;
-};
-
-// records in ogg theora+vorbis format
-class Recorder : public QObject
-{
-	Q_OBJECT
-
-public:
-	Recorder(QObject *parent = 0);
-	~Recorder();
-
-	QIODevice *device() const;
-	void setDevice(QIODevice *dev);
-
-private:
-	Q_DISABLE_COPY(Recorder);
-
-	class Private;
-	friend class ReceiverPrivate;
-	Private *d;
 };
 
 // this class essentially follows jingle's notion of payload information,
@@ -293,7 +268,7 @@ private:
 	Private *d;
 };
 
-class Receiver : public QObject
+class RtpSession : public QObject
 {
 	Q_OBJECT
 
@@ -305,107 +280,145 @@ public:
 		ErrorCodec
 	};
 
-	Receiver(QObject *parent = 0);
-	~Receiver();
+	RtpSession(QObject *parent = 0);
+	~RtpSession();
 
 	void setAudioOutputDevice(const QString &deviceId);
 #ifdef QT_GUI_LIB
-	void setVideoWidget(VideoWidget *widget);
+	void setVideoOutputWidget(VideoWidget *widget);
 #endif
-	void setRecorder(Recorder *recorder);
-
-	void setAudioPayloadInfo(const QList<PayloadInfo> &info);
-	void setVideoPayloadInfo(const QList<PayloadInfo> &info);
-	void setAudioParams(const QList<AudioParams> &params);
-	void setVideoParams(const QList<VideoParams> &params);
-
-	void start();
-	void stop();
-
-	QList<PayloadInfo> audioPayloadInfo() const;
-	QList<PayloadInfo> videoPayloadInfo() const;
-	QList<AudioParams> audioParams() const;
-	QList<VideoParams> videoParams() const;
-
-	int volume() const; // 0 (mute) to 100
-	void setVolume(int level);
-
-	Error errorCode() const;
-
-	// offset 0 is write-only, offset 1 is read-write
-	RtpChannel *audioRtpChannel();
-	RtpChannel *videoRtpChannel();
-
-signals:
-	void started();
-	void stopped();
-	void error();
-
-private:
-	Q_DISABLE_COPY(Receiver);
-
-	friend class ReceiverPrivate;
-	ReceiverPrivate *d;
-};
-
-class Producer : public QObject
-{
-	Q_OBJECT
-
-public:
-	enum Error
-	{
-		ErrorGeneric
-	};
-
-	Producer(QObject *parent = 0);
-	~Producer();
 
 	void setAudioInputDevice(const QString &deviceId);
 	void setVideoInputDevice(const QString &deviceId);
 	void setFileInput(const QString &fileName);
 	void setFileDataInput(const QByteArray &fileData);
 #ifdef QT_GUI_LIB
-	void setVideoWidget(VideoWidget *widget);
+	void setVideoPreviewWidget(VideoWidget *widget);
 #endif
 
-	void setAudioPayloadInfo(const QList<PayloadInfo> &info);
-	void setVideoPayloadInfo(const QList<PayloadInfo> &info);
-	void setAudioParams(const QList<AudioParams> &params);
-	void setVideoParams(const QList<VideoParams> &params);
+	// pass a QIODevice to record to.  pass 0 to stop recording.  if a
+	//   device is set before starting the session, then recording will
+	//   wait until it starts.
+	// records in ogg theora+vorbis format
+	void setRecordingQIODevice(QIODevice *dev);
 
+	// set local preferences.  this can be fuzzy *params structures
+	//   or payloadinfo.  *params structures end up expanding to a
+	//   bunch of payloadinfo structures.
+	void setLocalAudioPreferences(const QList<AudioParams> &params);
+	void setLocalAudioPreferences(const QList<PayloadInfo> &info);
+	void setLocalVideoPreferences(const QList<VideoParams> &params);
+	void setLocalVideoPreferences(const QList<PayloadInfo> &info);
+
+	// set remote preferences.  this is always as payloadinfo.
+	void setRemoteAudioPreferences(const QList<PayloadInfo> &info);
+	void setRemoteVideoPreferences(const QList<PayloadInfo> &info);
+
+	// usage strategy:
+	//   - initiator sets local prefs as params
+	//   - initiator starts(), waits for started()
+	//   - initiator obtains the corresponding payloadinfos and sends to
+	//     target.
+	//   - target receives payloadinfos
+	//   - target sets local prefs as params, and remote prefs
+	//   - target starts(), waits for started()
+	//   - target obtains the corresponding payloadinfos, which is an
+	//     intersection of initiator/target preferences, and sends to
+	//     initiator
+	//   - target is ready for use
+	//   - initiator receives payloadinfos, sets remote prefs, calls
+	//     updatePreferences() and waits for preferencesUpdated()
+	//   - initiator ready for use
+	//
+	// after starting, params getter functions will return a number
+	//   of objects matching that of the payloadinfo getters.  note
+	//   that these objects may not match the original local prefs
+	//   params (if any).
+	//
+	// it is also possible to set local prefs as payloadinfo instead
+	//   of params, but this is more for testing purposes than
+	//   something you'd want to do in the real world.
+	//
+	// note: target must set at least two params (upper/lower bound)
+	//   if it wants any flexibility in what payloadinfo is picked.
+	//   for additional flexibility, fields in params may be left unset.
+	//
+	// adding audio/video to existing session lacking it:
+	//   - set new local prefs as params
+	//   - call updatePreferences(), wait for preferencesUpdated()
+	//   - obtain corresponding payloadinfos, send to peer
+	//   - peer receives payloadinfos, sets local prefs as params, and
+	//     remote prefs
+	//   - peer calls updatePreferences(), waits for preferencesUpdated()
+	//   - peer obtains corresponding payloadinfos (intersection), and
+	//     sends back
+	//   - receive payloadinfos, set remote prefs, call
+	//     updatePreferences() and wait for preferencesUpdated()
+	//
+	// modifying params of existing media types:
+	//   - set new local prefs as params
+	//   - if any prefs were added, then remote prefs are cleared
+	//   - save original payloadinfos
+	//   - call updatePreferences(), wait for preferencesUpdated()
+	//   - obtain corresponding payloadinfos, and compare to original to
+	//     determine what was added or removed
+	//   - send adds/removes to peer
+	//   - peer receives payloadinfos, sets remote prefs based on
+	//     adds/removes to the original
+	//   - peer calls updatePreferences(), waits for preferencesUpdated()
+	//   - if there were any adds, peer obtains corresponding payloadinfos
+	//     (intersection), and compares to original to determine what was
+	//     agreed to be added.
+	//   - peer acks back with accepted adds, or rejects
+	//   - if reject is received, set original remote prefs
+	//   - if accept is received, add the 'adds' to the original remote
+	//     prefs and set them
+	//   - call updatePreferences(), wait for preferencesUpdated()
 	void start();
-	void transmitAudio(int paramsIndex = -1);
-	void transmitVideo(int paramsIndex = -1);
+
+	// if prefs are changed after starting, this function needs to be
+	//   called for them to take effect
+	void updatePreferences();
+
+	void transmitAudio(int index = -1);
+	void transmitVideo(int index = -1);
 	void pauseAudio();
 	void pauseVideo();
 	void stop();
 
 	QList<PayloadInfo> audioPayloadInfo() const;
 	QList<PayloadInfo> videoPayloadInfo() const;
+
+	// maps to above payloadinfo.  may not necessarily match local prefs
+	//   set as params.
 	QList<AudioParams> audioParams() const;
 	QList<VideoParams> videoParams() const;
 
-	int volume() const; // 0 (mute) to 100
-	void setVolume(int level);
+	// speaker
+	int outputVolume() const; // 0 (mute) to 100
+	void setOutputVolume(int level);
+
+	// microphone
+	int inputVolume() const; // 0 (mute) to 100
+	void setInputVolume(int level);
 
 	Error errorCode() const;
 
-	// offset 0 is read-only, offset 1 is read-write
 	RtpChannel *audioRtpChannel();
 	RtpChannel *videoRtpChannel();
 
 signals:
 	void started();
+	void preferencesUpdated();
 	void stopped();
 	void finished(); // for file playback only
 	void error();
 
 private:
-	Q_DISABLE_COPY(Producer);
+	Q_DISABLE_COPY(RtpSession);
 
-	friend class ProducerPrivate;
-	ProducerPrivate *d;
+	friend class RtpSessionPrivate;
+	RtpSessionPrivate *d;
 };
 
 }

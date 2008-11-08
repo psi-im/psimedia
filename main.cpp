@@ -651,9 +651,8 @@ public:
 	Ui::MainWin ui;
 	QAction *action_AboutProvider;
 	QString creditName;
-	PsiMedia::Producer producer;
-	PsiMedia::Receiver receiver;
-	PsiMedia::Recorder recorder;
+	PsiMedia::RtpSession producer;
+	PsiMedia::RtpSession receiver;
 	Configuration config;
 	bool transmitAudio, transmitVideo, transmitting;
 	bool receiveAudio, receiveVideo;
@@ -666,7 +665,6 @@ public:
 		action_AboutProvider(0),
 		producer(this),
 		receiver(this),
-		recorder(this),
 		sendAudioRtp(0),
 		sendVideoRtp(0),
 		receiveAudioRtp(0),
@@ -726,8 +724,8 @@ public:
 		change_volume_spk(ui.sl_spk->value());
 
 		// associate video widgets
-		producer.setVideoWidget(ui.vw_self);
-		receiver.setVideoWidget(ui.vw_remote);
+		producer.setVideoPreviewWidget(ui.vw_self);
+		receiver.setVideoOutputWidget(ui.vw_remote);
 
 		// hack: make the top/bottom layouts have matching height
 		int lineEditHeight = ui.le_receiveConfig->sizeHint().height();
@@ -792,25 +790,14 @@ public:
 		ui.le_receiveConfig->setEnabled(b);
 	}
 
-	static QString producerErrorToString(PsiMedia::Producer::Error e)
+	static QString rtpSessionErrorToString(PsiMedia::RtpSession::Error e)
 	{
 		QString str;
 		switch(e)
 		{
-			default: // generic
-				str = tr("Generic error"); break;
-		}
-		return str;
-	}
-
-	static QString receiverErrorToString(PsiMedia::Receiver::Error e)
-	{
-		QString str;
-		switch(e)
-		{
-			case PsiMedia::Receiver::ErrorSystem:
+			case PsiMedia::RtpSession::ErrorSystem:
 				str = tr("System error"); break;
-			case PsiMedia::Receiver::ErrorCodec:
+			case PsiMedia::RtpSession::ErrorCodec:
 				str = tr("Codec error"); break;
 			default: // generic
 				str = tr("Generic error"); break;
@@ -838,8 +825,7 @@ public:
 	{
 		if(recording)
 		{
-			receiver.setRecorder(0);
-			recorder.setDevice(0);
+			receiver.setRecordingQIODevice(0);
 			delete recordFile;
 			recordFile = 0;
 			recording = false;
@@ -915,14 +901,14 @@ private slots:
 		{
 			QList<PsiMedia::AudioParams> audioParamsList;
 			audioParamsList += config.audioParams;
-			producer.setAudioParams(audioParamsList);
+			producer.setLocalAudioPreferences(audioParamsList);
 		}
 
 		if(transmitVideo)
 		{
 			QList<PsiMedia::VideoParams> videoParamsList;
 			videoParamsList += config.videoParams;
-			producer.setVideoParams(videoParamsList);
+			producer.setLocalVideoPreferences(videoParamsList);
 		}
 
 		ui.pb_startSend->setEnabled(false);
@@ -1053,22 +1039,22 @@ private slots:
 
 			QList<PsiMedia::AudioParams> audioParamsList;
 			audioParamsList += config.audioParams;
-			receiver.setAudioParams(audioParamsList);
+			receiver.setLocalAudioPreferences(audioParamsList);
 
 			QList<PsiMedia::PayloadInfo> payloadInfoList;
 			payloadInfoList += audio;
-			receiver.setAudioPayloadInfo(payloadInfoList);
+			receiver.setRemoteAudioPreferences(payloadInfoList);
 		}
 
 		if(receiveVideo)
 		{
 			QList<PsiMedia::VideoParams> videoParamsList;
 			videoParamsList += config.videoParams;
-			receiver.setVideoParams(videoParamsList);
+			receiver.setLocalVideoPreferences(videoParamsList);
 
 			QList<PsiMedia::PayloadInfo> payloadInfoList;
 			payloadInfoList += video;
-			receiver.setVideoPayloadInfo(payloadInfoList);
+			receiver.setRemoteVideoPreferences(payloadInfoList);
 		}
 
 		RtpSocketGroup *audioSocketGroup = new RtpSocketGroup(this);
@@ -1115,12 +1101,12 @@ private slots:
 
 	void change_volume_mic(int value)
 	{
-		producer.setVolume(value);
+		producer.setInputVolume(value);
 	}
 
 	void change_volume_spk(int value)
 	{
-		receiver.setVolume(value);
+		receiver.setOutputVolume(value);
 	}
 
 	void producer_started()
@@ -1179,7 +1165,7 @@ private slots:
 
 		QMessageBox::critical(this, tr("Error"), tr(
 			"An error occurred while trying to send:\n%1."
-			).arg(producerErrorToString(producer.errorCode())
+			).arg(rtpSessionErrorToString(producer.errorCode())
 			));
 	}
 
@@ -1210,7 +1196,7 @@ private slots:
 
 		QMessageBox::critical(this, tr("Error"), tr(
 			"An error occurred while trying to receive:\n%1."
-			).arg(receiverErrorToString(receiver.errorCode())
+			).arg(rtpSessionErrorToString(receiver.errorCode())
 			));
 	}
 
@@ -1234,8 +1220,7 @@ private slots:
 				return;
 			}
 
-			recorder.setDevice(recordFile);
-			receiver.setRecorder(&recorder);
+			receiver.setRecordingQIODevice(recordFile);
 			recording = true;
 		}
 		else

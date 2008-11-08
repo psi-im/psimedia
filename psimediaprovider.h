@@ -39,8 +39,7 @@ class QIODevice;
 namespace PsiMedia {
 
 class Provider;
-class ProducerContext;
-class ReceiverContext;
+class RtpSessionContext;
 
 class Plugin
 {
@@ -155,8 +154,7 @@ public:
 	virtual QList<PDevice> audioOutputDevices() = 0;
 	virtual QList<PDevice> audioInputDevices() = 0;
 	virtual QList<PDevice> videoInputDevices() = 0;
-	virtual ProducerContext *createProducer() = 0;
-	virtual ReceiverContext *createReceiver() = 0;
+	virtual RtpSessionContext *createRtpSession() = 0;
 };
 
 class RtpChannelContext : public QObjectInterface
@@ -186,30 +184,41 @@ public:
 };
 #endif
 
-class ProducerContext : public QObjectInterface
+class RtpSessionContext : public QObjectInterface
 {
 public:
 	enum Error
 	{
-		ErrorGeneric
+		ErrorGeneric,
+		ErrorSystem,
+		ErrorCodec
 	};
 
-	virtual ~ProducerContext() {}
+	virtual ~RtpSessionContext() {}
 
+	virtual void setAudioOutputDevice(const QString &deviceId) = 0;
 	virtual void setAudioInputDevice(const QString &deviceId) = 0;
 	virtual void setVideoInputDevice(const QString &deviceId) = 0;
 	virtual void setFileInput(const QString &fileName) = 0;
 	virtual void setFileDataInput(const QByteArray &fileData) = 0;
+
 #ifdef QT_GUI_LIB
-	virtual void setVideoWidget(VideoWidgetContext *widget) = 0;
+	virtual void setVideoOutputWidget(VideoWidgetContext *widget) = 0;
+	virtual void setVideoPreviewWidget(VideoWidgetContext *widget) = 0;
 #endif
 
-	virtual void setAudioPayloadInfo(const QList<PPayloadInfo> &info) = 0;
-	virtual void setVideoPayloadInfo(const QList<PPayloadInfo> &info) = 0;
-	virtual void setAudioParams(const QList<PAudioParams> &params) = 0;
-	virtual void setVideoParams(const QList<PVideoParams> &params) = 0;
+	virtual void setRecorder(QIODevice *recordDevice) = 0;
+
+	virtual void setLocalAudioPreferences(const QList<PAudioParams> &params) = 0;
+	virtual void setLocalAudioPreferences(const QList<PPayloadInfo> &info) = 0;
+	virtual void setLocalVideoPreferences(const QList<PVideoParams> &params) = 0;
+	virtual void setLocalVideoPreferences(const QList<PPayloadInfo> &info) = 0;
+
+	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info) = 0;
+	virtual void setRemoteVideoPreferences(const QList<PPayloadInfo> &info) = 0;
 
 	virtual void start() = 0;
+	virtual void updatePreferences() = 0;
 
 	// if -1 is passed for paramsIndex, pick the best one to transmit
 	virtual void transmitAudio(int paramsIndex) = 0;
@@ -224,8 +233,11 @@ public:
 	virtual QList<PAudioParams> audioParams() const = 0;
 	virtual QList<PVideoParams> videoParams() const = 0;
 
-	virtual int volume() const = 0; // 0 (mute) to 100
-	virtual void setVolume(int level) = 0;
+	virtual int outputVolume() const = 0; // 0 (mute) to 100
+	virtual void setOutputVolume(int level) = 0;
+
+	virtual int inputVolume() const = 0; // 0 (mute) to 100
+	virtual void setInputVolume(int level) = 0;
 
 	virtual Error errorCode() const = 0;
 
@@ -234,53 +246,9 @@ public:
 
 HINT_SIGNALS:
 	HINT_METHOD(started())
+	HINT_METHOD(preferencesUpdated())
 	HINT_METHOD(stopped())
 	HINT_METHOD(finished()) // for file playback only
-	HINT_METHOD(error())
-};
-
-class ReceiverContext : public QObjectInterface
-{
-public:
-	enum Error
-	{
-		ErrorGeneric,
-		ErrorSystem,
-		ErrorCodec
-	};
-
-	virtual ~ReceiverContext() {}
-
-	virtual void setAudioOutputDevice(const QString &deviceId) = 0;
-#ifdef QT_GUI_LIB
-	virtual void setVideoWidget(VideoWidgetContext *widget) = 0;
-#endif
-	virtual void setRecorder(QIODevice *recordDevice) = 0;
-
-	virtual void setAudioPayloadInfo(const QList<PPayloadInfo> &info) = 0;
-	virtual void setVideoPayloadInfo(const QList<PPayloadInfo> &info) = 0;
-	virtual void setAudioParams(const QList<PAudioParams> &params) = 0;
-	virtual void setVideoParams(const QList<PVideoParams> &params) = 0;
-
-	virtual void start() = 0;
-	virtual void stop() = 0;
-
-	virtual QList<PPayloadInfo> audioPayloadInfo() const = 0;
-	virtual QList<PPayloadInfo> videoPayloadInfo() const = 0;
-	virtual QList<PAudioParams> audioParams() const = 0;
-	virtual QList<PVideoParams> videoParams() const = 0;
-
-	virtual int volume() const = 0; // 0 (mute) to 100
-	virtual void setVolume(int level) = 0;
-
-	virtual Error errorCode() const = 0;
-
-	virtual RtpChannelContext *audioRtpChannel() = 0;
-	virtual RtpChannelContext *videoRtpChannel() = 0;
-
-HINT_SIGNALS:
-	HINT_METHOD(started())
-	HINT_METHOD(stopped())
 	HINT_METHOD(error())
 };
 
@@ -289,7 +257,6 @@ HINT_SIGNALS:
 Q_DECLARE_INTERFACE(PsiMedia::Plugin, "org.psi-im.psimedia.Plugin/1.0")
 Q_DECLARE_INTERFACE(PsiMedia::Provider, "org.psi-im.psimedia.Provider/1.0")
 Q_DECLARE_INTERFACE(PsiMedia::RtpChannelContext, "org.psi-im.psimedia.RtpChannelContext/1.0")
-Q_DECLARE_INTERFACE(PsiMedia::ProducerContext, "org.psi-im.psimedia.ProducerContext/1.0")
-Q_DECLARE_INTERFACE(PsiMedia::ReceiverContext, "org.psi-im.psimedia.ReceiverContext/1.0")
+Q_DECLARE_INTERFACE(PsiMedia::RtpSessionContext, "org.psi-im.psimedia.RtpSessionContext/1.0")
 
 #endif
