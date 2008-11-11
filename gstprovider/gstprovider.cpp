@@ -689,13 +689,12 @@ static void nullAndUnrefElements(QList<GstElement*> &in)
 }*/
 
 Q_GLOBAL_STATIC(QMutex, render_mutex)
-class GstProducerContext;
-static GstProducerContext *g_producer = 0;
+class GstRtpSessionContext;
+static GstRtpSessionContext *g_producer = 0;
+static GstRtpSessionContext *g_receiver = 0;
 static QList<QImage> *g_images = 0;
 
-class GstReceiverContext;
 class GstRtpChannel;
-static GstReceiverContext *g_receiver = 0;
 static void receiver_write(GstRtpChannel *from, const PRtpPacket &rtp);
 static QList<QImage> *g_rimages = 0;
 
@@ -746,7 +745,7 @@ static void gst_show_rframe(int width, int height, const unsigned char *rgb24, g
 	if(!g_rimages)
 		g_rimages = new QList<QImage>;
 	g_rimages->append(image);
-	QMetaObject::invokeMethod((QObject *)g_receiver, "imageReady", Qt::QueuedConnection);
+	QMetaObject::invokeMethod((QObject *)g_receiver, "rimageReady", Qt::QueuedConnection);
 }
 
 Q_GLOBAL_STATIC(QMutex, in_mutex)
@@ -999,7 +998,7 @@ private:
 		GstElement *audioin = 0;
 		GstElement *videoin = 0;
 		fileSource = 0;
-		GstCaps *videoincaps;
+		GstCaps *videoincaps = 0;
 
 		if(!infile.isEmpty())
 		{
@@ -1047,9 +1046,9 @@ private:
 			}
 		}
 
-		GstElement *audioqueue, *audioconvert, *audioresample, *audioenc, *audiortppay, *audiortpsink;
-		GstAppRtpSink *appRtpSink;
-		GstCaps *caps5;
+		GstElement *audioqueue = 0, *audioconvert = 0, *audioresample = 0, *audioenc = 0, *audiortppay = 0, *audiortpsink = 0;
+		GstAppRtpSink *appRtpSink = 0;
+		GstCaps *caps5 = 0;
 
 		if(audioin || fileSource)
 		{
@@ -1069,9 +1068,9 @@ private:
 				"channels", G_TYPE_INT, 1, NULL);
 		}
 
-		GstElement *videoqueue, *videoconvert, *videosink;
-		GstAppVideoSink *appVideoSink;
-		GstElement *videoconvertpre, *videotee, *videortpqueue, *videoenc, *videortppay, *videortpsink;
+		GstElement *videoqueue = 0, *videoconvert = 0, *videosink = 0;
+		GstAppVideoSink *appVideoSink = 0;
+		GstElement *videoconvertpre = 0, *videotee = 0, *videortpqueue = 0, *videoenc = 0, *videortppay = 0, *videortpsink = 0;
 
 		if(videoin || fileSource)
 		{
@@ -1478,7 +1477,7 @@ class GstRtpChannel : public QObject, public RtpChannelContext
 	Q_INTERFACES(PsiMedia::RtpChannelContext)
 
 public:
-	friend class GstProducerContext;
+	friend class GstRtpSessionContext;
 	QList<PRtpPacket> in;
 
 	virtual QObject *qobject()
@@ -1505,7 +1504,7 @@ public:
 	virtual void write(const PRtpPacket &rtp)
 	{
 		// TODO
-		//receiver_write(this, rtp);
+		receiver_write(this, rtp);
 	}
 
 signals:
@@ -1514,34 +1513,37 @@ signals:
 };
 
 //----------------------------------------------------------------------------
-// GstProducerContext
+// GstRtpSessionContext
 //----------------------------------------------------------------------------
-class GstProducerContext : public QObject, public RtpSessionContext
+class GstRtpSessionContext : public QObject, public RtpSessionContext
 {
 	Q_OBJECT
 	Q_INTERFACES(PsiMedia::RtpSessionContext)
 
 public:
+	QString audioOutId;
 	QString audioInId, videoInId;
 	QString fileIn;
 	QByteArray fileDataIn;
-	VideoWidgetContext *videoWidget;
+	VideoWidgetContext *outputWidget, *previewWidget;
+	int audioOutVolume;
 	int audioInVolume;
 	int code;
 
 	GstRtpChannel audioRtp;
 	GstRtpChannel videoRtp;
 
-	GstProducerContext(QObject *parent = 0) :
+	// FIXME: remove this
+	bool producerMode;
+
+	GstRtpSessionContext(QObject *parent = 0) :
 		QObject(parent),
-		videoWidget(0),
+		outputWidget(0),
+		previewWidget(0),
+		audioOutVolume(100),
 		audioInVolume(100),
 		code(-1)
 	{
-		g_producer = this;
-
-		connect(GstThread::instance(), SIGNAL(producer_started()), SIGNAL(started()));
-		connect(GstThread::instance(), SIGNAL(producer_stopped()), SIGNAL(stopped()));
 	}
 
 	virtual QObject *qobject()
@@ -1551,7 +1553,8 @@ public:
 
 	virtual void setAudioOutputDevice(const QString &deviceId)
 	{
-		// FIXME
+		audioOutId = deviceId;
+		// TODO: if active, switch to that device
 	}
 
 	virtual void setAudioInputDevice(const QString &deviceId)
@@ -1581,58 +1584,89 @@ public:
 #ifdef QT_GUI_LIB
         virtual void setVideoOutputWidget(VideoWidgetContext *widget)
 	{
-		// FIXME
+		outputWidget = widget;
+		// TODO: if active, switch to using (or not using)
 	}
 
 	virtual void setVideoPreviewWidget(VideoWidgetContext *widget)
 	{
-		videoWidget = widget;
+		previewWidget = widget;
 		// TODO: if active, switch to using (or not using)
 	}
 #endif
 
 	virtual void setRecorder(QIODevice *recordDevice)
 	{
-		// FIXME
+		// TODO
+		Q_UNUSED(recordDevice);
 	}
 
 	virtual void setLocalAudioPreferences(const QList<PAudioParams> &params)
 	{
 		// TODO
+		Q_UNUSED(params);
 	}
 
 	virtual void setLocalAudioPreferences(const QList<PPayloadInfo> &info)
 	{
 		// TODO
+		Q_UNUSED(info);
 	}
 
 	virtual void setLocalVideoPreferences(const QList<PVideoParams> &params)
 	{
 		// TODO
+		Q_UNUSED(params);
 	}
 
 	virtual void setLocalVideoPreferences(const QList<PPayloadInfo> &info)
 	{
 		// TODO
+		Q_UNUSED(info);
 	}
 
 	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info)
 	{
 		// TODO
+		GstThread::instance()->raudioPayloadInfo = info.first();
 	}
 
 	virtual void setRemoteVideoPreferences(const QList<PPayloadInfo> &info)
 	{
 		// TODO
+		GstThread::instance()->rvideoPayloadInfo = info.first();
 	}
 
 	virtual void start()
 	{
 		// TODO
-		GstThread::instance()->ain = audioInId;
-		GstThread::instance()->vin = videoInId;
-		GstThread::instance()->infile = fileIn;
-		GstThread::instance()->startProducer();
+
+		// probably producer
+		if(!audioInId.isEmpty() || !videoInId.isEmpty() || !fileIn.isEmpty())
+		{
+			producerMode = true;
+			g_producer = this;
+
+			connect(GstThread::instance(), SIGNAL(producer_started()), SIGNAL(started()));
+			connect(GstThread::instance(), SIGNAL(producer_stopped()), SIGNAL(stopped()));
+
+			GstThread::instance()->ain = audioInId;
+			GstThread::instance()->vin = videoInId;
+			GstThread::instance()->infile = fileIn;
+			GstThread::instance()->startProducer();
+		}
+		// receiver
+		else
+		{
+			producerMode = false;
+			g_receiver = this;
+
+			connect(GstThread::instance(), SIGNAL(receiver_started()), SIGNAL(started()));
+			connect(GstThread::instance(), SIGNAL(receiver_stopped()), SIGNAL(stopped()));
+
+			GstThread::instance()->aout = audioOutId;
+			GstThread::instance()->startReceiver();
+		}
 	}
 
 	virtual void updatePreferences()
@@ -1665,7 +1699,11 @@ public:
 	virtual void stop()
 	{
 		// TODO
-		GstThread::instance()->stopProducer();
+
+		if(producerMode)
+			GstThread::instance()->stopProducer();
+		else
+			GstThread::instance()->stopReceiver();
 	}
 
 	virtual QList<PPayloadInfo> audioPayloadInfo() const
@@ -1694,12 +1732,12 @@ public:
 
 	virtual int outputVolume() const
 	{
-		return 0; // FIXME
+		return audioOutVolume;
 	}
 
 	virtual void setOutputVolume(int level)
 	{
-		// FIXME
+		audioOutVolume = level;
 		// TODO: if active, change active volume
 	}
 
@@ -1736,195 +1774,6 @@ signals:
 	void finished();
 	void error();
 
-public slots:
-	void imageReady()
-	{
-		render_mutex()->lock();
-		QImage image = g_images->takeFirst();
-		render_mutex()->unlock();
-
-		if(videoWidget)
-			videoWidget->show_frame(image);
-	}
-
-	void packetReadyAudio()
-	{
-		in_mutex()->lock();
-		PRtpPacket packet = g_in_packets_audio->takeFirst();
-		in_mutex()->unlock();
-
-		//printf("audio packet ready (%d bytes)\n", packet.rawValue.size());
-		audioRtp.in += packet;
-		emit audioRtp.readyRead();
-	}
-
-	void packetReady()
-	{
-		in_mutex()->lock();
-		PRtpPacket packet = g_in_packets->takeFirst();
-		in_mutex()->unlock();
-
-		//printf("video packet ready\n");
-		videoRtp.in += packet;
-		emit videoRtp.readyRead();
-	}
-};
-
-//----------------------------------------------------------------------------
-// GstReceiverContext
-//----------------------------------------------------------------------------
-/*class GstReceiverContext : public QObject, public ReceiverContext
-{
-	Q_OBJECT
-	Q_INTERFACES(PsiMedia::ReceiverContext)
-
-public:
-	QString audioOutId;
-	VideoWidgetContext *videoWidget;
-	int audioOutVolume;
-	int code;
-
-	GstRtpChannel audioRtp;
-	GstRtpChannel videoRtp;
-
-#ifdef UDP_LOOPBACK
-	QUdpSocket *audioloop, *videoloop;
-#endif
-
-	GstReceiverContext(QObject *parent = 0) :
-		QObject(parent)
-	{
-		g_receiver = this;
-
-		connect(GstThread::instance(), SIGNAL(receiver_started()), SIGNAL(started()));
-		connect(GstThread::instance(), SIGNAL(receiver_stopped()), SIGNAL(stopped()));
-
-#ifdef UDP_LOOPBACK
-		audioloop = new QUdpSocket(this);
-		videoloop = new QUdpSocket(this);
-#endif
-	}
-
-	virtual QObject *qobject()
-	{
-		return this;
-	}
-
-	virtual void setAudioOutputDevice(const QString &deviceId)
-	{
-		audioOutId = deviceId;
-		// TODO: if active, switch to that device
-	}
-
-#ifdef QT_GUI_LIB
-	virtual void setVideoWidget(VideoWidgetContext *widget)
-	{
-		videoWidget = widget;
-		// TODO: if active, switch to using (or not using)
-	}
-#endif
-	virtual void setRecorder(QIODevice *recordDevice)
-	{
-		// TODO
-		Q_UNUSED(recordDevice);
-	}
-
-	virtual void setAudioPayloadInfo(const QList<PPayloadInfo> &info)
-	{
-		// TODO
-		GstThread::instance()->raudioPayloadInfo = info.first();
-	}
-
-	virtual void setVideoPayloadInfo(const QList<PPayloadInfo> &info)
-	{
-		// TODO
-		GstThread::instance()->rvideoPayloadInfo = info.first();
-	}
-
-	virtual void setAudioParams(const QList<PAudioParams> &params)
-	{
-		// TODO
-		Q_UNUSED(params);
-	}
-
-	virtual void setVideoParams(const QList<PVideoParams> &params)
-	{
-		// TODO
-		Q_UNUSED(params);
-	}
-
-	virtual void start()
-	{
-		// TODO
-		GstThread::instance()->aout = audioOutId;
-		GstThread::instance()->startReceiver();
-	}
-
-	virtual void stop()
-	{
-		// TODO
-		GstThread::instance()->stopReceiver();
-	}
-
-	virtual QList<PPayloadInfo> audioPayloadInfo() const
-	{
-		// TODO
-		return QList<PPayloadInfo>();
-	}
-
-	virtual QList<PPayloadInfo> videoPayloadInfo() const
-	{
-		// TODO
-		return QList<PPayloadInfo>();
-	}
-
-	virtual QList<PAudioParams> audioParams() const
-	{
-		// TODO
-		return QList<PAudioParams>();
-	}
-
-	virtual QList<PVideoParams> videoParams() const
-	{
-		// TODO
-		return QList<PVideoParams>();
-	}
-
-	virtual int volume() const
-	{
-		// TODO
-		return 0;
-	}
-
-	virtual void setVolume(int level)
-	{
-		// TODO
-		Q_UNUSED(level);
-	}
-
-	virtual Error errorCode() const
-	{
-		// TODO
-		return ErrorGeneric;
-	}
-
-	virtual RtpChannelContext *audioRtpChannel()
-	{
-		// TODO
-		return &audioRtp;
-	}
-
-	virtual RtpChannelContext *videoRtpChannel()
-	{
-		// TODO
-		return &videoRtp;
-	}
-
-signals:
-	void started();
-	void stopped();
-	void error();
-
 public:
 	void doWrite(GstRtpChannel *from, const PRtpPacket &rtp)
 	{
@@ -1952,11 +1801,43 @@ public slots:
 	void imageReady()
 	{
 		render_mutex()->lock();
+		QImage image = g_images->takeFirst();
+		render_mutex()->unlock();
+
+		if(previewWidget)
+			previewWidget->show_frame(image);
+	}
+
+	void packetReadyAudio()
+	{
+		in_mutex()->lock();
+		PRtpPacket packet = g_in_packets_audio->takeFirst();
+		in_mutex()->unlock();
+
+		//printf("audio packet ready (%d bytes)\n", packet.rawValue.size());
+		audioRtp.in += packet;
+		emit audioRtp.readyRead();
+	}
+
+	void packetReady()
+	{
+		in_mutex()->lock();
+		PRtpPacket packet = g_in_packets->takeFirst();
+		in_mutex()->unlock();
+
+		//printf("video packet ready\n");
+		videoRtp.in += packet;
+		emit videoRtp.readyRead();
+	}
+
+	void rimageReady()
+	{
+		render_mutex()->lock();
 		QImage image = g_rimages->takeFirst();
 		render_mutex()->unlock();
 
-		if(videoWidget)
-			videoWidget->show_frame(image);
+		if(outputWidget)
+			outputWidget->show_frame(image);
 	}
 };
 
@@ -1964,7 +1845,7 @@ void receiver_write(GstRtpChannel *from, const PRtpPacket &rtp)
 {
 	if(g_receiver)
 		g_receiver->doWrite(from, rtp);
-}*/
+}
 
 //----------------------------------------------------------------------------
 // GstProvider
@@ -2122,13 +2003,8 @@ public:
 
 	virtual RtpSessionContext *createRtpSession()
 	{
-		return new GstProducerContext;
+		return new GstRtpSessionContext;
 	}
-
-	/*virtual ReceiverContext *createReceiver()
-	{
-		return new GstReceiverContext;
-	}*/
 };
 
 class GstPlugin : public QObject, public Plugin
