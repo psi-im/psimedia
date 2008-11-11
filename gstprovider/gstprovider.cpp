@@ -1505,7 +1505,7 @@ public:
 	virtual void write(const PRtpPacket &rtp)
 	{
 		// TODO
-		receiver_write(this, rtp);
+		//receiver_write(this, rtp);
 	}
 
 signals:
@@ -1516,10 +1516,10 @@ signals:
 //----------------------------------------------------------------------------
 // GstProducerContext
 //----------------------------------------------------------------------------
-class GstProducerContext : public QObject, public ProducerContext
+class GstProducerContext : public QObject, public RtpSessionContext
 {
 	Q_OBJECT
-	Q_INTERFACES(PsiMedia::ProducerContext)
+	Q_INTERFACES(PsiMedia::RtpSessionContext)
 
 public:
 	QString audioInId, videoInId;
@@ -1549,6 +1549,11 @@ public:
 		return this;
 	}
 
+	virtual void setAudioOutputDevice(const QString &deviceId)
+	{
+		// FIXME
+	}
+
 	virtual void setAudioInputDevice(const QString &deviceId)
 	{
 		audioInId = deviceId;
@@ -1574,35 +1579,51 @@ public:
 	}
 
 #ifdef QT_GUI_LIB
-	virtual void setVideoWidget(VideoWidgetContext *widget)
+        virtual void setVideoOutputWidget(VideoWidgetContext *widget)
+	{
+		// FIXME
+	}
+
+	virtual void setVideoPreviewWidget(VideoWidgetContext *widget)
 	{
 		videoWidget = widget;
 		// TODO: if active, switch to using (or not using)
 	}
 #endif
 
-	virtual void setAudioPayloadInfo(const QList<PPayloadInfo> &info)
+	virtual void setRecorder(QIODevice *recordDevice)
 	{
-		// TODO
-		Q_UNUSED(info);
+		// FIXME
 	}
 
-	virtual void setVideoPayloadInfo(const QList<PPayloadInfo> &info)
+	virtual void setLocalAudioPreferences(const QList<PAudioParams> &params)
 	{
 		// TODO
-		Q_UNUSED(info);
 	}
 
-	virtual void setAudioParams(const QList<PAudioParams> &params)
+	virtual void setLocalAudioPreferences(const QList<PPayloadInfo> &info)
 	{
 		// TODO
-		Q_UNUSED(params);
 	}
 
-	virtual void setVideoParams(const QList<PVideoParams> &params)
+	virtual void setLocalVideoPreferences(const QList<PVideoParams> &params)
 	{
 		// TODO
-		Q_UNUSED(params);
+	}
+
+	virtual void setLocalVideoPreferences(const QList<PPayloadInfo> &info)
+	{
+		// TODO
+	}
+
+	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info)
+	{
+		// TODO
+	}
+
+	virtual void setRemoteVideoPreferences(const QList<PPayloadInfo> &info)
+	{
+		// TODO
 	}
 
 	virtual void start()
@@ -1614,16 +1635,21 @@ public:
 		GstThread::instance()->startProducer();
 	}
 
-	virtual void transmitAudio(int paramsIndex)
+	virtual void updatePreferences()
 	{
-		// TODO (note that -1 means pick best)
-		Q_UNUSED(paramsIndex);
+		// TODO
 	}
 
-	virtual void transmitVideo(int paramsIndex)
+	virtual void transmitAudio(int index)
 	{
 		// TODO (note that -1 means pick best)
-		Q_UNUSED(paramsIndex);
+		Q_UNUSED(index);
+	}
+
+	virtual void transmitVideo(int index)
+	{
+		// TODO (note that -1 means pick best)
+		Q_UNUSED(index);
 	}
 
 	virtual void pauseAudio()
@@ -1666,12 +1692,23 @@ public:
 		return QList<PVideoParams>();
 	}
 
-	virtual int volume() const
+	virtual int outputVolume() const
+	{
+		return 0; // FIXME
+	}
+
+	virtual void setOutputVolume(int level)
+	{
+		// FIXME
+		// TODO: if active, change active volume
+	}
+
+	virtual int inputVolume() const
 	{
 		return audioInVolume;
 	}
 
-	virtual void setVolume(int level)
+	virtual void setInputVolume(int level)
 	{
 		audioInVolume = level;
 		// TODO: if active, change active volume
@@ -1694,6 +1731,7 @@ public:
 
 signals:
 	void started();
+	void preferencesUpdated();
 	void stopped();
 	void finished();
 	void error();
@@ -1735,7 +1773,7 @@ public slots:
 //----------------------------------------------------------------------------
 // GstReceiverContext
 //----------------------------------------------------------------------------
-class GstReceiverContext : public QObject, public ReceiverContext
+/*class GstReceiverContext : public QObject, public ReceiverContext
 {
 	Q_OBJECT
 	Q_INTERFACES(PsiMedia::ReceiverContext)
@@ -1926,7 +1964,7 @@ void receiver_write(GstRtpChannel *from, const PRtpPacket &rtp)
 {
 	if(g_receiver)
 		g_receiver->doWrite(from, rtp);
-}
+}*/
 
 //----------------------------------------------------------------------------
 // GstProvider
@@ -2082,15 +2120,15 @@ public:
 		return list;
 	}
 
-	virtual ProducerContext *createProducer()
+	virtual RtpSessionContext *createRtpSession()
 	{
 		return new GstProducerContext;
 	}
 
-	virtual ReceiverContext *createReceiver()
+	/*virtual ReceiverContext *createReceiver()
 	{
 		return new GstReceiverContext;
-	}
+	}*/
 };
 
 class GstPlugin : public QObject, public Plugin

@@ -221,8 +221,8 @@ public:
 	virtual void updatePreferences() = 0;
 
 	// if -1 is passed for paramsIndex, pick the best one to transmit
-	virtual void transmitAudio(int paramsIndex) = 0;
-	virtual void transmitVideo(int paramsIndex) = 0;
+	virtual void transmitAudio(int index) = 0;
+	virtual void transmitVideo(int index) = 0;
 
 	virtual void pauseAudio() = 0;
 	virtual void pauseVideo() = 0;
