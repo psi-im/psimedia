@@ -1,8 +1,8 @@
 CONFIG -= app_bundle
 QT += network
 
-include(../src/psimedia.pri)
-INCLUDEPATH += ../src
+include(../psimedia/psimedia.pri)
+INCLUDEPATH += ../psimedia
 
 include(../gstprovider/gstprovider.pri)
 
