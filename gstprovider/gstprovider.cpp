@@ -119,11 +119,11 @@ static QList<GstDevice> gstAudioOutputDevices()
 		g_object_unref(G_OBJECT(e));
 	}
 
-	foreach(QString driver, supportedDrivers)
+	foreach(const QString &driver, supportedDrivers)
 	{
 		QList<DeviceEnum::Item> list = DeviceEnum::audioOutputItems(driver);
 		bool first = true;
-		foreach(DeviceEnum::Item i, list)
+		foreach(const DeviceEnum::Item &i, list)
 		{
 			GstDevice dev;
 			dev.name = i.name + QString(" (%1)").arg(i.driver);
@@ -169,11 +169,11 @@ static QList<GstDevice> gstVideoInputDevices()
 		g_object_unref(G_OBJECT(e));
 	}
 
-	foreach(QString driver, supportedDrivers)
+	foreach(const QString &driver, supportedDrivers)
 	{
 		QList<DeviceEnum::Item> list = DeviceEnum::videoInputItems(driver);
 		bool first = true;
-		foreach(DeviceEnum::Item i, list)
+		foreach(const DeviceEnum::Item &i, list)
 		{
 			GstDevice dev;
 			dev.name = i.name + QString(" (%1)").arg(i.driver);
@@ -186,6 +186,29 @@ static QList<GstDevice> gstVideoInputDevices()
 				dev.element_name = "v4l2src";
 			else if(i.driver == "directshow")
 				dev.element_name = "dshowvideosrc";
+
+			QString element_name = dev.element_name;
+			QString dev_id = dev.dev_id;
+			GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), NULL);
+			if(!e)
+				continue;
+			if(element_name == "v4lsrc" || element_name == "v4l2src")
+				g_object_set(G_OBJECT(e), "device", dev_id.toLatin1().data(), NULL);
+
+			gst_element_set_state(e, GST_STATE_PAUSED);
+			int ret = gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
+			if(ret != GST_STATE_CHANGE_SUCCESS && ret != GST_STATE_CHANGE_NO_PREROLL)
+			{
+				gst_element_set_state(e, GST_STATE_NULL);
+				gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
+				g_object_unref(G_OBJECT(e));
+				continue;
+			}
+
+			gst_element_set_state(e, GST_STATE_NULL);
+			gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
+			g_object_unref(G_OBJECT(e));
+
 			out += dev;
 			first = false;
 		}
