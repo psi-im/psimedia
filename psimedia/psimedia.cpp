@@ -233,22 +233,6 @@ QString creditText()
 	return provider()->creditText();
 }
 
-QList<AudioParams> supportedAudioModes()
-{
-	QList<AudioParams> out;
-	foreach(const PAudioParams &pp, provider()->supportedAudioModes())
-		out += importAudioParams(pp);
-	return out;
-}
-
-QList<VideoParams> supportedVideoModes()
-{
-	QList<VideoParams> out;
-	foreach(const PVideoParams &pp, provider()->supportedVideoModes())
-		out += importVideoParams(pp);
-	return out;
-}
-
 class Device::Private
 {
 public:
@@ -270,30 +254,6 @@ public:
 		return dev;
 	}
 };
-
-QList<Device> audioOutputDevices()
-{
-	QList<Device> out;
-	foreach(const PDevice &pd, provider()->audioOutputDevices())
-		out += Global::importDevice(pd);
-	return out;
-}
-
-QList<Device> audioInputDevices()
-{
-	QList<Device> out;
-	foreach(const PDevice &pd, provider()->audioInputDevices())
-		out += Global::importDevice(pd);
-	return out;
-}
-
-QList<Device> videoInputDevices()
-{
-	QList<Device> out;
-	foreach(const PDevice &pd, provider()->videoInputDevices())
-		out += Global::importDevice(pd);
-	return out;
-}
 
 //----------------------------------------------------------------------------
 // Device
@@ -613,6 +573,125 @@ bool VideoParams::operator==(const VideoParams &other) const
 	}
 	else
 		return false;
+}
+
+//----------------------------------------------------------------------------
+// Features
+//----------------------------------------------------------------------------
+static QList<Device> get_audioOutputDevices()
+{
+	QList<Device> out;
+	foreach(const PDevice &pd, provider()->audioOutputDevices())
+		out += Global::importDevice(pd);
+	return out;
+}
+
+static QList<Device> get_audioInputDevices()
+{
+	QList<Device> out;
+	foreach(const PDevice &pd, provider()->audioInputDevices())
+		out += Global::importDevice(pd);
+	return out;
+}
+
+static QList<Device> get_videoInputDevices()
+{
+	QList<Device> out;
+	foreach(const PDevice &pd, provider()->videoInputDevices())
+		out += Global::importDevice(pd);
+	return out;
+}
+
+static QList<AudioParams> get_supportedAudioModes()
+{
+	QList<AudioParams> out;
+	foreach(const PAudioParams &pp, provider()->supportedAudioModes())
+		out += importAudioParams(pp);
+	return out;
+}
+
+static QList<VideoParams> get_supportedVideoModes()
+{
+	QList<VideoParams> out;
+	foreach(const PVideoParams &pp, provider()->supportedVideoModes())
+		out += importVideoParams(pp);
+	return out;
+}
+
+class Features::Private : public QThread
+{
+	Q_OBJECT
+
+public:
+	Features *q;
+
+	QList<Device> audioOutputDevices;
+	QList<Device> audioInputDevices;
+	QList<Device> videoInputDevices;
+	QList<AudioParams> supportedAudioModes;
+	QList<VideoParams> supportedVideoModes;
+
+	Private(Features *_q) :
+		QThread(_q),
+		q(_q)
+	{
+	}
+
+	virtual void run()
+	{
+		audioOutputDevices = get_audioOutputDevices();
+		audioInputDevices = get_audioInputDevices();
+		videoInputDevices = get_videoInputDevices();
+		supportedAudioModes = get_supportedAudioModes();
+		supportedVideoModes = get_supportedVideoModes();
+	}
+};
+
+Features::Features(QObject *parent) :
+	QObject(parent)
+{
+	d = new Private(this);
+	connect(d, SIGNAL(finished()), SIGNAL(finished()));
+}
+
+Features::~Features()
+{
+	delete d;
+}
+
+void Features::lookup()
+{
+	d->start();
+}
+
+bool Features::waitForFinished(int msecs)
+{
+	return d->wait(msecs < 0 ? ULONG_MAX : msecs);
+}
+
+QList<Device> Features::audioOutputDevices()
+{
+	return d->audioOutputDevices;
+}
+
+QList<Device> Features::audioInputDevices()
+{
+	return d->audioInputDevices;
+}
+
+QList<Device> Features::videoInputDevices()
+{
+	return d->videoInputDevices;
+}
+
+QList<AudioParams> Features::supportedAudioModes()
+{
+	return d->supportedAudioModes;
+}
+
+QList<VideoParams> Features::supportedVideoModes()
+{
+	return d->supportedVideoModes;
 }
 
 //----------------------------------------------------------------------------

@@ -221,11 +221,15 @@ public:
 
 	PsiMediaFeaturesSnapshot()
 	{
-		audioOutputDevices = PsiMedia::audioOutputDevices();
-		audioInputDevices = PsiMedia::audioInputDevices();
-		videoInputDevices = PsiMedia::videoInputDevices();
-		supportedAudioModes = PsiMedia::supportedAudioModes();
-		supportedVideoModes = PsiMedia::supportedVideoModes();
+		PsiMedia::Features f;
+		f.lookup();
+		f.waitForFinished();
+
+		audioOutputDevices = f.audioOutputDevices();
+		audioInputDevices = f.audioInputDevices();
+		videoInputDevices = f.videoInputDevices();
+		supportedAudioModes = f.supportedAudioModes();
+		supportedVideoModes = f.supportedVideoModes();
 	}
 };
 
@@ -235,22 +239,24 @@ static Configuration getDefaultConfiguration()
 	Configuration config;
 	config.liveInput = true;
 
+	PsiMediaFeaturesSnapshot snap;
+
 	QList<PsiMedia::Device> devs;
 
-	devs = PsiMedia::audioOutputDevices();
+	devs = snap.audioOutputDevices;
 	if(!devs.isEmpty())
 		config.audioOutDeviceId = devs.first().id();
 
-	devs = PsiMedia::audioInputDevices();
+	devs = snap.audioInputDevices;
 	if(!devs.isEmpty())
 		config.audioInDeviceId = devs.first().id();
 
-	devs = PsiMedia::videoInputDevices();
+	devs = snap.videoInputDevices;
 	if(!devs.isEmpty())
 		config.videoInDeviceId = devs.first().id();
 
-	config.audioParams = PsiMedia::supportedAudioModes().first();
-	config.videoParams = PsiMedia::supportedVideoModes().first();
+	config.audioParams = snap.supportedAudioModes.first();
+	config.videoParams = snap.supportedVideoModes.first();
 
 	return config;
 }

@@ -157,11 +157,32 @@ private:
 	Private *d;
 };
 
-QList<AudioParams> supportedAudioModes();
-QList<VideoParams> supportedVideoModes();
-QList<Device> audioOutputDevices();
-QList<Device> audioInputDevices();
-QList<Device> videoInputDevices();
+class Features : public QObject
+{
+	Q_OBJECT
+
+public:
+	Features(QObject *parent = 0);
+	~Features();
+
+	void lookup();
+	bool waitForFinished(int msecs = -1);
+
+	QList<Device> audioOutputDevices();
+	QList<Device> audioInputDevices();
+	QList<Device> videoInputDevices();
+
+	QList<AudioParams> supportedAudioModes();
+	QList<VideoParams> supportedVideoModes();
+
+signals:
+	void finished();
+
+private:
+	class Private;
+	friend class Private;
+	Private *d;
+};
 
 class RtpPacket
 {
