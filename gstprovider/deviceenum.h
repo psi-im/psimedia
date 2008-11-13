@@ -45,6 +45,8 @@ public:
 	QString name;   // friendly name
 	QString driver; // e.g. "oss", "alsa"
 	QString id;     // e.g. "/dev/dsp", "hw:0,0"
+
+	QSize explicitCaptureSize; // work around buggy cameras/drivers
 };
 
 // Note:

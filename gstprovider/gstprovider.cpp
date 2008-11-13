@@ -26,12 +26,6 @@
 #include "gstcustomelements.h"
 #include "deviceenum.h"
 
-//#define UDP_LOOPBACK
-
-#ifdef UDP_LOOPBACK
-# include <QUdpSocket>
-#endif
-
 namespace PsiMedia {
 
 class GstDevice
@@ -42,7 +36,48 @@ public:
 	QString id;
 	QString dev_id;
 	QString element_name;
+
+	QSize explicitCaptureSize;
 };
+
+static QString id_part_escape(const QString &in)
+{
+	QString out;
+	for(int n = 0; n < in.length(); ++n)
+	{
+		if(in[n] == '\\')
+			out += "\\\\";
+		else if(in[n] == ',')
+			out += "\\c";
+		else
+			out += in[n];
+	}
+	return out;
+}
+
+static QString id_part_unescape(const QString &in)
+{
+	QString out;
+	for(int n = 0; n < in.length(); ++n)
+	{
+		if(in[n] == '\\')
+		{
+			if(n + 1 >= in.length())
+				return QString();
+
+			++n;
+			if(in[n] == '\\')
+				out += '\\';
+			else if(in[n] == 'c')
+				out += ',';
+			else
+				return QString();
+		}
+		else
+			out += in[n];
+	}
+	return out;
+}
 
 static QList<GstDevice> gstAudioInputDevices()
 {
@@ -78,7 +113,7 @@ static QList<GstDevice> gstAudioInputDevices()
 			GstDevice dev;
 			dev.name = i.name + QString(" (%1)").arg(i.driver);
 			dev.is_default = first;
-			dev.id = i.driver + ',' + i.id;
+			dev.id = id_part_escape(i.driver) + ',' + id_part_escape(i.id);
 			dev.dev_id = i.id;
 			if(i.driver == "alsa")
 				dev.element_name = "alsasrc";
@@ -128,7 +163,7 @@ static QList<GstDevice> gstAudioOutputDevices()
 			GstDevice dev;
 			dev.name = i.name + QString(" (%1)").arg(i.driver);
 			dev.is_default = first;
-			dev.id = i.driver + ',' + i.id;
+			dev.id = id_part_escape(i.driver) + ',' + id_part_escape(i.id);
 			dev.dev_id = i.id;
 			if(i.driver == "alsa")
 				dev.element_name = "alsasink";
@@ -178,7 +213,11 @@ static QList<GstDevice> gstVideoInputDevices()
 			GstDevice dev;
 			dev.name = i.name + QString(" (%1)").arg(i.driver);
 			dev.is_default = first;
-			dev.id = i.driver + ',' + i.id;
+			dev.id = id_part_escape(i.driver) + ',' + id_part_escape(i.id);
+			dev.explicitCaptureSize = i.explicitCaptureSize;
+			if(!dev.explicitCaptureSize.isNull())
+				dev.id += QString(",") + id_part_escape(QString("%1x%2").arg(QString::number(dev.explicitCaptureSize.width()), QString::number(dev.explicitCaptureSize.height())));
+
 			dev.dev_id = i.id;
 			if(i.driver == "v4l")
 				dev.element_name = "v4lsrc";
@@ -226,14 +265,17 @@ static PDevice gstDeviceToPDevice(const GstDevice &dev, PDevice::Type type)
 	return out;
 }
 
-static GstElement *make_device_element(const QString &id, PDevice::Type type)
+static GstElement *make_device_element(const QString &id, PDevice::Type type, QSize *captureSize = 0)
 {
-	int at = id.indexOf(',');
-	if(at == -1)
+	QStringList parts = id.split(',');
+	for(int n = 0; n < parts.count(); ++n)
+		parts[n] = id_part_unescape(parts[n]);
+
+	if(parts.count() < 2)
 		return 0;
 
-	QString driver = id.mid(0, at);
-	QString dev_id = id.mid(at + 1);
+	QString driver = parts[0];
+	QString dev_id = parts[1];
 	QString element_name;
 	if(driver == "alsa")
 	{
@@ -289,6 +331,25 @@ static GstElement *make_device_element(const QString &id, PDevice::Type type)
 		g_object_unref(G_OBJECT(e));
 		return 0;
 	}
+
+	if(parts.count() >= 3 && captureSize)
+	{
+		int at = parts[2].indexOf('x');
+		if(at != -1)
+		{
+			QString ws = parts[2].mid(0, at);
+			QString hs = parts[2].mid(at + 1);
+			bool ok;
+			int w = ws.toInt(&ok);
+			if(ok)
+			{
+				int h = hs.toInt(&ok);
+				if(ok)
+					*captureSize = QSize(w, h);
+			}
+		}
+	}
+
 	return e;
 }
 
@@ -1056,16 +1117,20 @@ private:
 			{
 				printf("creating videoin\n");
 
-				videoin = make_device_element(vin, PDevice::VideoIn);
+				QSize captureSize;
+				videoin = make_device_element(vin, PDevice::VideoIn, &captureSize);
 				if(!videoin)
 				{
 					// TODO
 					printf("failed to create video input element\n");
 				}
 
-				videoincaps = gst_caps_new_simple("video/x-raw-yuv",
-					"width", G_TYPE_INT, 640,
-					"height", G_TYPE_INT, 480, NULL);
+				if(captureSize.isValid())
+				{
+					videoincaps = gst_caps_new_simple("video/x-raw-yuv",
+						"width", G_TYPE_INT, captureSize.width(),
+						"height", G_TYPE_INT, captureSize.height(), NULL);
+				}
 			}
 		}
 
@@ -1160,7 +1225,12 @@ private:
 		if(audioin)
 			gst_element_link_many(audioin, audioTarget, NULL);
 		if(videoin)
-			gst_element_link_filtered(videoin, videoTarget, videoincaps);
+		{
+			if(videoincaps)
+				gst_element_link_filtered(videoin, videoTarget, videoincaps);
+			else
+				gst_element_link(videoin, videoTarget);
+		}
 
 		//GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(e_pipeline));
 		//gst_bus_add_watch(bus, bus_call, loop);

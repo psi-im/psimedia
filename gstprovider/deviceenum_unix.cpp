@@ -503,6 +503,11 @@ static QList<Item> get_v4l_items()
 		i.name = v.friendlyName;
 		i.driver = "v4l";
 		i.id = v.dev;
+
+		// HACK
+		if(v.friendlyName == "Labtec Webcam Notebook")
+			i.explicitCaptureSize = QSize(640, 480);
+
 		out += i;
 	}
 
