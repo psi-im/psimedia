@@ -141,9 +141,19 @@ QList<Item> audioInputItems(const QString &driver)
 
 QList<Item> videoInputItems(const QString &driver)
 {
-	// TODO: mac video input
 	Q_UNUSED(driver);
+
 	QList<Item> out;
+
+	// hardcode a default input device
+	Item i;
+	i.type = Item::Video;
+	i.dir = Item::Input;
+	i.name = "Default";
+	i.driver = "osxvideo";
+	i.id = QString(); // unspecified
+	out += i;
+
 	return out;
 }
 
