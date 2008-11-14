@@ -23,6 +23,7 @@
 #include <QtCore>
 #include <QImage>
 #include <gst/gst.h>
+#include <gst/interfaces/propertyprobe.h>
 #include "gstcustomelements.h"
 #include "deviceenum.h"
 
@@ -76,6 +77,54 @@ static QString id_part_unescape(const QString &in)
 		else
 			out += in[n];
 	}
+	return out;
+}
+
+class GstDeviceProbeValue
+{
+public:
+	QString id;
+	QString name;
+};
+
+static QList<GstDeviceProbeValue> device_probe(GstElement *e)
+{
+	GObjectClass *klass = G_OBJECT_GET_CLASS(e);
+	if(!g_object_class_find_property(klass, "device") || !GST_IS_PROPERTY_PROBE(e))
+		return QList<GstDeviceProbeValue>();
+
+	GstPropertyProbe *probe = GST_PROPERTY_PROBE(e);
+	if(!probe)
+		return QList<GstDeviceProbeValue>();
+
+	const GParamSpec *pspec = gst_property_probe_get_property(probe, "device");
+	if(!pspec)
+		return QList<GstDeviceProbeValue>();
+
+	QList<GstDeviceProbeValue> out;
+
+	GValueArray *list = gst_property_probe_probe_and_get_values(probe, pspec);
+	if(list)
+	{
+		for(int n = 0; n < (int)list->n_values; ++n)
+		{
+			GValue *i = g_value_array_get_nth(list, n);
+
+			gchar *name;
+			g_object_set(G_OBJECT(e), "device", g_value_get_string(i), NULL);
+			g_object_get(G_OBJECT(e), "device-name", &name, NULL);
+
+			GstDeviceProbeValue dev;
+			dev.id = QString::fromUtf8(g_value_get_string(i));
+			dev.name = QString::fromUtf8(name);
+			g_free(name);
+
+			out += dev;
+		}
+
+		g_value_array_free(list);
+	}
+
 	return out;
 }
 
@@ -317,6 +366,12 @@ static GstElement *make_device_element(const QString &id, PDevice::Type type, QS
 	GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), NULL);
 	if(!e)
 		return 0;
+	QList<GstDeviceProbeValue> probeValues = device_probe(e);
+	printf("probe values:\n");
+	foreach(const GstDeviceProbeValue &v, probeValues)
+	{
+		printf("  [%s] [%s]\n", qPrintable(v.id), qPrintable(v.name));
+	}
 	if(element_name == "alsasrc" || element_name == "alsasink")
 		g_object_set(G_OBJECT(e), "device", dev_id.toLatin1().data(), NULL);
 	else if(element_name == "osxaudiosrc" || element_name == "osxaudiosink")

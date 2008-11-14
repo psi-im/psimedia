@@ -21,7 +21,7 @@ windows {
 	LIBPATH += \
 		"C:\Progra~1\Common~1\gtk+\lib" \
 		"C:\Progra~1\Common~1\GStreamer\0.10\lib"
-	LIBS += -llibgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lgobject-2.0 -llibgstvideo-0.10 -llibgstbase-0.10
+	LIBS += -llibgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lgobject-2.0 -llibgstvideo-0.10 -llibgstbase-0.10 -llibgstinterfaces-0.10
 }
 
 unix:!mac {
@@ -30,7 +30,7 @@ unix:!mac {
 		/usr/lib/glib-2.0/include \
 		/usr/include/libxml2 \
 		/usr/include/gstreamer-0.10
-	LIBS += -lgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lrt -lgstvideo-0.10
+	LIBS += -lgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lrt -lgstvideo-0.10 -lgstinterfaces-0.10
 }
 
 mac {
@@ -39,7 +39,7 @@ mac {
 		/opt/local/lib/glib-2.0/include \
 		/opt/local/include/libxml2 \
 		/opt/local/include/gstreamer-0.10
-	LIBS += -L/opt/local/lib -lgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lgobject-2.0 -lgstvideo-0.10 -lgstbase-0.10
+	LIBS += -L/opt/local/lib -lgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lgobject-2.0 -lgstvideo-0.10 -lgstbase-0.10 -lgstinterfaces-0.10
 }
 
 # device enum
