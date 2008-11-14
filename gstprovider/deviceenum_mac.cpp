@@ -129,11 +129,13 @@ static QList<Item> get_audio_items(int type)
 
 QList<Item> audioOutputItems(const QString &driver)
 {
+	Q_UNUSED(driver);
 	return get_audio_items(DIR_OUTPUT);
 }
 
 QList<Item> audioInputItems(const QString &driver)
 {
+	Q_UNUSED(driver);
 	return get_audio_items(DIR_INPUT);
 }
 
