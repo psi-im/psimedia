@@ -20,6 +20,11 @@
 
 #include "deviceenum.h"
 
+#include <QStringList>
+#include <QFile>
+#include <QFileInfo>
+#include <QDir>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>

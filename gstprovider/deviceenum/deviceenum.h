@@ -21,7 +21,9 @@
 #ifndef DEVICEENUM_H
 #define DEVICEENUM_H
 
-#include <QtCore>
+#include <QString>
+#include <QSize>
+#include <QList>
 
 namespace DeviceEnum {
 

@@ -21,6 +21,7 @@
 #include "devices.h"
 
 #include <QSize>
+#include <QStringList>
 #include <gst/gst.h>
 #include <gst/interfaces/propertyprobe.h>
 #include "deviceenum/deviceenum.h"
