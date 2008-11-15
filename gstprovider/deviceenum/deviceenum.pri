@@ -1,12 +1,12 @@
 HEADERS += $$PWD/deviceenum.h
 
 windows: {
-        SOURCES += $$PWD/deviceenum_win.cpp
+	SOURCES += $$PWD/deviceenum_win.cpp
 }
 unix:!mac: {
-        SOURCES += $$PWD/deviceenum_unix.cpp
+	SOURCES += $$PWD/deviceenum_unix.cpp
 }
 mac: {
-        SOURCES += $$PWD/deviceenum_mac.cpp
-        LIBS += -framework CoreAudio
+	SOURCES += $$PWD/deviceenum_mac.cpp
+	LIBS += -framework CoreAudio
 }
