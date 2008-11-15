@@ -3,6 +3,8 @@ DEFINES += GSTPROVIDER_STATIC
 # gstreamer stuff
 DEFINES += QT_STATICPLUGIN
 
+include(deviceenum/deviceenum.pri)
+
 HEADERS += \
 	$$PWD/gstcustomelements.h \
 	$$PWD/devices.h
@@ -45,17 +47,4 @@ mac {
 		/opt/local/include/libxml2 \
 		/opt/local/include/gstreamer-0.10
 	LIBS += -L/opt/local/lib -lgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lgobject-2.0 -lgstvideo-0.10 -lgstbase-0.10 -lgstinterfaces-0.10
-}
-
-# device enum
-HEADERS += $$PWD/deviceenum.h
-windows: {
-        SOURCES += $$PWD/deviceenum_win.cpp
-}
-unix:!mac: {
-        SOURCES += $$PWD/deviceenum_unix.cpp
-}
-mac: {
-        SOURCES += $$PWD/deviceenum_mac.cpp
-        LIBS += -framework CoreAudio
 }

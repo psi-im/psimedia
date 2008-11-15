@@ -23,7 +23,7 @@
 #include <QSize>
 #include <gst/gst.h>
 #include <gst/interfaces/propertyprobe.h>
-#include "deviceenum.h"
+#include "deviceenum/deviceenum.h"
 
 namespace PsiMedia {
 
