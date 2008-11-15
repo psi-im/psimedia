@@ -20,7 +20,9 @@
 
 #include "psimedia.h"
 
-#include <QtCore>
+#include <QCoreApplication>
+#include <QPluginLoader>
+#include <QThread>
 
 #ifdef QT_GUI_LIB
 #include <QPainter>
