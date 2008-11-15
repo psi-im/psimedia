@@ -28,6 +28,7 @@
 #include <QHostAddress>
 #include <QUdpSocket>
 #include <QtPlugin>
+#include <QLibrary>
 #include "psimedia.h"
 #include "ui_mainwin.h"
 #include "ui_config.h"
@@ -1238,15 +1239,33 @@ private slots:
 Q_IMPORT_PLUGIN(gstprovider)
 #endif
 
+static QString findPlugin(const QString &relpath, const QString &basename)
+{
+	QDir dir(QCoreApplication::applicationDirPath());
+	if(!dir.cd(relpath))
+		return QString();
+	foreach(const QString &fileName, dir.entryList())
+	{
+		if(fileName.contains(basename))
+		{
+			QString filePath = dir.filePath(fileName);
+			if(QLibrary::isLibrary(filePath))
+				return filePath;
+		}
+	}
+	return QString();
+}
+
 int main(int argc, char **argv)
 {
 	QApplication qapp(argc, argv);
 
 #ifndef GSTPROVIDER_STATIC
+	QString pluginFile = findPlugin("../gstprovider", "gstprovider");
 # ifdef GSTBUNDLE_PATH
-	PsiMedia::loadPlugin("gstprovider", GSTBUNDLE_PATH);
+	PsiMedia::loadPlugin(pluginFile, GSTBUNDLE_PATH);
 # else
-	PsiMedia::loadPlugin("gstprovider", QString());
+	PsiMedia::loadPlugin(pluginFile, QString());
 # endif
 #endif
 

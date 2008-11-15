@@ -1,8 +1,3 @@
-DEFINES += GSTPROVIDER_STATIC
-
-# gstreamer stuff
-DEFINES += QT_STATICPLUGIN
-
 include(deviceenum/deviceenum.pri)
 include(gstcustomelements/gstcustomelements.pri)
 
