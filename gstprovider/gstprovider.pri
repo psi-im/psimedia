@@ -2,12 +2,17 @@ DEFINES += GSTPROVIDER_STATIC
 
 # gstreamer stuff
 DEFINES += QT_STATICPLUGIN
-HEADERS += $$PWD/gstcustomelements.h
+
+HEADERS += \
+	$$PWD/gstcustomelements.h \
+	$$PWD/devices.h
+
 SOURCES += \
 	$$PWD/gstcustomelements.c \
 	$$PWD/gstcustomelements_appvideosink.c \
 	$$PWD/gstcustomelements_apprtpsrc.c \
 	$$PWD/gstcustomelements_apprtpsink.c \
+	$$PWD/devices.cpp \
 	$$PWD/gstprovider.cpp
 
 windows {
@@ -43,6 +48,7 @@ mac {
 }
 
 # device enum
+HEADERS += $$PWD/deviceenum.h
 windows: {
         SOURCES += $$PWD/deviceenum_win.cpp
 }
