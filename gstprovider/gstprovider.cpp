@@ -20,8 +20,15 @@
 
 #include "psimediaprovider.h"
 
-#include <QtCore>
+#include <QStringList>
 #include <QImage>
+#include <QDir>
+#include <QMutex>
+#include <QWaitCondition>
+#include <QCoreApplication>
+#include <QLibrary>
+#include <QThread>
+#include <QtPlugin>
 #include <gst/gst.h>
 #include "gstcustomelements/gstcustomelements.h"
 #include "devices.h"
