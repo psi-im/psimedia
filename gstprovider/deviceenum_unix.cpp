@@ -300,6 +300,20 @@ static QList<Item> get_alsa_items(int type)
 		}
 	}
 
+	// make a "default" item
+	{
+		Item i;
+		i.type = Item::Audio;
+		if(type == DIR_INPUT)
+			i.dir = Item::Input;
+		else // DIR_OUTPUT
+			i.dir = Item::Output;
+		i.name = "Default";
+		i.driver = "alsa";
+		i.id = "default";
+		out += i;
+	}
+
 	for(int n = 0; n < items.count(); ++n)
 	{
 		AlsaItem &ai = items[n];
@@ -316,9 +330,17 @@ static QList<Item> get_alsa_items(int type)
 		i.id = QString().sprintf("plughw:%d,%d", ai.card, ai.dev);
 		out += i;
 
-		i.name = ai.name + " (Direct)";
-		i.id = QString().sprintf("hw:%d,%d", ai.card, ai.dev);
-		out += i;
+		// internet discussion seems to indicate that plughw is the
+		//   same as hw except that it will convert audio parameters
+		//   if necessary.  the decision to use hw vs plughw is a
+		//   development choice, NOT a user choice.  it is generally
+		//   recommended for apps to use plughw unless they have a
+		//   good reason.
+		//
+		// so, for now we'll only offer plughw and not hw
+		//i.name = ai.name + " (Direct)";
+		//i.id = QString().sprintf("hw:%d,%d", ai.card, ai.dev);
+		//out += i;
 	}
 
 	return out;
