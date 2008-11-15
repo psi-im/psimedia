@@ -3,6 +3,6 @@ HEADERS += \
 
 SOURCES += \
 	$$PWD/gstcustomelements.c \
-	$$PWD/gstcustomelements_appvideosink.c \
-	$$PWD/gstcustomelements_apprtpsrc.c \
-	$$PWD/gstcustomelements_apprtpsink.c
+	$$PWD/appvideosink.c \
+	$$PWD/apprtpsrc.c \
+	$$PWD/apprtpsink.c
