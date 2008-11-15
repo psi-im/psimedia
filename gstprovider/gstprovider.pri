@@ -7,7 +7,8 @@ include(deviceenum/deviceenum.pri)
 
 HEADERS += \
 	$$PWD/gstcustomelements.h \
-	$$PWD/devices.h
+	$$PWD/devices.h \
+	$$PWD/payloadinfo.h
 
 SOURCES += \
 	$$PWD/gstcustomelements.c \
@@ -15,6 +16,7 @@ SOURCES += \
 	$$PWD/gstcustomelements_apprtpsrc.c \
 	$$PWD/gstcustomelements_apprtpsink.c \
 	$$PWD/devices.cpp \
+	$$PWD/payloadinfo.cpp \
 	$$PWD/gstprovider.cpp
 
 windows {
