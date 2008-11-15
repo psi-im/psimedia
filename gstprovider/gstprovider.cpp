@@ -1334,6 +1334,7 @@ public:
 signals:
 	void started();
 	void preferencesUpdated();
+	void audioInputIntensityChanged(int intensity);
 	void stopped();
 	void finished();
 	void error();

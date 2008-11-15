@@ -1110,6 +1110,7 @@ public:
 		c->qobject()->setParent(this);
 		connect(c->qobject(), SIGNAL(started()), SLOT(c_started()));
 		connect(c->qobject(), SIGNAL(preferencesUpdated()), SLOT(c_preferencesUpdated()));
+		connect(c->qobject(), SIGNAL(audioInputIntensityChanged(int)), SLOT(c_audioInputIntensityChanged(int)));
 		connect(c->qobject(), SIGNAL(stopped()), SLOT(c_stopped()));
 		connect(c->qobject(), SIGNAL(finished()), SLOT(c_finished()));
 		connect(c->qobject(), SIGNAL(error()), SLOT(c_error()));
@@ -1131,6 +1132,11 @@ private slots:
 	void c_preferencesUpdated()
 	{
 		emit q->preferencesUpdated();
+	}
+
+	void c_audioInputIntensityChanged(int intensity)
+	{
+		emit q->audioInputIntensityChanged(intensity);
 	}
 
 	void c_stopped()

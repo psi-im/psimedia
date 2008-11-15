@@ -431,6 +431,7 @@ public:
 signals:
 	void started();
 	void preferencesUpdated();
+	void audioInputIntensityChanged(int intensity); // 0-100
 	void stopped();
 	void finished(); // for file playback only
 	void error();

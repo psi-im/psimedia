@@ -247,6 +247,7 @@ public:
 HINT_SIGNALS:
 	HINT_METHOD(started())
 	HINT_METHOD(preferencesUpdated())
+	HINT_METHOD(audioInputIntensityChanged(int intensity))
 	HINT_METHOD(stopped())
 	HINT_METHOD(finished()) // for file playback only
 	HINT_METHOD(error())
