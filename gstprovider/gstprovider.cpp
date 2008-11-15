@@ -23,7 +23,7 @@
 #include <QtCore>
 #include <QImage>
 #include <gst/gst.h>
-#include "gstcustomelements.h"
+#include "gstcustomelements/gstcustomelements.h"
 #include "devices.h"
 #include "payloadinfo.h"
 

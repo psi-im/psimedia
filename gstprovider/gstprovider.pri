@@ -4,17 +4,13 @@ DEFINES += GSTPROVIDER_STATIC
 DEFINES += QT_STATICPLUGIN
 
 include(deviceenum/deviceenum.pri)
+include(gstcustomelements/gstcustomelements.pri)
 
 HEADERS += \
-	$$PWD/gstcustomelements.h \
 	$$PWD/devices.h \
 	$$PWD/payloadinfo.h
 
 SOURCES += \
-	$$PWD/gstcustomelements.c \
-	$$PWD/gstcustomelements_appvideosink.c \
-	$$PWD/gstcustomelements_apprtpsrc.c \
-	$$PWD/gstcustomelements_apprtpsink.c \
 	$$PWD/devices.cpp \
 	$$PWD/payloadinfo.cpp \
 	$$PWD/gstprovider.cpp
