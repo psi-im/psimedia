@@ -497,7 +497,7 @@ private slots:
 		QString fileName = QFileDialog::getOpenFileName(this,
 			tr("Open File"),
 			QDir::homePath(),
-			tr("Ogg Audio/Video (*.ogg)"));
+			tr("Ogg Audio/Video (*.oga, *.ogv, *.ogg)"));
 		if(!fileName.isEmpty())
 			ui.le_file->setText(fileName);
 	}
@@ -900,6 +900,8 @@ private slots:
 
 			// we just assume the file has both audio and video.
 			//   if it doesn't, no big deal, it'll still work.
+			//   update: after producer is started, we can correct
+			//   these variables.
 			transmitAudio = true;
 			transmitVideo = true;
 		}
@@ -1125,13 +1127,26 @@ private slots:
 		pVideo = 0;
 		if(transmitAudio)
 		{
-			audio = producer.audioPayloadInfo().first();
-			pAudio = &audio;
+			// confirm transmitting of audio is actually possible,
+			//   in the case that a file is used as input
+			if(producer.canTransmitAudio())
+			{
+				audio = producer.audioPayloadInfo().first();
+				pAudio = &audio;
+			}
+			else
+				transmitAudio = false;
 		}
 		if(transmitVideo)
 		{
-			video = producer.videoPayloadInfo().first();
-			pVideo = &video;
+			// same for video
+			if(producer.canTransmitVideo())
+			{
+				video = producer.videoPayloadInfo().first();
+				pVideo = &video;
+			}
+			else
+				transmitVideo = false;
 		}
 
 		QString str = payloadInfoToCodecString(pAudio, pVideo);
@@ -1214,7 +1229,7 @@ private slots:
 			QString fileName = QFileDialog::getSaveFileName(this,
 				tr("Save File"),
 				QDir::homePath(),
-				tr("Ogg Audio/Video (*.ogg)"));
+				tr("Ogg Audio/Video (*.oga, *.ogv, *.ogg)"));
 
 			recordFile = new QFile(fileName, this);
 			if(!recordFile->open(QIODevice::WriteOnly | QIODevice::Truncate))

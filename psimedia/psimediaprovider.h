@@ -233,6 +233,9 @@ public:
 	virtual QList<PAudioParams> audioParams() const = 0;
 	virtual QList<PVideoParams> videoParams() const = 0;
 
+	virtual bool canTransmitAudio() const = 0;
+	virtual bool canTransmitVideo() const = 0;
+
 	virtual int outputVolume() const = 0; // 0 (mute) to 100
 	virtual void setOutputVolume(int level) = 0;
 

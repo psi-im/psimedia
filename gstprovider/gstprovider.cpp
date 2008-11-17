@@ -1294,6 +1294,18 @@ public:
 		return QList<PVideoParams>();
 	}
 
+	virtual bool canTransmitAudio() const
+	{
+		// TODO
+		return true;
+	}
+
+	virtual bool canTransmitVideo() const
+	{
+		// TODO
+		return true;
+	}
+
 	virtual int outputVolume() const
 	{
 		return audioOutVolume;

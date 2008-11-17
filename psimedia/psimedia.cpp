@@ -1333,6 +1333,16 @@ QList<VideoParams> RtpSession::videoParams() const
 	return out;
 }
 
+bool RtpSession::canTransmitAudio() const
+{
+	return d->c->canTransmitAudio();
+}
+
+bool RtpSession::canTransmitVideo() const
+{
+	return d->c->canTransmitVideo();
+}
+
 int RtpSession::outputVolume() const
 {
 	return d->c->outputVolume();

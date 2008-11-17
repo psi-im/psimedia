@@ -415,6 +415,19 @@ public:
 	QList<AudioParams> audioParams() const;
 	QList<VideoParams> videoParams() const;
 
+	// parameter negotiation is independent of the existence of input and
+	//   output devices.  you could perform a negotiation without
+	//   specifying any input devices, and this just means you won't be
+	//   able to transmit until you eventually do specify them.  similarly,
+	//   you could have specified input devices but then later removed them
+	//   (by setting the device id to an empty string).  the following
+	//   methods can be used to know what media types you're able to send.
+	//   in the case of devices, this is somewhat redundant information,
+	//   but the methods are useful in the case of using a file as input,
+	//   which might have varying media contained.
+	bool canTransmitAudio() const;
+	bool canTransmitVideo() const;
+
 	// speaker
 	int outputVolume() const; // 0 (mute) to 100
 	void setOutputVolume(int level);
