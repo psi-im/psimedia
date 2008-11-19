@@ -87,7 +87,7 @@ struct _GstAppVideoSink
 {
 	GstVideoSink parent;
 
-	gpointer *appdata;
+	gpointer appdata;
 	void (*show_frame)(int width, int height, const unsigned char *rgb24, gpointer appdata);
 };
 
@@ -126,7 +126,7 @@ struct _GstAppRtpSink
 {
 	GstBaseSink parent;
 
-	gpointer *appdata;
+	gpointer appdata;
 	void (*packet_ready)(const unsigned char *buf, int size, gpointer appdata);
 };
 

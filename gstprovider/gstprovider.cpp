@@ -33,6 +33,7 @@
 #include "gstcustomelements/gstcustomelements.h"
 #include "devices.h"
 #include "payloadinfo.h"
+#include "rtpworker.h"
 
 namespace PsiMedia {
 
@@ -58,11 +59,6 @@ static PDevice gstDeviceToPDevice(const GstDevice &dev, PDevice::Type type)
 	out.name = dev.name;
 	out.id = dev.id;
 	return out;
-}
-
-static GstElement *make_device_element(const QString &id, PDevice::Type type, QSize *captureSize = 0)
-{
-	return devices_makeElement(id, type, captureSize);
 }
 
 //----------------------------------------------------------------------------
@@ -171,7 +167,11 @@ public:
 			g_thread_init(NULL);
 
 		// you can also use NULLs here if you don't want to pass args
-		gst_init(&args.argc, &args.argv);
+		GError *error;
+		if(!gst_init_check(&args.argc, &args.argv, &error))
+		{
+			// TODO: report fail
+		}
 
 		guint major, minor, micro, nano;
 		gst_version(&major, &minor, &micro, &nano);
@@ -201,48 +201,6 @@ public:
 //----------------------------------------------------------------------------
 // GstThread
 //----------------------------------------------------------------------------
-/*static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data)
-{
-	Q_UNUSED(bus);
-	GMainLoop *loop = (GMainLoop *)data;
-	switch(GST_MESSAGE_TYPE(msg))
-	{
-		case GST_MESSAGE_EOS:
-		{
-			g_print("End-of-stream\n");
-			g_main_loop_quit(loop);
-			break;
-		}
-		case GST_MESSAGE_ERROR:
-		{
-			gchar *debug;
-			GError *err;
-
-			gst_message_parse_error(msg, &err, &debug);
-			g_free(debug);
-
-			g_print("Error: %s\n", err->message);
-			g_error_free(err);
-
-			g_main_loop_quit(loop);
-			break;
-		}
-		default:
-			break;
-	}
-
-	return TRUE;
-}
-
-static void nullAndUnrefElements(QList<GstElement*> &in)
-{
-	foreach(GstElement *e, in)
-	{
-		gst_element_set_state(e, GST_STATE_NULL);
-		g_object_unref(G_OBJECT(e));
-	}
-}*/
-
 Q_GLOBAL_STATIC(QMutex, render_mutex)
 class GstRtpSessionContext;
 static GstRtpSessionContext *g_producer = 0;
@@ -253,103 +211,9 @@ class GstRtpChannel;
 static void receiver_write(GstRtpChannel *from, const PRtpPacket &rtp);
 static QList<QImage> *g_rimages = 0;
 
-static void gst_show_frame(int width, int height, const unsigned char *rgb24, gpointer appdata)
-{
-	Q_UNUSED(appdata);
-
-	QImage image(width, height, QImage::Format_RGB32);
-	int at = 0;
-	for(int y = 0; y < height; ++y)
-	{
-		for(int x = 0; x < width; ++x)
-		{
-			unsigned char r = rgb24[at++];
-			unsigned char g = rgb24[at++];
-			unsigned char b = rgb24[at++];
-			QRgb color = qRgb(r, g, b);
-			image.setPixel(x, y, color);
-		}
-	}
-
-	QMutexLocker locker(render_mutex());
-	if(!g_images)
-		g_images = new QList<QImage>;
-	g_images->append(image);
-	QMetaObject::invokeMethod((QObject *)g_producer, "imageReady", Qt::QueuedConnection);
-}
-
-static void gst_show_rframe(int width, int height, const unsigned char *rgb24, gpointer appdata)
-{
-	Q_UNUSED(appdata);
-
-	QImage image(width, height, QImage::Format_RGB32);
-	int at = 0;
-	for(int y = 0; y < height; ++y)
-	{
-		for(int x = 0; x < width; ++x)
-		{
-			unsigned char r = rgb24[at++];
-			unsigned char g = rgb24[at++];
-			unsigned char b = rgb24[at++];
-			QRgb color = qRgb(r, g, b);
-			image.setPixel(x, y, color);
-		}
-	}
-
-	QMutexLocker locker(render_mutex());
-	if(!g_rimages)
-		g_rimages = new QList<QImage>;
-	g_rimages->append(image);
-	QMetaObject::invokeMethod((QObject *)g_receiver, "rimageReady", Qt::QueuedConnection);
-}
-
 Q_GLOBAL_STATIC(QMutex, in_mutex)
 static QList<PRtpPacket> *g_in_packets_audio = 0;
 static QList<PRtpPacket> *g_in_packets = 0;
-static int eat_audio = 0;//1000;
-
-static void gst_packet_ready_audio(const unsigned char *buf, int size, gpointer data)
-{
-	Q_UNUSED(data);
-
-	QMutexLocker locker(in_mutex());
-	if(!g_in_packets_audio)
-		g_in_packets_audio = new QList<PRtpPacket>();
-	if(eat_audio > 0)
-	{
-		--eat_audio;
-		if(eat_audio == 0)
-			printf("done eating packets\n");
-		return;
-	}
-	QByteArray ba((const char *)buf, size);
-	PRtpPacket packet;
-	packet.rawValue = ba;
-	packet.portOffset = 0;
-	if(g_in_packets_audio->count() < 5)
-	{
-		g_in_packets_audio->append(packet);
-		QMetaObject::invokeMethod((QObject *)g_producer, "packetReadyAudio", Qt::QueuedConnection);
-	}
-}
-
-static void gst_packet_ready(const unsigned char *buf, int size, gpointer data)
-{
-	Q_UNUSED(data);
-
-	QMutexLocker locker(in_mutex());
-	if(!g_in_packets)
-		g_in_packets = new QList<PRtpPacket>();
-	QByteArray ba((const char *)buf, size);
-	PRtpPacket packet;
-	packet.rawValue = ba;
-	packet.portOffset = 0;
-	if(g_in_packets->count() < 5)
-	{
-		g_in_packets->append(packet);
-		QMetaObject::invokeMethod((QObject *)g_producer, "packetReady", Qt::QueuedConnection);
-	}
-}
 
 class GstThread : public QThread
 {
@@ -364,14 +228,16 @@ public:
 	QWaitCondition w;
 	static GstThread *self;
 
+	RtpWorker *worker;
+
+	bool producerMode;
+
 	GstThread(QObject *parent = 0) :
 		QThread(parent),
 		gstSession(0),
 		mainContext(0),
 		mainLoop(0),
-		pipeline(0),
-		rpipeline(0),
-		rvpipeline(0)
+		worker(0)
 	{
 		self = this;
 	}
@@ -386,26 +252,6 @@ public:
 	{
 		return self;
 	}
-
-	QString ain, vin;
-	QString infile;
-
-	GstElement *pipeline;
-	GstElement *fileSource;
-	GstElement *fileDemux;
-	GstElement *audioTarget;
-	GstElement *videoTarget;
-
-	PPayloadInfo audioPayloadInfo;
-	PPayloadInfo videoPayloadInfo;
-
-	QString aout;
-	GstElement *rpipeline, *rvpipeline;
-	GstElement *audiortpsrc;
-	GstElement *videortpsrc;
-
-	PPayloadInfo raudioPayloadInfo;
-	PPayloadInfo rvideoPayloadInfo;
 
 	void start(const QString &_pluginPath = QString())
 	{
@@ -490,7 +336,8 @@ protected:
 		QMutexLocker locker(&m);
 
 		// cleanup
-		cleanup_producer();
+		delete worker;
+		worker = 0;
 
 		g_main_loop_unref(mainLoop);
 		mainLoop = 0;
@@ -529,18 +376,55 @@ private:
 		return ((GstThread *)data)->doStopReceiver();
 	}
 
-	static void cb_fileDemux_pad_added(GstElement *element, GstPad *pad, gpointer data)
+	static void cb_worker_started(void *app)
 	{
-		((GstThread *)data)->fileDemux_pad_added(element, pad);
+		((GstThread *)app)->worker_started();
 	}
 
-	static void cb_fileDemux_pad_removed(GstElement *element, GstPad *pad, gpointer data)
+	static void cb_worker_updated(void *app)
 	{
-		((GstThread *)data)->fileDemux_pad_removed(element, pad);
+		((GstThread *)app)->worker_updated();
+	}
+
+	static void cb_worker_stopped(void *app)
+	{
+		((GstThread *)app)->worker_stopped();
+	}
+
+	static void cb_worker_finished(void *app)
+	{
+		((GstThread *)app)->worker_finished();
+	}
+
+	static void cb_worker_error(void *app)
+	{
+		((GstThread *)app)->worker_error();
+	}
+
+	static void cb_worker_previewFrame(const QImage &img, void *app)
+	{
+		((GstThread *)app)->worker_previewFrame(img);
+	}
+
+	static void cb_worker_outputFrame(const QImage &img, void *app)
+	{
+		((GstThread *)app)->worker_outputFrame(img);
+	}
+
+	static void cb_worker_rtpAudioOut(const PRtpPacket &packet, void *app)
+	{
+		((GstThread *)app)->worker_rtpAudioOut(packet);
+	}
+
+	static void cb_worker_rtpVideoOut(const PRtpPacket &packet, void *app)
+	{
+		((GstThread *)app)->worker_rtpVideoOut(packet);
 	}
 
 	gboolean loop_started()
 	{
+		worker = new RtpWorker(mainContext);
+
 		w.wakeOne();
 		m.unlock();
 		return FALSE;
@@ -548,483 +432,99 @@ private:
 
 	gboolean doStartProducer()
 	{
-		pipeline = gst_pipeline_new(NULL);
+		worker->start();
+		return FALSE;
+	}
 
-		GstElement *audioin = 0;
-		GstElement *videoin = 0;
-		fileSource = 0;
-		GstCaps *videoincaps = 0;
-
-		if(!infile.isEmpty())
-		{
-			printf("creating filesrc\n");
-
-			fileSource = gst_element_factory_make("filesrc", NULL);
-			g_object_set(G_OBJECT(fileSource), "location", infile.toLatin1().data(), NULL);
-
-			fileDemux = gst_element_factory_make("oggdemux", NULL);
-			g_signal_connect(G_OBJECT(fileDemux),
-				"pad-added",
-				G_CALLBACK(cb_fileDemux_pad_added), this);
-			g_signal_connect(G_OBJECT(fileDemux),
-				"pad-removed",
-				G_CALLBACK(cb_fileDemux_pad_removed), this);
-		}
-		else
-		{
-			if(!ain.isEmpty())
-			{
-				printf("creating audioin\n");
-
-				audioin = make_device_element(ain, PDevice::AudioIn);
-				if(!audioin)
-				{
-					// TODO
-					printf("failed to create audio input element\n");
-				}
-			}
-
-			if(!vin.isEmpty())
-			{
-				printf("creating videoin\n");
-
-				QSize captureSize;
-				videoin = make_device_element(vin, PDevice::VideoIn, &captureSize);
-				if(!videoin)
-				{
-					// TODO
-					printf("failed to create video input element\n");
-				}
-
-				if(captureSize.isValid())
-				{
-					videoincaps = gst_caps_new_simple("video/x-raw-yuv",
-						"width", G_TYPE_INT, captureSize.width(),
-						"height", G_TYPE_INT, captureSize.height(), NULL);
-				}
-			}
-		}
-
-		GstElement *audioqueue = 0, *audioconvert = 0, *audioresample = 0, *audioenc = 0, *audiortppay = 0, *audiortpsink = 0;
-		GstAppRtpSink *appRtpSink = 0;
-		GstCaps *caps5 = 0;
-
-		if(audioin || fileSource)
-		{
-			audioqueue = gst_element_factory_make("queue", NULL);
-			audioconvert = gst_element_factory_make("audioconvert", NULL);
-			audioresample = gst_element_factory_make("audioresample", NULL);
-			audioenc = gst_element_factory_make("speexenc", NULL);
-			audiortppay = gst_element_factory_make("rtpspeexpay", NULL);
-			//g_object_set(G_OBJECT(audiortppay), "min-ptime", (guint64)1000000000, NULL);
-			//audiosink = gst_element_factory_make("alsasink", NULL);
-			audiortpsink = gst_element_factory_make("apprtpsink", NULL);
-			appRtpSink = (GstAppRtpSink *)audiortpsink;
-			appRtpSink->packet_ready = gst_packet_ready_audio;
-
-			caps5 = gst_caps_new_simple("audio/x-raw-int",
-				"rate", G_TYPE_INT, 16000,
-				"channels", G_TYPE_INT, 1, NULL);
-		}
-
-		GstElement *videoqueue = 0, *videoconvert = 0, *videosink = 0;
-		GstAppVideoSink *appVideoSink = 0;
-		GstElement *videoconvertpre = 0, *videotee = 0, *videortpqueue = 0, *videoenc = 0, *videortppay = 0, *videortpsink = 0;
-
-		if(videoin || fileSource)
-		{
-			videoqueue = gst_element_factory_make("queue", NULL);
-			videoconvert = gst_element_factory_make("ffmpegcolorspace", NULL);
-			//videosink = gst_element_factory_make("ximagesink", NULL);
-			videosink = gst_element_factory_make("appvideosink", NULL);
-			if(!videosink)
-			{
-				printf("could not make videosink!!\n");
-			}
-			appVideoSink = (GstAppVideoSink *)videosink;
-			appVideoSink->show_frame = gst_show_frame;
-			//g_object_set(G_OBJECT(appVideoSink), "sync", FALSE, NULL);
-
-			videoconvertpre = gst_element_factory_make("ffmpegcolorspace", NULL);
-			videotee = gst_element_factory_make("tee", NULL);
-			videortpqueue = gst_element_factory_make("queue", NULL);
-			videoenc = gst_element_factory_make("theoraenc", NULL);
-			videortppay = gst_element_factory_make("rtptheorapay", NULL);
-			videortpsink = gst_element_factory_make("apprtpsink", NULL);
-			if(!videotee || !videortpqueue || !videoenc || !videortppay || !videortpsink)
-				printf("error making some video stuff\n");
-			appRtpSink = (GstAppRtpSink *)videortpsink;
-			appRtpSink->packet_ready = gst_packet_ready;
-		}
-
-		if(audioin)
-			gst_bin_add(GST_BIN(pipeline), audioin);
-		if(videoin)
-			gst_bin_add(GST_BIN(pipeline), videoin);
-
-		if(fileSource)
-			gst_bin_add_many(GST_BIN(pipeline), fileSource, fileDemux, NULL);
-
-		if(audioin || fileSource)
-			gst_bin_add_many(GST_BIN(pipeline), audioqueue, audioconvert, audioresample, audioenc, audiortppay, audiortpsink, NULL);
-		if(videoin || fileSource)
-		{
-			gst_bin_add_many(GST_BIN(pipeline), videoconvertpre, videotee, videoqueue, videoconvert, videosink, NULL);
-			gst_bin_add_many(GST_BIN(pipeline), videortpqueue, videoenc, videortppay, videortpsink, NULL);
-		}
-
-		if(fileSource)
-			gst_element_link_many(fileSource, fileDemux, NULL);
-
-		if(audioin || fileSource)
-		{
-			gst_element_link_many(audioqueue, audioconvert, audioresample, NULL);
-			gst_element_link_filtered(audioresample, audioenc, caps5);
-			gst_element_link_many(audioenc, audiortppay, audiortpsink, NULL);
-		}
-		if(videoin || fileSource)
-		{
-			gst_element_link_many(videoconvertpre, videotee, videoqueue, videoconvert, videosink, NULL);
-			gst_element_link_many(videotee, videortpqueue, videoenc, videortppay, videortpsink, NULL);
-		}
-
-		if(audioin || fileSource)
-			audioTarget = audioqueue;
-		if(videoin || fileSource)
-			videoTarget = videoconvertpre;
-
-		if(audioin)
-			gst_element_link_many(audioin, audioTarget, NULL);
-		if(videoin)
-		{
-			if(videoincaps)
-				gst_element_link_filtered(videoin, videoTarget, videoincaps);
-			else
-				gst_element_link(videoin, videoTarget);
-		}
-
-		//GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(e_pipeline));
-		//gst_bus_add_watch(bus, bus_call, loop);
-		//gst_object_unref(bus);
-
-		// ### seems for live streams we need playing state to get caps.
-		//   paused may not be enough??
-		gst_element_set_state(pipeline, GST_STATE_PLAYING);
-		gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-
-		if(audioin || fileSource)
-		{
-			GstPad *pad = gst_element_get_pad(audiortppay, "src");
-			GstCaps *caps = gst_pad_get_negotiated_caps(pad);
-			gchar *gstr = gst_caps_to_string(caps);
-			QString capsString = QString::fromUtf8(gstr);
-			g_free(gstr);
-			printf("rtppay caps audio: [%s]\n", qPrintable(capsString));
-			g_object_unref(pad);
-
-			GstStructure *cs = gst_caps_get_structure(caps, 0);
-
-			audioPayloadInfo = structureToPayloadInfo(cs);
-			if(audioPayloadInfo.id == -1)
-			{
-				// TODO: handle error
-			}
-
-			gst_caps_unref(caps);
-		}
-
-		if(videoin || fileSource)
-		{
-			GstPad *pad = gst_element_get_pad(videortppay, "src");
-			GstCaps *caps = gst_pad_get_negotiated_caps(pad);
-			gchar *gstr = gst_caps_to_string(caps);
-			QString capsString = QString::fromUtf8(gstr);
-			g_free(gstr);
-			printf("rtppay caps video: [%s]\n", qPrintable(capsString));
-			gst_object_unref(pad);
-
-			GstStructure *cs = gst_caps_get_structure(caps, 0);
-
-			videoPayloadInfo = structureToPayloadInfo(cs);
-			if(videoPayloadInfo.id == -1)
-			{
-				// TODO: handle error
-			}
-
-			gst_caps_unref(caps);
-		}
-
-		//gst_element_set_state(pipeline, GST_STATE_PLAYING);
-		//gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-
-		emit producer_started();
-
+	gboolean doStartReceiver()
+	{
+		worker->start();
 		return FALSE;
 	}
 
 	gboolean doStopProducer()
 	{
-		cleanup_producer();
-
-		emit producer_stopped();
-
+		worker->stop();
 		return FALSE;
 	}
 
 	gboolean doStopReceiver()
 	{
-		cleanup_receiver();
-
-		emit receiver_stopped();
-
+		worker->stop();
 		return FALSE;
 	}
 
-	void cleanup_producer()
+	void worker_started()
 	{
-		if(!pipeline)
-			return;
-
-		gst_element_set_state(pipeline, GST_STATE_NULL);
-		gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-
-		gst_object_unref(GST_OBJECT(pipeline));
-		pipeline = 0;
+		if(producerMode)
+			emit producer_started();
+		else
+			emit receiver_started();
 	}
 
-	void cleanup_receiver()
+	void worker_updated()
 	{
-		if(rpipeline)
-		{
-			gst_element_set_state(rpipeline, GST_STATE_NULL);
-			gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-
-			gst_object_unref(GST_OBJECT(rpipeline));
-			rpipeline = 0;
-		}
-
-		if(rvpipeline)
-		{
-			gst_element_set_state(rvpipeline, GST_STATE_NULL);
-			gst_element_get_state(rvpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-
-			gst_object_unref(GST_OBJECT(rvpipeline));
-			rvpipeline = 0;
-		}
-	}
-
-	void fileDemux_pad_added(GstElement *element, GstPad *pad)
-	{
-		Q_UNUSED(element);
-
-		gchar *name = gst_pad_get_name(pad);
-		printf("pad-added: %s\n", name);
-		g_free(name);
-
-		GstCaps *caps = gst_pad_get_caps(pad);
-		gchar *gstr = gst_caps_to_string(caps);
-		QString capsString = QString::fromUtf8(gstr);
-		g_free(gstr);
-		printf("  caps: [%s]\n", qPrintable(capsString));
-
-		int num = gst_caps_get_size(caps);
-		for(int n = 0; n < num; ++n)
-		{
-			GstStructure *cs = gst_caps_get_structure(caps, n);
-			QString mime = gst_structure_get_name(cs);
-
-			QStringList parts = mime.split('/');
-			if(parts.count() != 2)
-				continue;
-			QString type = parts[0];
-			QString subtype = parts[1];
-
-			GstElement *decoder = 0;
-			GstElement *target = 0;
-
-			// FIXME: in the future, we should probably do this
-			//   more dynamically, by inspecting the pads on the
-			//   decoder and comparing to the source pad, rather
-			//   than assuming fixed values (like 'x-speex').
-			if(type == "audio")
-			{
-				target = audioTarget;
-
-				if(subtype == "x-speex")
-					decoder = gst_element_factory_make("speexdec", NULL);
-				else if(subtype == "x-vorbis")
-					decoder = gst_element_factory_make("vorbisdec", NULL);
-			}
-			else if(type == "video")
-			{
-				target = videoTarget;
-
-				if(subtype == "x-theora")
-					decoder = gst_element_factory_make("theoradec", NULL);
-			}
-
-			if(decoder)
-			{
-				if(!gst_bin_add(GST_BIN(pipeline), decoder))
-					continue;
-				GstPad *sinkpad = gst_element_get_static_pad(decoder, "sink");
-				if(!GST_PAD_LINK_SUCCESSFUL(gst_pad_link(pad, sinkpad)))
-					continue;
-				gst_object_unref(sinkpad);
-
-				GstPad *sourcepad = gst_element_get_static_pad(decoder, "src");
-				sinkpad = gst_element_get_static_pad(target, "sink");
-				if(!GST_PAD_LINK_SUCCESSFUL(gst_pad_link(sourcepad, sinkpad)))
-					continue;
-				gst_object_unref(sourcepad);
-				gst_object_unref(sinkpad);
-
-				// by default the element is not in a working state.
-				//   we set to 'paused' which hopefully means it'll
-				//   do the right thing.
-				gst_element_set_state(decoder, GST_STATE_PAUSED);
-
-				// decoder set up, we're done
-				break;
-			}
-		}
-
-		gst_caps_unref(caps);
-	}
-
-	void fileDemux_pad_removed(GstElement *element, GstPad *pad)
-	{
-		Q_UNUSED(element);
-
 		// TODO
-
-		gchar *name = gst_pad_get_name(pad);
-		printf("pad-removed: %s\n", name);
-		g_free(name);
 	}
 
-	gboolean doStartReceiver()
+	void worker_stopped()
 	{
-		rpipeline = gst_pipeline_new(NULL);
-		rvpipeline = gst_pipeline_new(NULL);
-
-#ifdef UDP_LOOPBACK
-		audiortpsrc = gst_element_factory_make("udpsrc", NULL);
-		g_object_set(G_OBJECT(audiortpsrc), "port", 61000, NULL);
-#else
-		audiortpsrc = gst_element_factory_make("apprtpsrc", NULL);
-#endif
-
-		//GstStructure *cs = gst_structure_from_string("application/x-rtp, media=(string)audio, clock-rate=(int)16000, encoding-name=(string)SPEEX, encoding-params=(string)1, payload=(int)110", NULL);
-		//GstStructure *cs = gst_structure_from_string("application/x-rtp, media=(string)audio, clock-rate=(int)8000, encoding-name=(string)PCMU, payload=(int)0", NULL);
-		GstStructure *cs = payloadInfoToStructure(raudioPayloadInfo, "audio");
-		if(!cs)
-		{
-			// TODO: handle error
-			printf("cannot parse payload info\n");
-		}
-
-		GstCaps *caps = gst_caps_new_empty();
-		gst_caps_append_structure(caps, cs);
-		g_object_set(G_OBJECT(audiortpsrc), "caps", caps, NULL);
-		gst_caps_unref(caps);
-
-#ifdef UDP_LOOPBACK
-		videortpsrc = gst_element_factory_make("udpsrc", NULL);
-		g_object_set(G_OBJECT(videortpsrc), "port", 61002, NULL);
-#else
-		videortpsrc = gst_element_factory_make("apprtpsrc", NULL);
-#endif
-		cs = payloadInfoToStructure(rvideoPayloadInfo, "video");
-		if(!cs)
-		{
-			// TODO: handle error
-			printf("cannot parse payload info\n");
-		}
-
-		caps = gst_caps_new_empty();
-		gst_caps_append_structure(caps, cs);
-		g_object_set(G_OBJECT(videortpsrc), "caps", caps, NULL);
-		gst_caps_unref(caps);
-
-		//GstElement *audioqueue = gst_element_factory_make("queue", NULL);
-		GstElement *audiortpjitterbuffer = gst_element_factory_make("gstrtpjitterbuffer", NULL);
-		GstElement *audiortpdepay = gst_element_factory_make("rtpspeexdepay", NULL);
-		GstElement *audiodec = gst_element_factory_make("speexdec", NULL);
-		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-		GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
-		GstElement *audioout = 0;
-
-		if(audiortpjitterbuffer)
-		{
-			gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
-			gst_element_link_many(audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
-			g_object_set(G_OBJECT(audiortpjitterbuffer), "latency", (unsigned int)400, NULL);
-		}
+		if(producerMode)
+			emit producer_stopped();
 		else
+			emit receiver_stopped();
+	}
+
+	void worker_finished()
+	{
+		// TODO
+	}
+
+	void worker_error()
+	{
+		// TODO
+	}
+
+	void worker_previewFrame(const QImage &img)
+	{
+		QMutexLocker locker(render_mutex());
+		if(!g_images)
+			g_images = new QList<QImage>;
+		g_images->append(img);
+		QMetaObject::invokeMethod((QObject *)g_producer, "imageReady", Qt::QueuedConnection);
+	}
+
+	void worker_outputFrame(const QImage &img)
+	{
+		QMutexLocker locker(render_mutex());
+		if(!g_rimages)
+			g_rimages = new QList<QImage>;
+		g_rimages->append(img);
+		QMetaObject::invokeMethod((QObject *)g_receiver, "rimageReady", Qt::QueuedConnection);
+	}
+
+	void worker_rtpAudioOut(const PRtpPacket &packet)
+	{
+		QMutexLocker locker(in_mutex());
+		if(!g_in_packets_audio)
+			g_in_packets_audio = new QList<PRtpPacket>();
+		if(g_in_packets_audio->count() < 5)
 		{
-			gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
-			gst_element_link_many(audiortpsrc, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
+			g_in_packets_audio->append(packet);
+			QMetaObject::invokeMethod((QObject *)g_producer, "packetReadyAudio", Qt::QueuedConnection);
 		}
+	}
 
-		if(!aout.isEmpty())
+	void worker_rtpVideoOut(const PRtpPacket &packet)
+	{
+		QMutexLocker locker(in_mutex());
+		if(!g_in_packets)
+			g_in_packets = new QList<PRtpPacket>();
+		if(g_in_packets->count() < 5)
 		{
-			printf("creating audioout\n");
-
-			audioout = make_device_element(aout, PDevice::AudioOut);
-			if(!audioout)
-			{
-				// TODO
-				printf("failed to create audio output element\n");
-			}
+			g_in_packets->append(packet);
+			QMetaObject::invokeMethod((QObject *)g_producer, "packetReady", Qt::QueuedConnection);
 		}
-		else
-			audioout = gst_element_factory_make("fakesink", NULL);
-
-		//GstElement *videoqueue = gst_element_factory_make("queue", NULL);
-		GstElement *videortpjitterbuffer = gst_element_factory_make("gstrtpjitterbuffer", NULL);
-		GstElement *videortpdepay = gst_element_factory_make("rtptheoradepay", NULL);
-		GstElement *videodec = gst_element_factory_make("theoradec", NULL);
-		GstElement *videoconvert = gst_element_factory_make("ffmpegcolorspace", NULL);
-		//GstElement *videosink = gst_element_factory_make("ximagesink", NULL);
-		GstElement *videosink = gst_element_factory_make("appvideosink", NULL);
-		if(!videosink)
-		{
-			printf("could not make videosink!!\n");
-		}
-		GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videosink;
-		appVideoSink->show_frame = gst_show_rframe;
-
-		if(videortpjitterbuffer)
-		{
-			gst_bin_add_many(GST_BIN(rvpipeline), videortpsrc, /*videoqueue,*/ videortpjitterbuffer, videortpdepay, videodec, videoconvert, videosink, NULL);
-			gst_element_link_many(videortpsrc, /*videoqueue,*/ videortpjitterbuffer, videortpdepay, videodec, videoconvert, videosink, NULL);
-			g_object_set(G_OBJECT(audiortpjitterbuffer), "latency", (unsigned int)400, NULL);
-		}
-		else
-		{
-			gst_bin_add_many(GST_BIN(rvpipeline), videortpsrc, /*videoqueue,*/ videortpdepay, videodec, videoconvert, videosink, NULL);
-			gst_element_link_many(videortpsrc, /*videoqueue,*/ videortpdepay, videodec, videoconvert, videosink, NULL);
-		}
-
-		gst_bin_add(GST_BIN(rpipeline), audioout);
-		gst_element_link_many(audioresample, audioout, NULL);
-
-		gst_element_set_state(rpipeline, GST_STATE_READY);
-		gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-
-		gst_element_set_state(rvpipeline, GST_STATE_READY);
-		gst_element_get_state(rvpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-
-		gst_element_set_state(rpipeline, GST_STATE_PLAYING);
-
-		gst_element_set_state(rvpipeline, GST_STATE_PLAYING);
-
-		printf("receive pipeline started\n");
-
-		emit receiver_started();
-
-		return FALSE;
 	}
 };
 
@@ -1192,13 +692,13 @@ public:
 	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info)
 	{
 		// TODO
-		GstThread::instance()->raudioPayloadInfo = info.first();
+		GstThread::instance()->worker->remoteAudioPayloadInfo = info.first();
 	}
 
 	virtual void setRemoteVideoPreferences(const QList<PPayloadInfo> &info)
 	{
 		// TODO
-		GstThread::instance()->rvideoPayloadInfo = info.first();
+		GstThread::instance()->worker->remoteVideoPayloadInfo = info.first();
 	}
 
 	virtual void start()
@@ -1209,26 +709,28 @@ public:
 		if(!audioInId.isEmpty() || !videoInId.isEmpty() || !fileIn.isEmpty())
 		{
 			producerMode = true;
+			GstThread::instance()->producerMode = producerMode;
 			g_producer = this;
 
 			connect(GstThread::instance(), SIGNAL(producer_started()), SIGNAL(started()));
 			connect(GstThread::instance(), SIGNAL(producer_stopped()), SIGNAL(stopped()));
 
-			GstThread::instance()->ain = audioInId;
-			GstThread::instance()->vin = videoInId;
-			GstThread::instance()->infile = fileIn;
+			GstThread::instance()->worker->ain = audioInId;
+			GstThread::instance()->worker->vin = videoInId;
+			GstThread::instance()->worker->infile = fileIn;
 			GstThread::instance()->startProducer();
 		}
 		// receiver
 		else
 		{
 			producerMode = false;
+			GstThread::instance()->producerMode = producerMode;
 			g_receiver = this;
 
 			connect(GstThread::instance(), SIGNAL(receiver_started()), SIGNAL(started()));
 			connect(GstThread::instance(), SIGNAL(receiver_stopped()), SIGNAL(stopped()));
 
-			GstThread::instance()->aout = audioOutId;
+			GstThread::instance()->worker->aout = audioOutId;
 			GstThread::instance()->startReceiver();
 		}
 	}
@@ -1273,13 +775,13 @@ public:
 	virtual QList<PPayloadInfo> audioPayloadInfo() const
 	{
 		// TODO
-		return QList<PPayloadInfo>() << GstThread::instance()->audioPayloadInfo;
+		return QList<PPayloadInfo>() << GstThread::instance()->worker->localAudioPayloadInfo;
 	}
 
 	virtual QList<PPayloadInfo> videoPayloadInfo() const
 	{
 		// TODO
-		return QList<PPayloadInfo>() << GstThread::instance()->videoPayloadInfo;
+		return QList<PPayloadInfo>() << GstThread::instance()->worker->localVideoPayloadInfo;
 	}
 
 	virtual QList<PAudioParams> audioParams() const
@@ -1354,24 +856,10 @@ signals:
 public:
 	void doWrite(GstRtpChannel *from, const PRtpPacket &rtp)
 	{
-		if(from == &audioRtp && rtp.portOffset == 0)
-		{
-#ifdef UDP_LOOPBACK
-			audioloop->writeDatagram(rtp.rawValue, QHostAddress("127.0.0.1"), 61000);
-#else
-			GstAppRtpSrc *src = (GstAppRtpSrc *)GstThread::instance()->audiortpsrc;
-			gst_apprtpsrc_packet_push(src, (const unsigned char *)rtp.rawValue.data(), rtp.rawValue.size());
-#endif
-		}
-		else if(from == &videoRtp && rtp.portOffset == 0)
-		{
-#ifdef UDP_LOOPBACK
-			videoloop->writeDatagram(rtp.rawValue, QHostAddress("127.0.0.1"), 61002);
-#else
-			GstAppRtpSrc *src = (GstAppRtpSrc *)GstThread::instance()->videortpsrc;
-			gst_apprtpsrc_packet_push(src, (const unsigned char *)rtp.rawValue.data(), rtp.rawValue.size());
-#endif
-		}
+		if(from == &audioRtp)
+			GstThread::instance()->worker->rtpAudioIn(rtp);
+		else if(from == &videoRtp)
+			GstThread::instance()->worker->rtpVideoIn(rtp);
 	}
 
 public slots:
@@ -1479,6 +967,14 @@ public:
 		QList<PAudioParams> list;
 		{
 			PAudioParams p;
+			p.codec = "pcmu";
+			p.sampleRate = 8000;
+			p.sampleSize = 16;
+			p.channels = 1;
+			list += p;
+		}
+		{
+			PAudioParams p;
 			p.codec = "speex";
 			p.sampleRate = 8000;
 			p.sampleSize = 16;
@@ -1516,6 +1012,13 @@ public:
 	virtual QList<PVideoParams> supportedVideoModes()
 	{
 		QList<PVideoParams> list;
+		{
+			PVideoParams p;
+			p.codec = "h263p";
+			p.size = QSize(160, 120);
+			p.fps = 15;
+			list += p;
+		}
 		{
 			PVideoParams p;
 			p.codec = "theora";
