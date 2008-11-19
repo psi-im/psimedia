@@ -306,6 +306,7 @@ static QList<Item> get_alsa_items(int type)
 	}
 
 	// make a "default" item
+	if(!items.isEmpty())
 	{
 		Item i;
 		i.type = Item::Audio;
