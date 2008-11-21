@@ -707,6 +707,14 @@ public:
 		ui.sl_mic->setValue(90);
 		ui.sl_spk->setValue(90);
 
+		ui.le_remoteAddress->setText("127.0.0.1");
+		ui.le_remoteAudioPort->setText("60000");
+		ui.le_remoteVideoPort->setText("60002");
+		ui.le_localAudioPort->setText("60000");
+		ui.le_localVideoPort->setText("60002");
+		ui.le_remoteAddress->selectAll();
+		ui.le_remoteAddress->setFocus();
+
 		connect(ui.action_Quit, SIGNAL(triggered()), SLOT(close()));
 		connect(ui.action_Configure, SIGNAL(triggered()), SLOT(doConfigure()));
 		connect(ui.action_About, SIGNAL(triggered()), SLOT(doAbout()));
@@ -1254,6 +1262,7 @@ private slots:
 Q_IMPORT_PLUGIN(gstprovider)
 #endif
 
+#ifndef GSTPROVIDER_STATIC
 static QString findPlugin(const QString &relpath, const QString &basename)
 {
 	QDir dir(QCoreApplication::applicationDirPath());
@@ -1270,6 +1279,7 @@ static QString findPlugin(const QString &relpath, const QString &basename)
 	}
 	return QString();
 }
+#endif
 
 int main(int argc, char **argv)
 {
