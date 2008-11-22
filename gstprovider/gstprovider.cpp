@@ -453,6 +453,12 @@ private:
 		wm->thread->worker_rtpVideoOut(wm->worker, packet);
 	}
 
+	static void cb_worker_recordData(const QByteArray &packet, void *app)
+	{
+		WorkerMapping *wm = (WorkerMapping *)app;
+		wm->thread->worker_recordData(wm->worker, packet);
+	}
+
 	gboolean loop_started()
 	{
 		// make producer (0) and receiver (1)
@@ -475,6 +481,7 @@ private:
 			worker->cb_outputFrame = cb_worker_outputFrame;
 			worker->cb_rtpAudioOut = cb_worker_rtpAudioOut;
 			worker->cb_rtpVideoOut = cb_worker_rtpVideoOut;
+			worker->cb_recordData = cb_worker_recordData;
 		}
 
 		w.wakeOne();
@@ -600,6 +607,13 @@ private:
 			g_in_packets = new QList<PRtpPacket>();
 		*g_in_packets += packet;
 		QMetaObject::invokeMethod((QObject *)g_producer, "packetReady", Qt::QueuedConnection);
+	}
+
+	void worker_recordData(RtpWorker *worker, const QByteArray &data)
+	{
+		// TODO
+		Q_UNUSED(worker);
+		Q_UNUSED(data);
 	}
 };
 

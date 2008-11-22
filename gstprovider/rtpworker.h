@@ -82,6 +82,9 @@ public:
 	void setOutputVolume(int level);
 	void setInputVolume(int level);
 
+	void recordStart();
+	void recordStop();
+
 	// callbacks
 	void (*cb_started)(void *app);
 	void (*cb_updated)(void *app);
@@ -94,6 +97,7 @@ public:
 	void (*cb_outputFrame)(const Frame &frame, void *app);
 	void (*cb_rtpAudioOut)(const PRtpPacket &packet, void *app);
 	void (*cb_rtpVideoOut)(const PRtpPacket &packet, void *app);
+	void (*cb_recordData)(const QByteArray &packet, void *app);
 
 private:
 	GMainContext *mainContext_;

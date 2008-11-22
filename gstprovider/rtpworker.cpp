@@ -129,6 +129,16 @@ void RtpWorker::setInputVolume(int level)
 	Q_UNUSED(level);
 }
 
+void RtpWorker::recordStart()
+{
+	// TODO
+}
+
+void RtpWorker::recordStop()
+{
+	// TODO
+}
+
 gboolean RtpWorker::cb_doStart(gpointer data)
 {
 	return ((RtpWorker *)data)->doStart();
