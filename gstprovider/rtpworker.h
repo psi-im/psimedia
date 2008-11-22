@@ -25,15 +25,25 @@
 #include <QByteArray>
 #include <QImage>
 #include <QMutex>
+#include <QTime>
 #include <gst/gst.h>
 #include "psimediaprovider.h"
 #include "gstcustomelements/gstcustomelements.h"
 
 namespace PsiMedia {
 
+// Note: do not destruct this class during one of its callbacks
 class RtpWorker
 {
 public:
+	// this class exists in case we want to add metadata to the image,
+	//   such as a timestamp
+	class Frame
+	{
+	public:
+		QImage image;
+	};
+
 	void *app; // for callbacks
 
 	QString aout;
@@ -79,11 +89,9 @@ public:
 	void (*cb_finished)(void *app);
 	void (*cb_error)(void *app);
 
-	// FIXME: consider signalling that there are frames or packets, and
-	//   provide read functions, rather than putting the items in the
-	//   signal
-	void (*cb_previewFrame)(const QImage &img, void *app);
-	void (*cb_outputFrame)(const QImage &img, void *app);
+	// callbacks - from alternate thread, be safe!
+	void (*cb_previewFrame)(const Frame &frame, void *app);
+	void (*cb_outputFrame)(const Frame &frame, void *app);
 	void (*cb_rtpAudioOut)(const PRtpPacket &packet, void *app);
 	void (*cb_rtpVideoOut)(const PRtpPacket &packet, void *app);
 
@@ -102,20 +110,11 @@ private:
 
 	bool producerMode;
 
-	QMutex frames_mutex;
-	GSource *frames_timer;
-	QList<QImage> frames_preview;
-	QList<QImage> frames_output;
-
-	QMutex in_packets_mutex;
-	GSource *in_packets_timer;
-	QList<PRtpPacket> in_packets_audio;
-	QList<PRtpPacket> in_packets_video;
-
 	void cleanup();
 
 	static gboolean cb_doStart(gpointer data);
 	static gboolean cb_doStop(gpointer data);
+	static void cb_fileDemux_no_more_pads(GstElement *element, gpointer data);
 	static void cb_fileDemux_pad_added(GstElement *element, GstPad *pad, gpointer data);
 	static void cb_fileDemux_pad_removed(GstElement *element, GstPad *pad, gpointer data);
 	static gboolean cb_bus_call(GstBus *bus, GstMessage *msg, gpointer data);
@@ -123,11 +122,10 @@ private:
 	static void cb_show_frame_output(int width, int height, const unsigned char *rgb24, gpointer data);
 	static void cb_packet_ready_rtp_audio(const unsigned char *buf, int size, gpointer data);
 	static void cb_packet_ready_rtp_video(const unsigned char *buf, int size, gpointer data);
-	static gboolean cb_do_show_frames(gpointer data);
-	static gboolean cb_do_recv_packets(gpointer data);
 
 	gboolean doStart();
 	gboolean doStop();
+	void fileDemux_no_more_pads(GstElement *element);
 	void fileDemux_pad_added(GstElement *element, GstPad *pad);
 	void fileDemux_pad_removed(GstElement *element, GstPad *pad);
 	gboolean bus_call(GstBus *bus, GstMessage *msg);
@@ -135,8 +133,6 @@ private:
 	void show_frame_output(int width, int height, const unsigned char *rgb24);
 	void packet_ready_rtp_audio(const unsigned char *buf, int size);
 	void packet_ready_rtp_video(const unsigned char *buf, int size);
-	gboolean do_show_frames();
-	gboolean do_recv_packets();
 };
 
 }

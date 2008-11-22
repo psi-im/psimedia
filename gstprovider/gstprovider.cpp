@@ -35,6 +35,22 @@
 #include "payloadinfo.h"
 #include "rtpworker.h"
 
+// for a live transmission we really shouldn't have excessive queuing (or
+//   *any* queuing!), so we'll cap the queue sizes.  if the system gets
+//   overloaded and the thread scheduling skews such that our queues get
+//   filled before they can be emptied, then we'll start dropping old
+//   items making room for new ones.  on a live transmission there's no
+//   sense in keeping ancient data around.  we just drop and move on.
+// note: queuing frames *reaaaallly* doesn't make any sense, since if the
+//   UI receives 5 frames at once, they'll just get painted on each other
+//   in succession and you'd only really see the last one.  however, we'll
+//   queue frames in case we ever implement timestamped frames.
+#define QUEUE_FRAME_MAX 10
+#define QUEUE_PACKET_MAX 25
+
+// don't wake the main thread more often than this, for performance reasons
+#define WAKE_PACKET_MIN 40
+
 namespace PsiMedia {
 
 static QList<GstDevice> gstAudioOutputDevices()
@@ -228,16 +244,22 @@ public:
 	QWaitCondition w;
 	static GstThread *self;
 
-	RtpWorker *worker;
+	class WorkerMapping
+	{
+	public:
+		GstThread *thread;
+		RtpWorker *worker;
+	};
 
-	bool producerMode;
+	QList<WorkerMapping> workers;
+
+	//bool producerMode;
 
 	GstThread(QObject *parent = 0) :
 		QThread(parent),
 		gstSession(0),
 		mainContext(0),
-		mainLoop(0),
-		worker(0)
+		mainLoop(0)
 	{
 		self = this;
 	}
@@ -336,8 +358,9 @@ protected:
 		QMutexLocker locker(&m);
 
 		// cleanup
-		delete worker;
-		worker = 0;
+		foreach(const WorkerMapping &wm, workers)
+			delete wm.worker;
+		workers.clear();
 
 		g_main_loop_unref(mainLoop);
 		mainLoop = 0;
@@ -378,52 +401,81 @@ private:
 
 	static void cb_worker_started(void *app)
 	{
-		((GstThread *)app)->worker_started();
+		WorkerMapping *wm = (WorkerMapping *)app;
+		wm->thread->worker_started(wm->worker);
 	}
 
 	static void cb_worker_updated(void *app)
 	{
-		((GstThread *)app)->worker_updated();
+		WorkerMapping *wm = (WorkerMapping *)app;
+		wm->thread->worker_updated(wm->worker);
 	}
 
 	static void cb_worker_stopped(void *app)
 	{
-		((GstThread *)app)->worker_stopped();
+		WorkerMapping *wm = (WorkerMapping *)app;
+		wm->thread->worker_stopped(wm->worker);
 	}
 
 	static void cb_worker_finished(void *app)
 	{
-		((GstThread *)app)->worker_finished();
+		WorkerMapping *wm = (WorkerMapping *)app;
+		wm->thread->worker_finished(wm->worker);
 	}
 
 	static void cb_worker_error(void *app)
 	{
-		((GstThread *)app)->worker_error();
+		WorkerMapping *wm = (WorkerMapping *)app;
+		wm->thread->worker_error(wm->worker);
 	}
 
-	static void cb_worker_previewFrame(const QImage &img, void *app)
+	static void cb_worker_previewFrame(const RtpWorker::Frame &frame, void *app)
 	{
-		((GstThread *)app)->worker_previewFrame(img);
+		WorkerMapping *wm = (WorkerMapping *)app;
+		wm->thread->worker_previewFrame(wm->worker, frame);
 	}
 
-	static void cb_worker_outputFrame(const QImage &img, void *app)
+	static void cb_worker_outputFrame(const RtpWorker::Frame &frame, void *app)
 	{
-		((GstThread *)app)->worker_outputFrame(img);
+		WorkerMapping *wm = (WorkerMapping *)app;
+		wm->thread->worker_outputFrame(wm->worker, frame);
 	}
 
 	static void cb_worker_rtpAudioOut(const PRtpPacket &packet, void *app)
 	{
-		((GstThread *)app)->worker_rtpAudioOut(packet);
+		WorkerMapping *wm = (WorkerMapping *)app;
+		wm->thread->worker_rtpAudioOut(wm->worker, packet);
 	}
 
 	static void cb_worker_rtpVideoOut(const PRtpPacket &packet, void *app)
 	{
-		((GstThread *)app)->worker_rtpVideoOut(packet);
+		WorkerMapping *wm = (WorkerMapping *)app;
+		wm->thread->worker_rtpVideoOut(wm->worker, packet);
 	}
 
 	gboolean loop_started()
 	{
-		worker = new RtpWorker(mainContext);
+		// make producer (0) and receiver (1)
+		for(int n = 0; n < 2; ++n)
+		{
+			RtpWorker *worker = new RtpWorker(mainContext);
+
+			WorkerMapping wm;
+			wm.thread = this;
+			wm.worker = worker;
+			workers += wm;
+
+			worker->app = &workers[workers.count()-1];
+			worker->cb_started = cb_worker_started;
+			worker->cb_updated = cb_worker_updated;
+			worker->cb_stopped = cb_worker_stopped;
+			worker->cb_finished = cb_worker_finished;
+			worker->cb_error = cb_worker_error;
+			worker->cb_previewFrame = cb_worker_previewFrame;
+			worker->cb_outputFrame = cb_worker_outputFrame;
+			worker->cb_rtpAudioOut = cb_worker_rtpAudioOut;
+			worker->cb_rtpVideoOut = cb_worker_rtpVideoOut;
+		}
 
 		w.wakeOne();
 		m.unlock();
@@ -432,61 +484,72 @@ private:
 
 	gboolean doStartProducer()
 	{
-		worker->start();
+		workers[0].worker->start();
 		return FALSE;
 	}
 
 	gboolean doStartReceiver()
 	{
-		worker->start();
+		workers[1].worker->start();
 		return FALSE;
 	}
 
 	gboolean doStopProducer()
 	{
-		worker->stop();
+		workers[0].worker->stop();
 		return FALSE;
 	}
 
 	gboolean doStopReceiver()
 	{
-		worker->stop();
+		workers[1].worker->stop();
 		return FALSE;
 	}
 
-	void worker_started()
+	void worker_started(RtpWorker *worker)
 	{
-		if(producerMode)
+		if(worker == workers[0].worker)
 			emit producer_started();
 		else
 			emit receiver_started();
 	}
 
-	void worker_updated()
+	void worker_updated(RtpWorker *worker)
 	{
 		// TODO
+		Q_UNUSED(worker);
 	}
 
-	void worker_stopped()
+	void worker_stopped(RtpWorker *worker)
 	{
-		if(producerMode)
+		if(worker == workers[0].worker)
 			emit producer_stopped();
 		else
 			emit receiver_stopped();
 	}
 
-	void worker_finished()
+	void worker_finished(RtpWorker *worker)
 	{
 		// TODO
+		Q_UNUSED(worker);
 	}
 
-	void worker_error()
+	void worker_error(RtpWorker *worker)
 	{
 		// TODO
+		Q_UNUSED(worker);
 	}
 
-	void worker_previewFrame(const QImage &img)
+	void worker_previewFrame(RtpWorker *worker, const RtpWorker::Frame &frame)
 	{
+		Q_UNUSED(worker);
+		/*QList<RtpWorker::Frame> list = worker->readPreviewFrames();
+		if(list.count() >= 2)
+			printf("previewFrames: lost %d frame(s)\n", list.count() - 1);
+
+		QImage img = list.first().image;*/
+		QImage img = frame.image;
+
 		QMutexLocker locker(render_mutex());
 		if(!g_images)
 			g_images = new QList<QImage>;
@@ -494,8 +557,16 @@ private:
 		QMetaObject::invokeMethod((QObject *)g_producer, "imageReady", Qt::QueuedConnection);
 	}
 
-	void worker_outputFrame(const QImage &img)
+	void worker_outputFrame(RtpWorker *worker, const RtpWorker::Frame &frame)
 	{
+		Q_UNUSED(worker);
+		/*QList<RtpWorker::Frame> list = worker->readOutputFrames();
+		if(list.count() >= 2)
+			printf("outputFrames: lost %d frame(s)\n", list.count() - 1);
+
+		QImage img = list.first().image;*/
+		QImage img = frame.image;
+
 		QMutexLocker locker(render_mutex());
 		if(!g_rimages)
 			g_rimages = new QList<QImage>;
@@ -503,28 +574,32 @@ private:
 		QMetaObject::invokeMethod((QObject *)g_receiver, "rimageReady", Qt::QueuedConnection);
 	}
 
-	void worker_rtpAudioOut(const PRtpPacket &packet)
+	void worker_rtpAudioOut(RtpWorker *worker, const PRtpPacket &packet)
 	{
+		Q_UNUSED(worker);
+		/*QList<PRtpPacket> list = worker->readRtpAudioOut();
+		if(list.count() >= 10)
+			printf("rtpAudioOut: fell behind (%d)\n", list.count());*/
+
 		QMutexLocker locker(in_mutex());
 		if(!g_in_packets_audio)
 			g_in_packets_audio = new QList<PRtpPacket>();
-		if(g_in_packets_audio->count() < 5)
-		{
-			g_in_packets_audio->append(packet);
-			QMetaObject::invokeMethod((QObject *)g_producer, "packetReadyAudio", Qt::QueuedConnection);
-		}
+		*g_in_packets_audio += packet;
+		QMetaObject::invokeMethod((QObject *)g_producer, "packetReadyAudio", Qt::QueuedConnection);
 	}
 
-	void worker_rtpVideoOut(const PRtpPacket &packet)
+	void worker_rtpVideoOut(RtpWorker *worker, const PRtpPacket &packet)
 	{
+		Q_UNUSED(worker);
+		/*QList<PRtpPacket> list = worker->readRtpVideoOut();
+		if(list.count() >= 10)
+			printf("rtpVideoOut: fell behind (%d)\n", list.count());*/
+
 		QMutexLocker locker(in_mutex());
 		if(!g_in_packets)
 			g_in_packets = new QList<PRtpPacket>();
-		if(g_in_packets->count() < 5)
-		{
-			g_in_packets->append(packet);
-			QMetaObject::invokeMethod((QObject *)g_producer, "packetReady", Qt::QueuedConnection);
-		}
+		*g_in_packets += packet;
+		QMetaObject::invokeMethod((QObject *)g_producer, "packetReady", Qt::QueuedConnection);
 	}
 };
 
@@ -692,13 +767,13 @@ public:
 	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info)
 	{
 		// TODO
-		GstThread::instance()->worker->remoteAudioPayloadInfo = info.first();
+		GstThread::instance()->workers[1].worker->remoteAudioPayloadInfo = info.first();
 	}
 
 	virtual void setRemoteVideoPreferences(const QList<PPayloadInfo> &info)
 	{
 		// TODO
-		GstThread::instance()->worker->remoteVideoPayloadInfo = info.first();
+		GstThread::instance()->workers[1].worker->remoteVideoPayloadInfo = info.first();
 	}
 
 	virtual void start()
@@ -709,28 +784,28 @@ public:
 		if(!audioInId.isEmpty() || !videoInId.isEmpty() || !fileIn.isEmpty())
 		{
 			producerMode = true;
-			GstThread::instance()->producerMode = producerMode;
+			//GstThread::instance()->producerMode = producerMode;
 			g_producer = this;
 
 			connect(GstThread::instance(), SIGNAL(producer_started()), SIGNAL(started()));
 			connect(GstThread::instance(), SIGNAL(producer_stopped()), SIGNAL(stopped()));
 
-			GstThread::instance()->worker->ain = audioInId;
-			GstThread::instance()->worker->vin = videoInId;
-			GstThread::instance()->worker->infile = fileIn;
+			GstThread::instance()->workers[0].worker->ain = audioInId;
+			GstThread::instance()->workers[0].worker->vin = videoInId;
+			GstThread::instance()->workers[0].worker->infile = fileIn;
 			GstThread::instance()->startProducer();
 		}
 		// receiver
 		else
 		{
 			producerMode = false;
-			GstThread::instance()->producerMode = producerMode;
+			//GstThread::instance()->producerMode = producerMode;
 			g_receiver = this;
 
 			connect(GstThread::instance(), SIGNAL(receiver_started()), SIGNAL(started()));
 			connect(GstThread::instance(), SIGNAL(receiver_stopped()), SIGNAL(stopped()));
 
-			GstThread::instance()->worker->aout = audioOutId;
+			GstThread::instance()->workers[1].worker->aout = audioOutId;
 			GstThread::instance()->startReceiver();
 		}
 	}
@@ -775,13 +850,13 @@ public:
 	virtual QList<PPayloadInfo> audioPayloadInfo() const
 	{
 		// TODO
-		return QList<PPayloadInfo>() << GstThread::instance()->worker->localAudioPayloadInfo;
+		return QList<PPayloadInfo>() << GstThread::instance()->workers[0].worker->localAudioPayloadInfo;
 	}
 
 	virtual QList<PPayloadInfo> videoPayloadInfo() const
 	{
 		// TODO
-		return QList<PPayloadInfo>() << GstThread::instance()->worker->localVideoPayloadInfo;
+		return QList<PPayloadInfo>() << GstThread::instance()->workers[0].worker->localVideoPayloadInfo;
 	}
 
 	virtual QList<PAudioParams> audioParams() const
@@ -857,9 +932,9 @@ public:
 	void doWrite(GstRtpChannel *from, const PRtpPacket &rtp)
 	{
 		if(from == &audioRtp)
-			GstThread::instance()->worker->rtpAudioIn(rtp);
+			GstThread::instance()->workers[1].worker->rtpAudioIn(rtp);
 		else if(from == &videoRtp)
-			GstThread::instance()->worker->rtpVideoIn(rtp);
+			GstThread::instance()->workers[1].worker->rtpVideoIn(rtp);
 	}
 
 public slots:
@@ -965,14 +1040,14 @@ public:
 	virtual QList<PAudioParams> supportedAudioModes()
 	{
 		QList<PAudioParams> list;
-		{
+		/*{
 			PAudioParams p;
 			p.codec = "pcmu";
 			p.sampleRate = 8000;
 			p.sampleSize = 16;
 			p.channels = 1;
 			list += p;
-		}
+		}*/
 		{
 			PAudioParams p;
 			p.codec = "speex";
@@ -1012,13 +1087,13 @@ public:
 	virtual QList<PVideoParams> supportedVideoModes()
 	{
 		QList<PVideoParams> list;
-		{
+		/*{
 			PVideoParams p;
 			p.codec = "h263p";
 			p.size = QSize(160, 120);
 			p.fps = 15;
 			list += p;
-		}
+		}*/
 		{
 			PVideoParams p;
 			p.codec = "theora";
