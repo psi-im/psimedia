@@ -205,11 +205,9 @@ void gst_apprtpsrc_packet_push(GstAppRtpSrc *src, const unsigned char *buf, int 
 
 	g_mutex_lock(src->push_mutex);
 
+	// if buffer is full, eat the oldest to make room
 	if(g_queue_get_length(src->buffers) >= APPRTPSRC_MAX_BUF_COUNT)
-	{
-		g_mutex_unlock(src->push_mutex);
-		return;
-	}
+		g_queue_pop_head(src->buffers);
 
 	// ignore zero-byte packets
 	if(size < 1)
