@@ -858,7 +858,7 @@ private slots:
 	void doAbout()
 	{
 		QMessageBox::about(this, tr("About PsiMedia Test"), tr(
-			"PsiMedia Test v0.1\n"
+			"PsiMedia Test v1.0\n"
 			"A simple test application for the PsiMedia system.\n"
 			"\n"
 			"Copyright (C) 2008  Barracuda Networks, Inc."
