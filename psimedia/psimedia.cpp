@@ -1206,6 +1206,11 @@ void RtpSession::setFileDataInput(const QByteArray &fileData)
 	d->c->setFileDataInput(fileData);
 }
 
+void RtpSession::setFileLoopEnabled(bool enabled)
+{
+	d->c->setFileLoopEnabled(enabled);
+}
+
 #ifdef QT_GUI_LIB
 void RtpSession::setVideoPreviewWidget(VideoWidget *widget)
 {

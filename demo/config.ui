@@ -6,7 +6,7 @@
     <x>0</x>
     <y>0</y>
     <width>338</width>
-    <height>355</height>
+    <height>384</height>
    </rect>
   </property>
   <property name="windowTitle" >
@@ -109,6 +109,13 @@
         </item>
        </layout>
       </item>
+      <item row="5" column="1" >
+       <widget class="QCheckBox" name="ck_loop" >
+        <property name="text" >
+         <string>Loop file playback</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -163,7 +170,7 @@
      <property name="sizeHint" >
       <size>
        <width>320</width>
-       <height>81</height>
+       <height>41</height>
       </size>
      </property>
     </spacer>
@@ -188,6 +195,7 @@
   <tabstop>cb_videoInDevice</tabstop>
   <tabstop>le_file</tabstop>
   <tabstop>tb_file</tabstop>
+  <tabstop>ck_loop</tabstop>
   <tabstop>cb_audioMode</tabstop>
   <tabstop>cb_videoMode</tabstop>
   <tabstop>buttonBox</tabstop>

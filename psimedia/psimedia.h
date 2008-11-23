@@ -313,6 +313,7 @@ public:
 	void setVideoInputDevice(const QString &deviceId);
 	void setFileInput(const QString &fileName);
 	void setFileDataInput(const QByteArray &fileData);
+	void setFileLoopEnabled(bool enabled);
 #ifdef QT_GUI_LIB
 	void setVideoPreviewWidget(VideoWidget *widget);
 #endif

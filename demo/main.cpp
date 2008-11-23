@@ -202,11 +202,13 @@ public:
 	bool liveInput;
 	QString audioOutDeviceId, audioInDeviceId, videoInDeviceId;
 	QString file;
+	bool loopFile;
 	PsiMedia::AudioParams audioParams;
 	PsiMedia::VideoParams videoParams;
 
 	Configuration() :
-		liveInput(false)
+		liveInput(false),
+		loopFile(false)
 	{
 	}
 };
@@ -239,6 +241,7 @@ static Configuration getDefaultConfiguration()
 {
 	Configuration config;
 	config.liveInput = true;
+	config.loopFile = true;
 
 	PsiMediaFeaturesSnapshot snap;
 
@@ -377,6 +380,7 @@ public:
 		ui.lb_file->setEnabled(false);
 		ui.le_file->setEnabled(false);
 		ui.tb_file->setEnabled(false);
+		ui.ck_loop->setEnabled(false);
 
 		connect(ui.rb_sendLive, SIGNAL(toggled(bool)), SLOT(live_toggled(bool)));
 		connect(ui.rb_sendFile, SIGNAL(toggled(bool)), SLOT(file_toggled(bool)));
@@ -416,7 +420,10 @@ public:
 		foreach(const PsiMedia::VideoParams &params, snap.supportedVideoModes)
 		{
 			QString codec = params.codec();
-			codec[0] = codec[0].toUpper();
+			if(codec == "theora" || codec == "vorbis" || codec == "speex")
+				codec[0] = codec[0].toUpper();
+			else
+				codec = codec.toUpper();
 			QString sizestr = QString("%1x%2").arg(params.size().width()).arg(params.size().height());
 			QString str = QString("%1, %2 @ %3fps").arg(codec).arg(sizestr).arg(params.fps());
 
@@ -436,6 +443,7 @@ public:
 		else
 			ui.rb_sendFile->setChecked(true);
 		ui.le_file->setText(config.file);
+		ui.ck_loop->setChecked(config.loopFile);
 	}
 
 	// apparently custom QVariants can't be compared, so we have to
@@ -472,6 +480,7 @@ protected:
 		config.videoParams = qVariantValue<PsiMedia::VideoParams>(ui.cb_videoMode->itemData(ui.cb_videoMode->currentIndex()));
 		config.liveInput = ui.rb_sendLive->isChecked();
 		config.file = ui.le_file->text();
+		config.loopFile = ui.ck_loop->isChecked();
 
 		QDialog::accept();
 	}
@@ -490,13 +499,14 @@ private slots:
 		ui.lb_file->setEnabled(on);
 		ui.le_file->setEnabled(on);
 		ui.tb_file->setEnabled(on);
+		ui.ck_loop->setEnabled(on);
 	}
 
 	void file_choose()
 	{
 		QString fileName = QFileDialog::getOpenFileName(this,
 			tr("Open File"),
-			QDir::homePath(),
+			QCoreApplication::applicationDirPath(),
 			tr("Ogg Audio/Video (*.oga *.ogv *.ogg)"));
 		if(!fileName.isEmpty())
 			ui.le_file->setText(fileName);
@@ -905,6 +915,7 @@ private slots:
 		else // non-live (file) input
 		{
 			producer.setFileInput(config.file);
+			producer.setFileLoopEnabled(config.loopFile);
 
 			// we just assume the file has both audio and video.
 			//   if it doesn't, no big deal, it'll still work.

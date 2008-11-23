@@ -734,6 +734,12 @@ public:
 		// TODO: if active, switch to playing this file data
 	}
 
+	virtual void setFileLoopEnabled(bool enabled)
+	{
+		// TODO
+		Q_UNUSED(enabled);
+	}
+
 #ifdef QT_GUI_LIB
         virtual void setVideoOutputWidget(VideoWidgetContext *widget)
 	{

@@ -201,6 +201,7 @@ public:
 	virtual void setVideoInputDevice(const QString &deviceId) = 0;
 	virtual void setFileInput(const QString &fileName) = 0;
 	virtual void setFileDataInput(const QByteArray &fileData) = 0;
+	virtual void setFileLoopEnabled(bool enabled) = 0;
 
 #ifdef QT_GUI_LIB
 	virtual void setVideoOutputWidget(VideoWidgetContext *widget) = 0;
