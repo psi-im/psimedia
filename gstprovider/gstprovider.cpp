@@ -26,25 +26,11 @@
 #include <QWaitCondition>
 #include <QtPlugin>
 #include "devices.h"
+#include "modes.h"
 #include "gstthread.h"
 #include "rwcontrol.h"
 
 namespace PsiMedia {
-
-static QList<GstDevice> gstAudioOutputDevices()
-{
-	return devices_list(PDevice::AudioOut);
-}
-
-static QList<GstDevice> gstAudioInputDevices()
-{
-	return devices_list(PDevice::AudioIn);
-}
-
-static QList<GstDevice> gstVideoInputDevices()
-{
-	return devices_list(PDevice::VideoIn);
-}
 
 static PDevice gstDeviceToPDevice(const GstDevice &dev, PDevice::Type type)
 {
@@ -723,106 +709,20 @@ public:
 		return str;
 	}
 
-	// FIXME: any better way besides hardcoding?
 	virtual QList<PAudioParams> supportedAudioModes()
 	{
-		QList<PAudioParams> list;
-		/*{
-			PAudioParams p;
-			p.codec = "pcmu";
-			p.sampleRate = 8000;
-			p.sampleSize = 16;
-			p.channels = 1;
-			list += p;
-		}*/
-		{
-			PAudioParams p;
-			p.codec = "speex";
-			p.sampleRate = 8000;
-			p.sampleSize = 16;
-			p.channels = 1;
-			list += p;
-		}
-		{
-			PAudioParams p;
-			p.codec = "speex";
-			p.sampleRate = 16000;
-			p.sampleSize = 16;
-			p.channels = 1;
-			list += p;
-		}
-		{
-			PAudioParams p;
-			p.codec = "speex";
-			p.sampleRate = 32000;
-			p.sampleSize = 16;
-			p.channels = 1;
-			list += p;
-		}
-		{
-			PAudioParams p;
-			p.codec = "vorbis";
-			p.sampleRate = 44100;
-			p.sampleSize = 16;
-			p.channels = 2;
-			list += p;
-		}
-		return list;
+		return modes_supportedAudio();
 	}
 
-	// FIXME: any better way besides hardcoding?
 	virtual QList<PVideoParams> supportedVideoModes()
 	{
-		QList<PVideoParams> list;
-		/*{
-			PVideoParams p;
-			p.codec = "h263p";
-			p.size = QSize(160, 120);
-			p.fps = 15;
-			list += p;
-		}*/
-		{
-			PVideoParams p;
-			p.codec = "theora";
-			p.size = QSize(160, 120);
-			p.fps = 15;
-			list += p;
-		}
-		{
-			PVideoParams p;
-			p.codec = "theora";
-			p.size = QSize(320, 240);
-			p.fps = 15;
-			list += p;
-		}
-		{
-			PVideoParams p;
-			p.codec = "theora";
-			p.size = QSize(320, 240);
-			p.fps = 30;
-			list += p;
-		}
-		{
-			PVideoParams p;
-			p.codec = "theora";
-			p.size = QSize(640, 480);
-			p.fps = 15;
-			list += p;
-		}
-		{
-			PVideoParams p;
-			p.codec = "theora";
-			p.size = QSize(640, 480);
-			p.fps = 30;
-			list += p;
-		}
-		return list;
+		return modes_supportedVideo();
 	}
 
 	virtual QList<PDevice> audioOutputDevices()
 	{
 		QList<PDevice> list;
-		foreach(const GstDevice &i, gstAudioOutputDevices())
+		foreach(const GstDevice &i, devices_list(PDevice::AudioOut))
 			list += gstDeviceToPDevice(i, PDevice::AudioOut);
 		return list;
 	}
@@ -830,7 +730,7 @@ public:
 	virtual QList<PDevice> audioInputDevices()
 	{
 		QList<PDevice> list;
-		foreach(const GstDevice &i, gstAudioInputDevices())
+		foreach(const GstDevice &i, devices_list(PDevice::AudioIn))
 			list += gstDeviceToPDevice(i, PDevice::AudioIn);
 		return list;
 	}
@@ -838,7 +738,7 @@ public:
 	virtual QList<PDevice> videoInputDevices()
 	{
 		QList<PDevice> list;
-		foreach(const GstDevice &i, gstVideoInputDevices())
+		foreach(const GstDevice &i, devices_list(PDevice::VideoIn))
 			list += gstDeviceToPDevice(i, PDevice::VideoIn);
 		return list;
 	}

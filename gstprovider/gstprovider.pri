@@ -3,6 +3,7 @@ include(gstcustomelements/gstcustomelements.pri)
 
 HEADERS += \
 	$$PWD/devices.h \
+	$$PWD/modes.h \
 	$$PWD/payloadinfo.h \
 	$$PWD/rtpworker.h \
 	$$PWD/gstthread.h \
@@ -10,6 +11,7 @@ HEADERS += \
 
 SOURCES += \
 	$$PWD/devices.cpp \
+	$$PWD/modes.cpp \
 	$$PWD/payloadinfo.cpp \
 	$$PWD/rtpworker.cpp \
 	$$PWD/gstthread.cpp \
