@@ -23,6 +23,15 @@
 #include "gstthread.h"
 #include "rtpworker.h"
 
+// TODO: queue frames
+// note: queuing frames *reaaaallly* doesn't make any sense, since if the
+//   UI receives 5 frames at once, they'll just get painted on each other
+//   in succession and you'd only really see the last one.  however, we'll
+//   queue frames in case we ever implement timestamped frames.
+#define QUEUE_FRAME_MAX 10
+
+// TODO: use audioIntensityChanged signal
+
 namespace PsiMedia {
 
 //----------------------------------------------------------------------------
@@ -33,13 +42,10 @@ RwControlLocal::RwControlLocal(GstThread *thread, QObject *parent) :
 	cb_rtpAudioOut(0),
 	cb_rtpVideoOut(0),
 	cb_recordData(0),
-	processTrigger(this)
+	wake_pending(false)
 {
 	thread_ = thread;
 	remote_ = 0;
-
-	connect(&processTrigger, SIGNAL(timeout()), SLOT(processMessages()));
-	processTrigger.setSingleShot(true);
 
 	// create RwControlRemote, block until ready
 	QMutexLocker locker(&m);
@@ -61,12 +67,11 @@ RwControlLocal::~RwControlLocal()
 	w.wait(&m);
 }
 
-void RwControlLocal::start(const RwControlConfigDevices &devs, const RwControlConfigCodecs &codecs)
+void RwControlLocal::start(const RwControlConfigDevices &devices, const RwControlConfigCodecs &codecs)
 {
-	RwControlMessage *msg = new RwControlMessage;
-	msg->type = RwControlMessage::Start;
-	msg->devs = new RwControlConfigDevices(devs);
-	msg->codecs = new RwControlConfigCodecs(codecs);
+	RwControlStartMessage *msg = new RwControlStartMessage;
+	msg->devices = devices;
+	msg->codecs = codecs;
 	remote_->postMessage(msg);
 }
 
@@ -74,10 +79,10 @@ void RwControlLocal::stop()
 {
 }
 
-void RwControlLocal::updateDevices(const RwControlConfigDevices &devs)
+void RwControlLocal::updateDevices(const RwControlConfigDevices &devices)
 {
 	// TODO
-	Q_UNUSED(devs);
+	Q_UNUSED(devices);
 }
 
 void RwControlLocal::updateCodecs(const RwControlConfigCodecs &codecs)
@@ -145,6 +150,10 @@ gboolean RwControlLocal::doDestroyRemote()
 
 void RwControlLocal::processMessages()
 {
+	m.lock();
+	wake_pending = false;
+	m.unlock();
+
 	while(1)
 	{
 		m.lock();
@@ -154,15 +163,25 @@ void RwControlLocal::processMessages()
 			break;
 		}
 
-		RwControlMessage *msg = in.takeFirst();
+		RwControlMessage *bmsg = in.takeFirst();
 		m.unlock();
 
-		// remote only ever sends status type
-		Q_ASSERT(msg->type == RwControlMessage::Status);
-
-		RwControlStatus status = *(msg->status);
-		delete msg;
-		emit statusReady(status);
+		if(bmsg->type == RwControlMessage::Status)
+		{
+			RwControlStatusMessage *msg = (RwControlStatusMessage *)bmsg;
+			RwControlStatus status = msg->status;
+			delete bmsg;
+			emit statusReady(status);
+		}
+		else if(bmsg->type == RwControlMessage::Frame)
+		{
+			RwControlFrameMessage *msg = (RwControlFrameMessage *)bmsg;
+			if(msg->frame.type == RwControlFrame::Preview)
+				emit previewFrame(msg->frame.image);
+			delete bmsg;
+		}
+		else
+			delete bmsg;
 
 		// FIXME: signal-safety (due to loop)
 	}
@@ -173,8 +192,11 @@ void RwControlLocal::postMessage(RwControlMessage *msg)
 {
 	QMutexLocker locker(&m);
 	in += msg;
-	if(!processTrigger.isActive())
-		processTrigger.start();
+	if(!wake_pending)
+	{
+		QMetaObject::invokeMethod(this, "processMessages", Qt::QueuedConnection);
+		wake_pending = true;
+	}
 }
 
 //----------------------------------------------------------------------------
@@ -274,15 +296,19 @@ gboolean RwControlRemote::processMessages()
 			break;
 		}
 
-		RwControlMessage *msg = in.takeFirst();
+		RwControlMessage *bmsg = in.takeFirst();
 		m.unlock();
 
-		if(msg->type == RwControlMessage::Start)
+		if(bmsg->type == RwControlMessage::Start)
 		{
+			RwControlStartMessage *msg = (RwControlStartMessage *)bmsg;
+			worker->ain = msg->devices.audioInId;
+			worker->vin = msg->devices.videoInId;
+			worker->infile = msg->devices.fileNameIn;
 			worker->start();
 		}
 
-		delete msg;
+		delete bmsg;
 	}
 
 	return FALSE;
@@ -290,9 +316,8 @@ gboolean RwControlRemote::processMessages()
 
 void RwControlRemote::worker_started()
 {
-	RwControlMessage *msg = new RwControlMessage;
-	msg->type = RwControlMessage::Status;
-	msg->status = new RwControlStatus;
+	RwControlStatusMessage *msg = new RwControlStatusMessage;
+	// TODO: set msg->status
 	local_->postMessage(msg);
 }
 
@@ -318,8 +343,10 @@ void RwControlRemote::worker_error()
 
 void RwControlRemote::worker_previewFrame(const RtpWorker::Frame &frame)
 {
-	// TODO
-	Q_UNUSED(frame);
+	RwControlFrameMessage *msg = new RwControlFrameMessage;
+	msg->frame.type = RwControlFrame::Preview;
+	msg->frame.image = frame.image;
+	local_->postMessage(msg);
 }
 
 void RwControlRemote::worker_outputFrame(const RtpWorker::Frame &frame)

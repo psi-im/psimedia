@@ -40,9 +40,9 @@ namespace PsiMedia {
 // RwControlLocal  - object to live in "local" Qt eventloop
 // RwControlRemote - object to live in "remote" glib eventloop
 //
-// When RwControlLocal is created, you pass it the GstThread.  It will then
-// atomically create RwControlRemote in the remote thread and associate the
-// two objects.
+// When RwControlLocal is created, you pass it the GstThread.  The constructor
+// atomically creates a corresponding RwControlRemote in the remote thread and
+// associates the two objects.
 //
 // The possible exchanges are made clear here.  Things you can do:
 //
@@ -91,11 +91,15 @@ public:
 	QString fileNameIn;
 	QByteArray fileDataIn;
 	bool loopFile;
+	bool useVideoPreview;
+	bool useVideoOut;
 	int audioOutVolume;
 	int audioInVolume;
 
 	RwControlConfigDevices() :
 		loopFile(false),
+		useVideoPreview(false),
+		useVideoOut(false),
 		audioOutVolume(-1),
 		audioInVolume(-1)
 	{
@@ -105,9 +109,12 @@ public:
 class RwControlConfigCodecs
 {
 public:
-	bool useLocalParams;
-	bool useLocalPayloadInfo;
-	bool useRemotePayloadInfo;
+	bool useLocalAudioParams;
+	bool useLocalVideoParams;
+	bool useLocalAudioPayloadInfo;
+	bool useLocalVideoPayloadInfo;
+	bool useRemoteAudioPayloadInfo;
+	bool useRemoteVideoPayloadInfo;
 
 	QList<PAudioParams> localAudioParams;
 	QList<PVideoParams> localVideoParams;
@@ -117,9 +124,12 @@ public:
 	QList<PPayloadInfo> remoteVideoPayloadInfo;
 
 	RwControlConfigCodecs() :
-		useLocalParams(false),
-		useLocalPayloadInfo(false),
-		useRemotePayloadInfo(false)
+		useLocalAudioParams(false),
+		useLocalVideoParams(false),
+		useLocalAudioPayloadInfo(false),
+		useLocalVideoPayloadInfo(false),
+		useRemoteAudioPayloadInfo(false),
+		useRemoteVideoPayloadInfo(false)
 	{
 	}
 };
@@ -127,10 +137,14 @@ public:
 class RwControlTransmit
 {
 public:
+	bool useAudio;
+	bool useVideo;
 	int audioIndex;
 	int videoIndex;
 
 	RwControlTransmit() :
+		useAudio(false),
+		useVideo(false),
 		audioIndex(-1),
 		videoIndex(-1)
 	{
@@ -163,7 +177,7 @@ public:
 	bool stopped;
 	bool finished;
 	bool error;
-	RtpSessionContext::Error errorCode;
+	int errorCode;
 
 	RwControlStatus() :
 		canTransmitAudio(false),
@@ -171,12 +185,37 @@ public:
 		stopped(false),
 		finished(false),
 		error(false),
-		errorCode(RtpSessionContext::ErrorGeneric)
+		errorCode(-1)
 	{
 	}
 };
 
-// generalize the messages
+class RwControlAudioIntensity
+{
+public:
+	int value;
+
+	RwControlAudioIntensity() :
+		value(-1)
+	{
+	}
+};
+
+// always remote -> local, for internal use
+class RwControlFrame
+{
+public:
+	enum Type
+	{
+		Preview,
+		Output
+	};
+
+	Type type;
+	QImage image;
+};
+
+// internal
 class RwControlMessage
 {
 public:
@@ -188,35 +227,118 @@ public:
 		UpdateCodecs,
 		Transmit,
 		Record,
-		Status
+		Status,
+		AudioIntensity,
+		Frame
 	};
 
 	Type type;
 
-	// a message can contain multiple data elements
-	RwControlConfigDevices *devs;
-	RwControlConfigCodecs *codecs;
-	RwControlTransmit *transmit;
-	RwControlRecord *record;
-	RwControlStatus *status;
-
-	RwControlMessage() :
-		type((Type)-1),
-		devs(0),
-		codecs(0),
-		transmit(0),
-		record(0),
-		status(0)
+	RwControlMessage(Type _type) :
+		type(_type)
 	{
 	}
 
-	~RwControlMessage()
+	virtual ~RwControlMessage()
 	{
-		delete devs;
-		delete codecs;
-		delete transmit;
-		delete record;
-		delete status;
+	}
+};
+
+class RwControlStartMessage : public RwControlMessage
+{
+public:
+	RwControlConfigDevices devices;
+	RwControlConfigCodecs codecs;
+
+	RwControlStartMessage() :
+		RwControlMessage(RwControlMessage::Start)
+	{
+	}
+};
+
+class RwControlStopMessage : public RwControlMessage
+{
+public:
+	RwControlStopMessage() :
+		RwControlMessage(RwControlMessage::Stop)
+	{
+	}
+};
+
+class RwControlUpdateDevicesMessage : public RwControlMessage
+{
+public:
+	RwControlConfigDevices devices;
+
+	RwControlUpdateDevicesMessage() :
+		RwControlMessage(RwControlMessage::UpdateDevices)
+	{
+	}
+};
+
+class RwControlUpdateCodecsMessage : public RwControlMessage
+{
+public:
+	RwControlConfigCodecs codecs;
+
+	RwControlUpdateCodecsMessage() :
+		RwControlMessage(RwControlMessage::UpdateCodecs)
+	{
+	}
+};
+
+class RwControlTransmitMessage : public RwControlMessage
+{
+public:
+	RwControlTransmit transmit;
+
+	RwControlTransmitMessage() :
+		RwControlMessage(RwControlMessage::Transmit)
+	{
+	}
+};
+
+class RwControlRecordMessage : public RwControlMessage
+{
+public:
+	RwControlRecord record;
+
+	RwControlRecordMessage() :
+		RwControlMessage(RwControlMessage::Record)
+	{
+	}
+};
+
+class RwControlStatusMessage : public RwControlMessage
+{
+public:
+	RwControlStatus status;
+
+	RwControlStatusMessage() :
+		RwControlMessage(RwControlMessage::Status)
+	{
+	}
+};
+
+class RwControlAudioIntensityMessage : public RwControlMessage
+{
+public:
+	RwControlAudioIntensity intensity;
+
+	RwControlAudioIntensityMessage() :
+		RwControlMessage(RwControlMessage::AudioIntensity)
+	{
+	}
+};
+
+class RwControlFrameMessage : public RwControlMessage
+{
+public:
+	RwControlFrame frame;
+
+	RwControlFrameMessage() :
+		RwControlMessage(RwControlMessage::Frame)
+	{
 	}
 };
 
@@ -228,9 +350,9 @@ public:
 	RwControlLocal(GstThread *thread, QObject *parent = 0);
 	~RwControlLocal();
 
-	void start(const RwControlConfigDevices &devs, const RwControlConfigCodecs &codecs);
+	void start(const RwControlConfigDevices &devices, const RwControlConfigCodecs &codecs);
 	void stop();
-	void updateDevices(const RwControlConfigDevices &devs);
+	void updateDevices(const RwControlConfigDevices &devices);
 	void updateCodecs(const RwControlConfigCodecs &codecs);
 	void setTransmit(const RwControlTransmit &transmit);
 	void setRecord(const RwControlRecord &record);
@@ -239,7 +361,10 @@ public:
 	void rtpAudioIn(const PRtpPacket &packet);
 	void rtpVideoIn(const PRtpPacket &packet);
 
-	// can come from any thread
+	// can come from any thread.
+	// note that it is only safe to assign callbacks prior to starting.
+	// note if the stream is stopped while recording is active, then
+	//   stopped status will not be reported until EOF is delivered.
 	void (*cb_rtpAudioOut)(const PRtpPacket &packet, void *app);
 	void (*cb_rtpVideoOut)(const PRtpPacket &packet, void *app);
 	void (*cb_recordData)(const QByteArray &packet, void *app);
@@ -250,6 +375,7 @@ signals:
 
 	void previewFrame(const QImage &img);
 	void outputFrame(const QImage &img);
+	void audioIntensityChanged(int intensity);
 
 private slots:
 	void processMessages();
@@ -260,7 +386,7 @@ private:
 	QMutex m;
 	QWaitCondition w;
 	RwControlRemote *remote_;
-	QTimer processTrigger;
+	bool wake_pending;
 
 	QList<RwControlMessage*> in;
 
