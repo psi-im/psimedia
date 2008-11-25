@@ -22,34 +22,12 @@
 
 #include <QStringList>
 #include <QImage>
-#include <QDir>
 #include <QMutex>
 #include <QWaitCondition>
-#include <QCoreApplication>
-#include <QLibrary>
-#include <QThread>
 #include <QtPlugin>
-#include <gst/gst.h>
-#include "gstcustomelements/gstcustomelements.h"
 #include "devices.h"
-#include "payloadinfo.h"
-#include "rtpworker.h"
-
-// for a live transmission we really shouldn't have excessive queuing (or
-//   *any* queuing!), so we'll cap the queue sizes.  if the system gets
-//   overloaded and the thread scheduling skews such that our queues get
-//   filled before they can be emptied, then we'll start dropping old
-//   items making room for new ones.  on a live transmission there's no
-//   sense in keeping ancient data around.  we just drop and move on.
-// note: queuing frames *reaaaallly* doesn't make any sense, since if the
-//   UI receives 5 frames at once, they'll just get painted on each other
-//   in succession and you'd only really see the last one.  however, we'll
-//   queue frames in case we ever implement timestamped frames.
-#define QUEUE_FRAME_MAX 10
-#define QUEUE_PACKET_MAX 25
-
-// don't wake the main thread more often than this, for performance reasons
-#define WAKE_PACKET_MIN 40
+#include "gstthread.h"
+#include "rwcontrol.h"
 
 namespace PsiMedia {
 
@@ -78,551 +56,20 @@ static PDevice gstDeviceToPDevice(const GstDevice &dev, PDevice::Type type)
 }
 
 //----------------------------------------------------------------------------
-// GstSession
-//----------------------------------------------------------------------------
-// converts Qt-ified commandline args back to C style
-class CArgs
-{
-public:
-	int argc;
-	char **argv;
-
-	CArgs()
-	{
-		argc = 0;
-		argv = 0;
-	}
-
-	~CArgs()
-	{
-		if(count > 0)
-		{
-			for(int n = 0; n < count; ++n)
-				free(data[n]);
-			free(argv);
-			free(data);
-		}
-	}
-
-	void set(const QStringList &args)
-	{
-		count = args.count();
-		if(count == 0)
-		{
-			data = 0;
-			argc = 0;
-			argv = 0;
-		}
-		else
-		{
-			data = (char **)malloc(sizeof(char **) * count);
-			argv = (char **)malloc(sizeof(char **) * count);
-			for(int n = 0; n < count; ++n)
-			{
-				QByteArray cs = args[n].toLocal8Bit();
-				data[n] = (char *)qstrdup(cs.data());
-				argv[n] = data[n];
-			}
-			argc = count;
-		}
-	}
-
-private:
-	int count;
-	char **data;
-};
-
-static void loadPlugins(const QString &pluginPath, bool print = false)
-{
-	if(print)
-		printf("Loading plugins in [%s]\n", qPrintable(pluginPath));
-	QDir dir(pluginPath);
-	QStringList entryList = dir.entryList(QDir::Files);
-	foreach(QString entry, entryList)
-	{
-		if(!QLibrary::isLibrary(entry))
-			continue;
-		QString filePath = dir.filePath(entry);
-		GError *err = 0;
-		GstPlugin *plugin = gst_plugin_load_file(
-			filePath.toLatin1().data(), &err);
-		if(!plugin)
-		{
-			if(print)
-			{
-				printf("**FAIL**: %s: %s\n", qPrintable(entry),
-					err->message);
-			}
-			g_error_free(err);
-			continue;
-		}
-		if(print)
-		{
-			printf("   OK   : %s name=[%s]\n", qPrintable(entry),
-				gst_plugin_get_name(plugin));
-		}
-		gst_object_unref(plugin);
-	}
-
-	if(print)
-		printf("\n");
-}
-
-class GstSession
-{
-public:
-	CArgs args;
-	QString version;
-
-	GstSession(const QString &pluginPath = QString())
-	{
-		args.set(QCoreApplication::instance()->arguments());
-
-		// make sure glib threads are available
-		if(!g_thread_supported())
-			g_thread_init(NULL);
-
-		// you can also use NULLs here if you don't want to pass args
-		GError *error;
-		if(!gst_init_check(&args.argc, &args.argv, &error))
-		{
-			// TODO: report fail
-		}
-
-		guint major, minor, micro, nano;
-		gst_version(&major, &minor, &micro, &nano);
-
-		QString nano_str;
-		if(nano == 1)
-			nano_str = " (CVS)";
-		else if(nano == 2)
-			nano_str = " (Prerelease)";
-
-		version.sprintf("%d.%d.%d%s", major, minor, micro,
-			!nano_str.isEmpty() ? qPrintable(nano_str) : "");
-
-		// manually load plugins?
-		if(!pluginPath.isEmpty())
-			loadPlugins(pluginPath);
-
-		gstcustomelements_register();
-	}
-
-	~GstSession()
-	{
-		// nothing i guess
-	}
-};
-
-//----------------------------------------------------------------------------
-// GstThread
-//----------------------------------------------------------------------------
-Q_GLOBAL_STATIC(QMutex, render_mutex)
-class GstRtpSessionContext;
-static GstRtpSessionContext *g_producer = 0;
-static GstRtpSessionContext *g_receiver = 0;
-static QList<QImage> *g_images = 0;
-
-class GstRtpChannel;
-static void receiver_write(GstRtpChannel *from, const PRtpPacket &rtp);
-static QList<QImage> *g_rimages = 0;
-
-Q_GLOBAL_STATIC(QMutex, in_mutex)
-static QList<PRtpPacket> *g_in_packets_audio = 0;
-static QList<PRtpPacket> *g_in_packets = 0;
-
-class GstThread : public QThread
-{
-	Q_OBJECT
-
-public:
-	QString pluginPath;
-	GstSession *gstSession;
-	GMainContext *mainContext;
-	GMainLoop *mainLoop;
-	QMutex m;
-	QWaitCondition w;
-	static GstThread *self;
-
-	class WorkerMapping
-	{
-	public:
-		GstThread *thread;
-		RtpWorker *worker;
-	};
-
-	QList<WorkerMapping> workers;
-
-	//bool producerMode;
-
-	GstThread(QObject *parent = 0) :
-		QThread(parent),
-		gstSession(0),
-		mainContext(0),
-		mainLoop(0)
-	{
-		self = this;
-	}
-
-	~GstThread()
-	{
-		stop();
-		self = 0;
-	}
-
-	static GstThread *instance()
-	{
-		return self;
-	}
-
-	void start(const QString &_pluginPath = QString())
-	{
-		QMutexLocker locker(&m);
-		pluginPath = _pluginPath;
-		QThread::start();
-		w.wait(&m);
-	}
-
-	void stop()
-	{
-		QMutexLocker locker(&m);
-		if(mainLoop)
-		{
-			// thread-safe ?
-			g_main_loop_quit(mainLoop);
-			w.wait(&m);
-		}
-
-		wait();
-	}
-
-	void startProducer()
-	{
-		GSource *timer = g_timeout_source_new(0);
-		g_source_set_callback(timer, cb_doStartProducer, this, NULL);
-		g_source_attach(timer, mainContext);
-	}
-
-	void startReceiver()
-	{
-		GSource *timer = g_timeout_source_new(0);
-		g_source_set_callback(timer, cb_doStartReceiver, this, NULL);
-		g_source_attach(timer, mainContext);
-	}
-
-	void stopProducer()
-	{
-		GSource *timer = g_timeout_source_new(0);
-		g_source_set_callback(timer, cb_doStopProducer, this, NULL);
-		g_source_attach(timer, mainContext);
-	}
-
-	void stopReceiver()
-	{
-		GSource *timer = g_timeout_source_new(0);
-		g_source_set_callback(timer, cb_doStopReceiver, this, NULL);
-		g_source_attach(timer, mainContext);
-	}
-
-signals:
-	void producer_started();
-	void producer_stopped();
-	void producer_finished();
-	void producer_error();
-
-	void receiver_started();
-	void receiver_stopped();
-
-protected:
-	virtual void run()
-	{
-		printf("GStreamer thread started\n");
-
-		 // this will be unlocked as soon as the mainloop runs
-		m.lock();
-
-		gstSession = new GstSession(pluginPath);
-		printf("Using GStreamer version %s\n", qPrintable(gstSession->version));
-
-		mainContext = g_main_context_new();
-		mainLoop = g_main_loop_new(mainContext, FALSE);
-
-		// deferred call to loop_started()
-		GSource *timer = g_timeout_source_new(0);
-		g_source_attach(timer, mainContext);
-		g_source_set_callback(timer, cb_loop_started, this, NULL);
-
-		// kick off the event loop
-		g_main_loop_run(mainLoop);
-
-		QMutexLocker locker(&m);
-
-		// cleanup
-		foreach(const WorkerMapping &wm, workers)
-			delete wm.worker;
-		workers.clear();
-
-		g_main_loop_unref(mainLoop);
-		mainLoop = 0;
-		g_main_context_unref(mainContext);
-		mainContext = 0;
-		delete gstSession;
-		gstSession = 0;
-
-		w.wakeOne();
-		printf("GStreamer thread completed\n");
-	}
-
-private:
-	static gboolean cb_loop_started(gpointer data)
-	{
-		return ((GstThread *)data)->loop_started();
-	}
-
-	static gboolean cb_doStartProducer(gpointer data)
-	{
-		return ((GstThread *)data)->doStartProducer();
-	}
-
-	static gboolean cb_doStartReceiver(gpointer data)
-	{
-		return ((GstThread *)data)->doStartReceiver();
-	}
-
-	static gboolean cb_doStopProducer(gpointer data)
-	{
-		return ((GstThread *)data)->doStopProducer();
-	}
-
-	static gboolean cb_doStopReceiver(gpointer data)
-	{
-		return ((GstThread *)data)->doStopReceiver();
-	}
-
-	static void cb_worker_started(void *app)
-	{
-		WorkerMapping *wm = (WorkerMapping *)app;
-		wm->thread->worker_started(wm->worker);
-	}
-
-	static void cb_worker_updated(void *app)
-	{
-		WorkerMapping *wm = (WorkerMapping *)app;
-		wm->thread->worker_updated(wm->worker);
-	}
-
-	static void cb_worker_stopped(void *app)
-	{
-		WorkerMapping *wm = (WorkerMapping *)app;
-		wm->thread->worker_stopped(wm->worker);
-	}
-
-	static void cb_worker_finished(void *app)
-	{
-		WorkerMapping *wm = (WorkerMapping *)app;
-		wm->thread->worker_finished(wm->worker);
-	}
-
-	static void cb_worker_error(void *app)
-	{
-		WorkerMapping *wm = (WorkerMapping *)app;
-		wm->thread->worker_error(wm->worker);
-	}
-
-	static void cb_worker_previewFrame(const RtpWorker::Frame &frame, void *app)
-	{
-		WorkerMapping *wm = (WorkerMapping *)app;
-		wm->thread->worker_previewFrame(wm->worker, frame);
-	}
-
-	static void cb_worker_outputFrame(const RtpWorker::Frame &frame, void *app)
-	{
-		WorkerMapping *wm = (WorkerMapping *)app;
-		wm->thread->worker_outputFrame(wm->worker, frame);
-	}
-
-	static void cb_worker_rtpAudioOut(const PRtpPacket &packet, void *app)
-	{
-		WorkerMapping *wm = (WorkerMapping *)app;
-		wm->thread->worker_rtpAudioOut(wm->worker, packet);
-	}
-
-	static void cb_worker_rtpVideoOut(const PRtpPacket &packet, void *app)
-	{
-		WorkerMapping *wm = (WorkerMapping *)app;
-		wm->thread->worker_rtpVideoOut(wm->worker, packet);
-	}
-
-	static void cb_worker_recordData(const QByteArray &packet, void *app)
-	{
-		WorkerMapping *wm = (WorkerMapping *)app;
-		wm->thread->worker_recordData(wm->worker, packet);
-	}
-
-	gboolean loop_started()
-	{
-		// make producer (0) and receiver (1)
-		for(int n = 0; n < 2; ++n)
-		{
-			RtpWorker *worker = new RtpWorker(mainContext);
-
-			WorkerMapping wm;
-			wm.thread = this;
-			wm.worker = worker;
-			workers += wm;
-
-			worker->app = &workers[workers.count()-1];
-			worker->cb_started = cb_worker_started;
-			worker->cb_updated = cb_worker_updated;
-			worker->cb_stopped = cb_worker_stopped;
-			worker->cb_finished = cb_worker_finished;
-			worker->cb_error = cb_worker_error;
-			worker->cb_previewFrame = cb_worker_previewFrame;
-			worker->cb_outputFrame = cb_worker_outputFrame;
-			worker->cb_rtpAudioOut = cb_worker_rtpAudioOut;
-			worker->cb_rtpVideoOut = cb_worker_rtpVideoOut;
-			worker->cb_recordData = cb_worker_recordData;
-		}
-
-		w.wakeOne();
-		m.unlock();
-		return FALSE;
-	}
-
-	gboolean doStartProducer()
-	{
-		workers[0].worker->start();
-		return FALSE;
-	}
-
-	gboolean doStartReceiver()
-	{
-		workers[1].worker->start();
-		return FALSE;
-	}
-
-	gboolean doStopProducer()
-	{
-		workers[0].worker->stop();
-		return FALSE;
-	}
-
-	gboolean doStopReceiver()
-	{
-		workers[1].worker->stop();
-		return FALSE;
-	}
-
-	void worker_started(RtpWorker *worker)
-	{
-		if(worker == workers[0].worker)
-			emit producer_started();
-		else
-			emit receiver_started();
-	}
-
-	void worker_updated(RtpWorker *worker)
-	{
-		// TODO
-		Q_UNUSED(worker);
-	}
-
-	void worker_stopped(RtpWorker *worker)
-	{
-		if(worker == workers[0].worker)
-			emit producer_stopped();
-		else
-			emit receiver_stopped();
-	}
-
-	void worker_finished(RtpWorker *worker)
-	{
-		// TODO
-		Q_UNUSED(worker);
-	}
-
-	void worker_error(RtpWorker *worker)
-	{
-		// TODO
-		Q_UNUSED(worker);
-	}
-
-	void worker_previewFrame(RtpWorker *worker, const RtpWorker::Frame &frame)
-	{
-		Q_UNUSED(worker);
-		/*QList<RtpWorker::Frame> list = worker->readPreviewFrames();
-		if(list.count() >= 2)
-			printf("previewFrames: lost %d frame(s)\n", list.count() - 1);
-
-		QImage img = list.first().image;*/
-		QImage img = frame.image;
-
-		QMutexLocker locker(render_mutex());
-		if(!g_images)
-			g_images = new QList<QImage>;
-		g_images->append(img);
-		QMetaObject::invokeMethod((QObject *)g_producer, "imageReady", Qt::QueuedConnection);
-	}
-
-	void worker_outputFrame(RtpWorker *worker, const RtpWorker::Frame &frame)
-	{
-		Q_UNUSED(worker);
-		/*QList<RtpWorker::Frame> list = worker->readOutputFrames();
-		if(list.count() >= 2)
-			printf("outputFrames: lost %d frame(s)\n", list.count() - 1);
-
-		QImage img = list.first().image;*/
-		QImage img = frame.image;
-
-		QMutexLocker locker(render_mutex());
-		if(!g_rimages)
-			g_rimages = new QList<QImage>;
-		g_rimages->append(img);
-		QMetaObject::invokeMethod((QObject *)g_receiver, "rimageReady", Qt::QueuedConnection);
-	}
-
-	void worker_rtpAudioOut(RtpWorker *worker, const PRtpPacket &packet)
-	{
-		Q_UNUSED(worker);
-		/*QList<PRtpPacket> list = worker->readRtpAudioOut();
-		if(list.count() >= 10)
-			printf("rtpAudioOut: fell behind (%d)\n", list.count());*/
-
-		QMutexLocker locker(in_mutex());
-		if(!g_in_packets_audio)
-			g_in_packets_audio = new QList<PRtpPacket>();
-		*g_in_packets_audio += packet;
-		QMetaObject::invokeMethod((QObject *)g_producer, "packetReadyAudio", Qt::QueuedConnection);
-	}
-
-	void worker_rtpVideoOut(RtpWorker *worker, const PRtpPacket &packet)
-	{
-		Q_UNUSED(worker);
-		/*QList<PRtpPacket> list = worker->readRtpVideoOut();
-		if(list.count() >= 10)
-			printf("rtpVideoOut: fell behind (%d)\n", list.count());*/
-
-		QMutexLocker locker(in_mutex());
-		if(!g_in_packets)
-			g_in_packets = new QList<PRtpPacket>();
-		*g_in_packets += packet;
-		QMetaObject::invokeMethod((QObject *)g_producer, "packetReady", Qt::QueuedConnection);
-	}
-
-	void worker_recordData(RtpWorker *worker, const QByteArray &data)
-	{
-		// TODO
-		Q_UNUSED(worker);
-		Q_UNUSED(data);
-	}
-};
-
-GstThread *GstThread::self = 0;
-
-//----------------------------------------------------------------------------
 // GstRtpChannel
 //----------------------------------------------------------------------------
-class GstProducerContext;
+// for a live transmission we really shouldn't have excessive queuing (or
+//   *any* queuing!), so we'll cap the queue sizes.  if the system gets
+//   overloaded and the thread scheduling skews such that our queues get
+//   filled before they can be emptied, then we'll start dropping old
+//   items making room for new ones.  on a live transmission there's no
+//   sense in keeping ancient data around.  we just drop and move on.
+#define QUEUE_PACKET_MAX 25
+
+// don't wake the main thread more often than this, for performance reasons
+#define WAKE_PACKET_MIN 40
+
+class GstRtpSessionContext;
 
 class GstRtpChannel : public QObject, public RtpChannelContext
 {
@@ -630,8 +77,24 @@ class GstRtpChannel : public QObject, public RtpChannelContext
 	Q_INTERFACES(PsiMedia::RtpChannelContext)
 
 public:
-	friend class GstRtpSessionContext;
+	bool enabled;
+	QMutex m;
+	GstRtpSessionContext *session;
 	QList<PRtpPacket> in;
+
+	QTime wake_time;
+	bool wake_pending;
+	QList<PRtpPacket> pending_in;
+
+	int written_pending;
+
+	GstRtpChannel() :
+		QObject(),
+		enabled(false),
+		wake_pending(false),
+		written_pending(0)
+	{
+	}
 
 	virtual QObject *qobject()
 	{
@@ -640,8 +103,8 @@ public:
 
 	virtual void setEnabled(bool b)
 	{
-		// TODO
-		Q_UNUSED(b);
+		QMutexLocker locker(&m);
+		enabled = b;
 	}
 
 	virtual int packetsAvailable() const
@@ -656,13 +119,69 @@ public:
 
 	virtual void write(const PRtpPacket &rtp)
 	{
-		// TODO
-		receiver_write(this, rtp);
+		m.lock();
+		if(!enabled)
+			return;
+		m.unlock();
+
+		receiver_push_packet_for_write(rtp);
+		++written_pending;
+
+		// only queue one call per eventloop pass
+		if(written_pending == 1)
+			QMetaObject::invokeMethod(this, "processOut", Qt::QueuedConnection);
+	}
+
+	// session calls this, which may be in another thread
+	void push_packet_for_read(const PRtpPacket &rtp)
+	{
+		QMutexLocker locker(&m);
+		if(!enabled)
+			return;
+
+		// if the queue is full, bump off the oldest to make room
+		if(pending_in.count() >= QUEUE_PACKET_MAX)
+			pending_in.removeFirst();
+
+		pending_in += rtp;
+
+		// TODO: use WAKE_PACKET_MIN and wake_time ?
+
+		if(!wake_pending)
+		{
+			wake_pending = true;
+			QMetaObject::invokeMethod(this, "processIn", Qt::QueuedConnection);
+		}
 	}
 
 signals:
 	void readyRead();
 	void packetsWritten(int count);
+
+private slots:
+	void processIn()
+	{
+		int oldcount = in.count();
+
+		m.lock();
+		wake_pending = false;
+		in += pending_in;
+		pending_in.clear();
+		m.unlock();
+
+		if(in.count() > oldcount)
+			emit readyRead();
+	}
+
+	void processOut()
+	{
+		int count = written_pending;
+		written_pending = 0;
+		emit packetsWritten(count);
+	}
+
+private:
+	void receiver_push_packet_for_write(const PRtpPacket &rtp);
 };
 
 //----------------------------------------------------------------------------
@@ -674,29 +193,51 @@ class GstRtpSessionContext : public QObject, public RtpSessionContext
 	Q_INTERFACES(PsiMedia::RtpSessionContext)
 
 public:
-	QString audioOutId;
-	QString audioInId, videoInId;
-	QString fileIn;
-	QByteArray fileDataIn;
-	VideoWidgetContext *outputWidget, *previewWidget;
-	int audioOutVolume;
-	int audioInVolume;
-	int code;
+	GstThread *gstThread;
 
+	RwControlLocal *control;
+	RwControlConfigDevices devices;
+	RwControlConfigCodecs codecs;
+	RwControlTransmit transmit;
+	RwControlStatus lastStatus;
+	bool isStarted;
+	bool pending_status;
+
+#ifdef QT_GUI_LIB
+	VideoWidgetContext *outputWidget, *previewWidget;
+#endif
+
+	QIODevice *recordDevice, *nextRecordDevice;
+	bool record_cancel;
+
+	// keep these parentless, so they can switch threads
 	GstRtpChannel audioRtp;
 	GstRtpChannel videoRtp;
 
-	// FIXME: remove this
-	bool producerMode;
-
-	GstRtpSessionContext(QObject *parent = 0) :
+	GstRtpSessionContext(GstThread *_gstThread, QObject *parent = 0) :
 		QObject(parent),
-		outputWidget(0),
-		previewWidget(0),
-		audioOutVolume(100),
-		audioInVolume(100),
-		code(-1)
+		gstThread(_gstThread),
+		control(0),
+		pending_status(false),
+		recordDevice(0),
+		nextRecordDevice(0),
+		record_cancel(false)
 	{
+#ifdef QT_GUI_LIB
+		outputWidget = 0;
+		previewWidget = 0;
+#endif
+
+		devices.audioOutVolume = 100;
+		devices.audioInVolume = 100;
+
+		codecs.useLocalAudioParams = true;
+		codecs.useLocalVideoParams = true;
+	}
+
+	~GstRtpSessionContext()
+	{
+		cleanup();
 	}
 
 	virtual QObject *qobject()
@@ -704,230 +245,280 @@ public:
 		return this;
 	}
 
+	void cleanup()
+	{
+		isStarted = false;
+		pending_status = false;
+		delete control;
+		control = 0;
+	}
+
 	virtual void setAudioOutputDevice(const QString &deviceId)
 	{
-		audioOutId = deviceId;
-		// TODO: if active, switch to that device
+		devices.audioOutId = deviceId;
+		if(control)
+			control->updateDevices(devices);
 	}
 
 	virtual void setAudioInputDevice(const QString &deviceId)
 	{
-		audioInId = deviceId;
-		// TODO: if active, switch to that device
+		devices.audioInId = deviceId;
+		if(control)
+			control->updateDevices(devices);
 	}
 
 	virtual void setVideoInputDevice(const QString &deviceId)
 	{
-		videoInId = deviceId;
-		// TODO: if active, switch to that device
+		devices.videoInId = deviceId;
+		if(control)
+			control->updateDevices(devices);
 	}
 
 	virtual void setFileInput(const QString &fileName)
 	{
-		fileIn = fileName;
-		// TODO: if active, switch to playing this file
+		devices.fileNameIn = fileName;
+		devices.fileDataIn.clear();
+		if(control)
+			control->updateDevices(devices);
 	}
 
 	virtual void setFileDataInput(const QByteArray &fileData)
 	{
-		fileDataIn = fileData;
-		// TODO: if active, switch to playing this file data
+		devices.fileDataIn = fileData;
+		devices.fileNameIn.clear();
+		if(control)
+			control->updateDevices(devices);
 	}
 
 	virtual void setFileLoopEnabled(bool enabled)
 	{
-		// TODO
-		Q_UNUSED(enabled);
+		devices.loopFile = enabled;
+		if(control)
+			control->updateDevices(devices);
 	}
 
 #ifdef QT_GUI_LIB
         virtual void setVideoOutputWidget(VideoWidgetContext *widget)
 	{
 		outputWidget = widget;
-		// TODO: if active, switch to using (or not using)
+		devices.useVideoOut = widget ? true : false;
+		if(control)
+			control->updateDevices(devices);
 	}
 
 	virtual void setVideoPreviewWidget(VideoWidgetContext *widget)
 	{
 		previewWidget = widget;
-		// TODO: if active, switch to using (or not using)
+		devices.useVideoPreview = widget ? true : false;
+		if(control)
+			control->updateDevices(devices);
 	}
 #endif
 
-	virtual void setRecorder(QIODevice *recordDevice)
+	virtual void setRecorder(QIODevice *_recordDevice)
 	{
-		// TODO
-		Q_UNUSED(recordDevice);
+		if(recordDevice)
+		{
+			// if we were already recording and haven't cancelled,
+			//   then cancel it
+			if(!record_cancel)
+			{
+				record_cancel = true;
+
+				RwControlRecord record;
+				record.enabled = false;
+				control->setRecord(record);
+			}
+
+			// queue up the device for later
+			if(_recordDevice)
+				nextRecordDevice = _recordDevice;
+		}
+		else
+		{
+			if(control)
+			{
+				if(_recordDevice)
+				{
+					recordDevice = _recordDevice;
+
+					RwControlRecord record;
+					record.enabled = true;
+					control->setRecord(record);
+				}
+			}
+			else
+			{
+				// queue up the device for later
+				nextRecordDevice = _recordDevice;
+			}
+		}
 	}
 
 	virtual void setLocalAudioPreferences(const QList<PAudioParams> &params)
 	{
-		// TODO
-		Q_UNUSED(params);
+		codecs.useLocalAudioParams = true;
+		codecs.localAudioParams = params;
+
+		// disable the other
+		codecs.useLocalAudioPayloadInfo = false;
+		codecs.localAudioPayloadInfo.clear();
 	}
 
 	virtual void setLocalAudioPreferences(const QList<PPayloadInfo> &info)
 	{
-		// TODO
-		Q_UNUSED(info);
+		codecs.useLocalAudioPayloadInfo = true;
+		codecs.localAudioPayloadInfo = info;
+
+		// disable the other
+		codecs.useLocalAudioParams = false;
+		codecs.localAudioParams.clear();
 	}
 
 	virtual void setLocalVideoPreferences(const QList<PVideoParams> &params)
 	{
-		// TODO
-		Q_UNUSED(params);
+		codecs.useLocalVideoParams = true;
+		codecs.localVideoParams = params;
+
+		// disable the other
+		codecs.useLocalVideoPayloadInfo = false;
+		codecs.localVideoPayloadInfo.clear();
 	}
 
 	virtual void setLocalVideoPreferences(const QList<PPayloadInfo> &info)
 	{
-		// TODO
-		Q_UNUSED(info);
+		codecs.useLocalVideoPayloadInfo = true;
+		codecs.localVideoPayloadInfo = info;
+
+		// disable the other
+		codecs.useLocalVideoParams = false;
+		codecs.localVideoParams.clear();
 	}
 
 	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info)
 	{
-		// TODO
-		GstThread::instance()->workers[1].worker->remoteAudioPayloadInfo = info.first();
+		codecs.useRemoteAudioPayloadInfo = true;
+		codecs.remoteAudioPayloadInfo = info;
 	}
 
 	virtual void setRemoteVideoPreferences(const QList<PPayloadInfo> &info)
 	{
-		// TODO
-		GstThread::instance()->workers[1].worker->remoteVideoPayloadInfo = info.first();
+		codecs.useRemoteVideoPayloadInfo = true;
+		codecs.remoteVideoPayloadInfo = info;
 	}
 
 	virtual void start()
 	{
-		// TODO
+		Q_ASSERT(!control && !isStarted);
 
-		// probably producer
-		if(!audioInId.isEmpty() || !videoInId.isEmpty() || !fileIn.isEmpty())
-		{
-			producerMode = true;
-			//GstThread::instance()->producerMode = producerMode;
-			g_producer = this;
+		control = new RwControlLocal(gstThread, this);
+		connect(control, SIGNAL(statusReady(const RwControlStatus &)), SLOT(control_statusReady(const RwControlStatus &)));
+		connect(control, SIGNAL(previewFrame(const QImage &)), SLOT(control_previewFrame(const QImage &)));
+		connect(control, SIGNAL(outputFrame(const QImage &)), SLOT(control_outputFrame(const QImage &)));
+		connect(control, SIGNAL(audioIntensityChanged(int)), SLOT(control_audioIntensityChanged(int)));
 
-			connect(GstThread::instance(), SIGNAL(producer_started()), SIGNAL(started()));
-			connect(GstThread::instance(), SIGNAL(producer_stopped()), SIGNAL(stopped()));
-
-			GstThread::instance()->workers[0].worker->ain = audioInId;
-			GstThread::instance()->workers[0].worker->vin = videoInId;
-			GstThread::instance()->workers[0].worker->infile = fileIn;
-			GstThread::instance()->startProducer();
-		}
-		// receiver
-		else
-		{
-			producerMode = false;
-			//GstThread::instance()->producerMode = producerMode;
-			g_receiver = this;
-
-			connect(GstThread::instance(), SIGNAL(receiver_started()), SIGNAL(started()));
-			connect(GstThread::instance(), SIGNAL(receiver_stopped()), SIGNAL(stopped()));
-
-			GstThread::instance()->workers[1].worker->aout = audioOutId;
-			GstThread::instance()->startReceiver();
-		}
+		lastStatus = RwControlStatus();
+		isStarted = false;
+		pending_status = true;
+		control->start(devices, codecs);
 	}
 
 	virtual void updatePreferences()
 	{
-		// TODO
+		Q_ASSERT(control);
+
+		pending_status = true;
+		control->updateCodecs(codecs);
 	}
 
 	virtual void transmitAudio(int index)
 	{
-		// TODO (note that -1 means pick best)
-		Q_UNUSED(index);
+		transmit.useAudio = true;
+		transmit.audioIndex = index;
+		control->setTransmit(transmit);
 	}
 
 	virtual void transmitVideo(int index)
 	{
-		// TODO (note that -1 means pick best)
-		Q_UNUSED(index);
+		transmit.useVideo = true;
+		transmit.videoIndex = index;
+		control->setTransmit(transmit);
 	}
 
 	virtual void pauseAudio()
 	{
-		// TODO
+		transmit.useAudio = false;
+		control->setTransmit(transmit);
 	}
 
 	virtual void pauseVideo()
 	{
-		// TODO
+		transmit.useVideo = false;
+		control->setTransmit(transmit);
 	}
 
 	virtual void stop()
 	{
-		// TODO
-
-		if(producerMode)
-			GstThread::instance()->stopProducer();
-		else
-			GstThread::instance()->stopReceiver();
+		control->stop();
 	}
 
 	virtual QList<PPayloadInfo> audioPayloadInfo() const
 	{
-		// TODO
-		return QList<PPayloadInfo>() << GstThread::instance()->workers[0].worker->localAudioPayloadInfo;
+		return lastStatus.localAudioPayloadInfo;
 	}
 
 	virtual QList<PPayloadInfo> videoPayloadInfo() const
 	{
-		// TODO
-		return QList<PPayloadInfo>() << GstThread::instance()->workers[0].worker->localVideoPayloadInfo;
+		return lastStatus.localVideoPayloadInfo;
 	}
 
 	virtual QList<PAudioParams> audioParams() const
 	{
-		// TODO
-		return QList<PAudioParams>();
+		return lastStatus.localAudioParams;
 	}
 
 	virtual QList<PVideoParams> videoParams() const
 	{
-		// TODO
-		return QList<PVideoParams>();
+		return lastStatus.localVideoParams;
 	}
 
 	virtual bool canTransmitAudio() const
 	{
-		// TODO
-		return true;
+		return lastStatus.canTransmitAudio;
 	}
 
 	virtual bool canTransmitVideo() const
 	{
-		// TODO
-		return true;
+		return lastStatus.canTransmitVideo;
 	}
 
 	virtual int outputVolume() const
 	{
-		return audioOutVolume;
+		return devices.audioOutVolume;
 	}
 
 	virtual void setOutputVolume(int level)
 	{
-		audioOutVolume = level;
-		// TODO: if active, change active volume
+		devices.audioOutVolume = level;
+		if(control)
+			control->updateDevices(devices);
 	}
 
 	virtual int inputVolume() const
 	{
-		return audioInVolume;
+		return devices.audioInVolume;
 	}
 
 	virtual void setInputVolume(int level)
 	{
-		audioInVolume = level;
-		// TODO: if active, change active volume
+		devices.audioInVolume = level;
+		if(control)
+			control->updateDevices(devices);
 	}
 
 	virtual Error errorCode() const
 	{
-		return (Error)code;
+		return (Error)lastStatus.errorCode;
 	}
 
 	virtual RtpChannelContext *audioRtpChannel()
@@ -940,6 +531,16 @@ public:
 		return &videoRtp;
 	}
 
+	// channel calls this, which may be in another thread
+	void push_packet_for_write(GstRtpChannel *from, const PRtpPacket &rtp)
+	{
+		// TODO: thread-safe access to 'control' which might get deleted?
+		if(from == &audioRtp)
+			control->rtpAudioIn(rtp);
+		else if(from == &videoRtp)
+			control->rtpVideoIn(rtp);
+	}
+
 signals:
 	void started();
 	void preferencesUpdated();
@@ -948,63 +549,123 @@ signals:
 	void finished();
 	void error();
 
-public:
-	void doWrite(GstRtpChannel *from, const PRtpPacket &rtp)
+private slots:
+	void control_statusReady(const RwControlStatus &status)
 	{
-		if(from == &audioRtp)
-			GstThread::instance()->workers[1].worker->rtpAudioIn(rtp);
-		else if(from == &videoRtp)
-			GstThread::instance()->workers[1].worker->rtpVideoIn(rtp);
+		lastStatus = status;
+
+		if(status.finished)
+		{
+			// finished status just means the file is done
+			//   sending.  the session still remains active.
+			emit finished();
+		}
+		else if(status.error)
+		{
+			cleanup();
+			emit error();
+		}
+		else if(pending_status)
+		{
+			pending_status = false;
+
+			if(status.stopped)
+			{
+				cleanup();
+				emit stopped();
+			}
+			else if(!isStarted)
+			{
+				isStarted = true;
+
+				if(!recordDevice && nextRecordDevice)
+				{
+					recordDevice = nextRecordDevice;
+					nextRecordDevice = 0;
+
+					RwControlRecord record;
+					record.enabled = true;
+					control->setRecord(record);
+				}
+
+				emit started();
+			}
+			else
+				emit preferencesUpdated();
+		}
 	}
 
-public slots:
-	void imageReady()
+	void control_previewFrame(const QImage &img)
 	{
-		render_mutex()->lock();
-		QImage image = g_images->takeFirst();
-		render_mutex()->unlock();
-
 		if(previewWidget)
-			previewWidget->show_frame(image);
+			previewWidget->show_frame(img);
 	}
 
-	void packetReadyAudio()
+	void control_outputFrame(const QImage &img)
 	{
-		in_mutex()->lock();
-		PRtpPacket packet = g_in_packets_audio->takeFirst();
-		in_mutex()->unlock();
-
-		//printf("audio packet ready (%d bytes)\n", packet.rawValue.size());
-		audioRtp.in += packet;
-		emit audioRtp.readyRead();
-	}
-
-	void packetReady()
-	{
-		in_mutex()->lock();
-		PRtpPacket packet = g_in_packets->takeFirst();
-		in_mutex()->unlock();
-
-		//printf("video packet ready\n");
-		videoRtp.in += packet;
-		emit videoRtp.readyRead();
-	}
-
-	void rimageReady()
-	{
-		render_mutex()->lock();
-		QImage image = g_rimages->takeFirst();
-		render_mutex()->unlock();
-
 		if(outputWidget)
-			outputWidget->show_frame(image);
+			outputWidget->show_frame(img);
+	}
+
+	void control_audioIntensityChanged(int intensity)
+	{
+		emit audioInputIntensityChanged(intensity);
+	}
+
+private:
+	static void cb_control_rtpAudioOut(const PRtpPacket &packet, void *app)
+	{
+		((GstRtpSessionContext *)app)->control_rtpAudioOut(packet);
+	}
+
+	static void cb_control_rtpVideoOut(const PRtpPacket &packet, void *app)
+	{
+		((GstRtpSessionContext *)app)->control_rtpVideoOut(packet);
+	}
+
+	static void cb_control_recordData(const QByteArray &packet, void *app)
+	{
+		((GstRtpSessionContext *)app)->control_recordData(packet);
+	}
+
+	// note: this is executed from a different thread
+	void control_rtpAudioOut(const PRtpPacket &packet)
+	{
+		audioRtp.push_packet_for_read(packet);
+	}
+
+	// note: this is executed from a different thread
+	void control_rtpVideoOut(const PRtpPacket &packet)
+	{
+		videoRtp.push_packet_for_read(packet);
+	}
+
+	// note: this is executed from a different thread
+	void control_recordData(const QByteArray &packet)
+	{
+		Q_UNUSED(packet);
+		// TODO: if EOF (empty packet), be sure to start the
+		//   next recording afterwards, like this:
+
+		/*recordDevice = 0;
+		record_cancel = false;
+
+		if(nextRecordDevice)
+		{
+			recordDevice = nextRecordDevice;
+			nextRecordDevice = 0;
+
+			RwControlRecord record;
+			record.enabled = true;
+			control->setRecord(record);
+		}*/
 	}
 };
 
-void receiver_write(GstRtpChannel *from, const PRtpPacket &rtp)
+void GstRtpChannel::receiver_push_packet_for_write(const PRtpPacket &rtp)
 {
-	if(g_receiver)
-		g_receiver->doWrite(from, rtp);
+	if(session)
+		session->push_packet_for_write(this, rtp);
 }
 
 //----------------------------------------------------------------------------
@@ -1031,7 +692,13 @@ public:
 	virtual bool init(const QString &resourcePath)
 	{
 		thread = new GstThread(this);
-		thread->start(resourcePath);
+		if(!thread->start(resourcePath))
+		{
+			delete thread;
+			thread = 0;
+			return false;
+		}
+
 		return true;
 	}
 
@@ -1178,7 +845,7 @@ public:
 
 	virtual RtpSessionContext *createRtpSession()
 	{
-		return new GstRtpSessionContext;
+		return new GstRtpSessionContext(thread);
 	}
 };
 
