@@ -145,8 +145,6 @@ public:
 			return;
 		}
 
-		success = true;
-
 		guint major, minor, micro, nano;
 		gst_version(&major, &minor, &micro, &nano);
 
@@ -164,6 +162,37 @@ public:
 			loadPlugins(pluginPath);
 
 		gstcustomelements_register();
+
+		QStringList reqelem = QStringList()
+			<< "speexenc" << "speexdec"
+			<< "vorbisenc" << "vorbisdec"
+			<< "theoraenc" << "theoradec"
+			<< "rtpspeexpay" << "rtpspeexdepay"
+			<< "rtpvorbispay" << "rtpvorbisdepay"
+			<< "rtptheorapay" << "rtptheoradepay"
+			<< "oggmux" << "oggdemux"
+			<< "audioconvert"
+			<< "audioresample"
+			<< "volume"
+			<< "ffmpegcolorspace"
+			<< "videorate"
+			<< "videoscale"
+			<< "gstrtpjitterbuffer";
+
+		foreach(const QString &name, reqelem)
+		{
+			GstElement *e = gst_element_factory_make(name.toLatin1().data(), NULL);
+			if(!e)
+			{
+				printf("Unable to load element '%s'.\n", qPrintable(name));
+				success = false;
+				return;
+			}
+
+			g_object_unref(G_OBJECT(e));
+		}
+
+		success = true;
 	}
 
 	~GstSession()
@@ -254,7 +283,7 @@ GMainContext *GstThread::mainContext()
 
 void GstThread::run()
 {
-	printf("GStreamer thread started\n");
+	//printf("GStreamer thread started\n");
 
 	// this will be unlocked as soon as the mainloop runs
 	d->m.lock();
@@ -269,13 +298,13 @@ void GstThread::run()
 		d->gstSession = 0;
 		d->w.wakeOne();
 		d->m.unlock();
-		printf("GStreamer thread completed (error)\n");
+		//printf("GStreamer thread completed (error)\n");
 		return;
 	}
 
 	d->success = true;
 
-	printf("Using GStreamer version %s\n", qPrintable(d->gstSession->version));
+	//printf("Using GStreamer version %s\n", qPrintable(d->gstSession->version));
 
 	d->mainContext = g_main_context_new();
 	d->mainLoop = g_main_loop_new(d->mainContext, FALSE);
@@ -297,7 +326,7 @@ void GstThread::run()
 	d->gstSession = 0;
 
 	d->w.wakeOne();
-	printf("GStreamer thread completed\n");
+	//printf("GStreamer thread completed\n");
 }
 
 }
