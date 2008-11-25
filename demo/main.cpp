@@ -403,7 +403,10 @@ public:
 		foreach(const PsiMedia::AudioParams &params, snap.supportedAudioModes)
 		{
 			QString codec = params.codec();
-			codec[0] = codec[0].toUpper();
+			if(codec == "vorbis" || codec == "speex")
+				codec[0] = codec[0].toUpper();
+			else
+				codec = codec.toUpper();
 			QString hz = QString::number(params.sampleRate() / 1000);
 			QString chanstr;
 			if(params.channels() == 1)
@@ -420,7 +423,7 @@ public:
 		foreach(const PsiMedia::VideoParams &params, snap.supportedVideoModes)
 		{
 			QString codec = params.codec();
-			if(codec == "theora" || codec == "vorbis" || codec == "speex")
+			if(codec == "theora")
 				codec[0] = codec[0].toUpper();
 			else
 				codec = codec.toUpper();
