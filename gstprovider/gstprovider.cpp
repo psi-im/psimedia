@@ -25,6 +25,7 @@
 #include <QMutex>
 #include <QWaitCondition>
 #include <QtPlugin>
+#include <QIODevice>
 #include "devices.h"
 #include "modes.h"
 #include "gstthread.h"
@@ -170,6 +171,131 @@ private:
 	void receiver_push_packet_for_write(const PRtpPacket &rtp);
 };
 
+class GstRecorder : public QObject
+{
+	Q_OBJECT
+
+public:
+	RwControlLocal *control;
+	QIODevice *recordDevice, *nextRecordDevice;
+	bool record_cancel;
+
+	QMutex m;
+	bool wake_pending;
+	QList<QByteArray> pending_in;
+
+	GstRecorder(QObject *parent = 0) :
+		QObject(parent),
+		control(0),
+		recordDevice(0),
+		nextRecordDevice(0),
+		record_cancel(false),
+		wake_pending(false)
+	{
+	}
+
+	void setDevice(QIODevice *dev)
+	{
+		if(recordDevice)
+		{
+			// if we were already recording and haven't cancelled,
+			//   then cancel it
+			if(!record_cancel)
+			{
+				record_cancel = true;
+
+				RwControlRecord record;
+				record.enabled = false;
+				control->setRecord(record);
+			}
+
+			// queue up the device for later
+			if(dev)
+				nextRecordDevice = dev;
+		}
+		else
+		{
+			if(control)
+			{
+				if(dev)
+				{
+					recordDevice = dev;
+
+					RwControlRecord record;
+					record.enabled = true;
+					control->setRecord(record);
+				}
+			}
+			else
+			{
+				// queue up the device for later
+				nextRecordDevice = dev;
+			}
+		}
+	}
+
+	void startNext()
+	{
+		if(control && !recordDevice && nextRecordDevice)
+		{
+			recordDevice = nextRecordDevice;
+			nextRecordDevice = 0;
+
+			RwControlRecord record;
+			record.enabled = true;
+			control->setRecord(record);
+		}
+	}
+
+	// session calls this, which may be in another thread
+	void push_data_for_read(const QByteArray &buf)
+	{
+		QMutexLocker locker(&m);
+		pending_in += buf;
+		if(!wake_pending)
+		{
+			wake_pending = true;
+			QMetaObject::invokeMethod(this, "processIn", Qt::QueuedConnection);
+		}
+	}
+
+private slots:
+	void processIn()
+	{
+		m.lock();
+		wake_pending = false;
+		QList<QByteArray> in = pending_in;
+		pending_in.clear();
+		m.unlock();
+
+		while(!in.isEmpty())
+		{
+			QByteArray buf = in.takeFirst();
+
+			if(!buf.isEmpty())
+			{
+				recordDevice->write(buf);
+			}
+			else // EOF
+			{
+				recordDevice->close();
+				recordDevice = 0;
+				record_cancel = false;
+
+				if(control && nextRecordDevice)
+				{
+					recordDevice = nextRecordDevice;
+					nextRecordDevice = 0;
+
+					RwControlRecord record;
+					record.enabled = true;
+					control->setRecord(record);
+				}
+			}
+		}
+	}
+};
+
 //----------------------------------------------------------------------------
 // GstRtpSessionContext
 //----------------------------------------------------------------------------
@@ -187,27 +313,30 @@ public:
 	RwControlTransmit transmit;
 	RwControlStatus lastStatus;
 	bool isStarted;
+	bool isStopping;
 	bool pending_status;
 
 #ifdef QT_GUI_LIB
 	VideoWidgetContext *outputWidget, *previewWidget;
 #endif
 
-	QIODevice *recordDevice, *nextRecordDevice;
-	bool record_cancel;
+	GstRecorder recorder;
 
 	// keep these parentless, so they can switch threads
 	GstRtpChannel audioRtp;
 	GstRtpChannel videoRtp;
+	QMutex write_mutex;
+	bool allow_writes;
 
 	GstRtpSessionContext(GstThread *_gstThread, QObject *parent = 0) :
 		QObject(parent),
 		gstThread(_gstThread),
 		control(0),
+		isStarted(false),
+		isStopping(false),
 		pending_status(false),
-		recordDevice(0),
-		nextRecordDevice(0),
-		record_cancel(false)
+		recorder(this),
+		allow_writes(false)
 	{
 #ifdef QT_GUI_LIB
 		outputWidget = 0;
@@ -234,7 +363,15 @@ public:
 	void cleanup()
 	{
 		isStarted = false;
+		isStopping = false;
 		pending_status = false;
+
+		write_mutex.lock();
+		allow_writes = false;
+		write_mutex.unlock();
+
+		recorder.control = 0;
+
 		delete control;
 		control = 0;
 	}
@@ -301,44 +438,12 @@ public:
 	}
 #endif
 
-	virtual void setRecorder(QIODevice *_recordDevice)
+	virtual void setRecorder(QIODevice *recordDevice)
 	{
-		if(recordDevice)
-		{
-			// if we were already recording and haven't cancelled,
-			//   then cancel it
-			if(!record_cancel)
-			{
-				record_cancel = true;
+		// can't assign a new recording device after stopping
+		Q_ASSERT(!isStopping);
 
-				RwControlRecord record;
-				record.enabled = false;
-				control->setRecord(record);
-			}
-
-			// queue up the device for later
-			if(_recordDevice)
-				nextRecordDevice = _recordDevice;
-		}
-		else
-		{
-			if(control)
-			{
-				if(_recordDevice)
-				{
-					recordDevice = _recordDevice;
-
-					RwControlRecord record;
-					record.enabled = true;
-					control->setRecord(record);
-				}
-			}
-			else
-			{
-				// queue up the device for later
-				nextRecordDevice = _recordDevice;
-			}
-		}
+		recorder.setDevice(recordDevice);
 	}
 
 	virtual void setLocalAudioPreferences(const QList<PAudioParams> &params)
@@ -403,6 +508,17 @@ public:
 		connect(control, SIGNAL(outputFrame(const QImage &)), SLOT(control_outputFrame(const QImage &)));
 		connect(control, SIGNAL(audioIntensityChanged(int)), SLOT(control_audioIntensityChanged(int)));
 
+		control->app = this;
+		control->cb_rtpAudioOut = cb_control_rtpAudioOut;
+		control->cb_rtpVideoOut = cb_control_rtpVideoOut;
+		control->cb_recordData = cb_control_recordData;
+
+		recorder.control = control;
+
+		write_mutex.lock();
+		allow_writes = true;
+		write_mutex.unlock();
+
 		lastStatus = RwControlStatus();
 		isStarted = false;
 		pending_status = true;
@@ -445,6 +561,10 @@ public:
 
 	virtual void stop()
 	{
+		Q_ASSERT(!isStopping);
+
+		isStopping = true;
+		pending_status = true;
 		control->stop();
 	}
 
@@ -520,7 +640,10 @@ public:
 	// channel calls this, which may be in another thread
 	void push_packet_for_write(GstRtpChannel *from, const PRtpPacket &rtp)
 	{
-		// TODO: thread-safe access to 'control' which might get deleted?
+		QMutexLocker locker(&write_mutex);
+		if(!allow_writes)
+			return;
+
 		if(from == &audioRtp)
 			control->rtpAudioIn(rtp);
 		else if(from == &videoRtp)
@@ -564,15 +687,8 @@ private slots:
 			{
 				isStarted = true;
 
-				if(!recordDevice && nextRecordDevice)
-				{
-					recordDevice = nextRecordDevice;
-					nextRecordDevice = 0;
-
-					RwControlRecord record;
-					record.enabled = true;
-					control->setRecord(record);
-				}
+				// if there was a pending record, start it
+				recorder.startNext();
 
 				emit started();
 			}
@@ -629,22 +745,7 @@ private:
 	// note: this is executed from a different thread
 	void control_recordData(const QByteArray &packet)
 	{
-		Q_UNUSED(packet);
-		// TODO: if EOF (empty packet), be sure to start the
-		//   next recording afterwards, like this:
-
-		/*recordDevice = 0;
-		record_cancel = false;
-
-		if(nextRecordDevice)
-		{
-			recordDevice = nextRecordDevice;
-			nextRecordDevice = 0;
-
-			RwControlRecord record;
-			record.enabled = true;
-			control->setRecord(record);
-		}*/
+		recorder.push_data_for_read(packet);
 	}
 };
 
