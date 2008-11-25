@@ -39,6 +39,7 @@ namespace PsiMedia {
 //----------------------------------------------------------------------------
 RwControlLocal::RwControlLocal(GstThread *thread, QObject *parent) :
 	QObject(parent),
+	app(0),
 	cb_rtpAudioOut(0),
 	cb_rtpVideoOut(0),
 	cb_recordData(0),

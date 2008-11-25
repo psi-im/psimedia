@@ -365,6 +365,7 @@ public:
 	// note that it is only safe to assign callbacks prior to starting.
 	// note if the stream is stopped while recording is active, then
 	//   stopped status will not be reported until EOF is delivered.
+	void *app;
 	void (*cb_rtpAudioOut)(const PRtpPacket &packet, void *app);
 	void (*cb_rtpVideoOut)(const PRtpPacket &packet, void *app);
 	void (*cb_recordData)(const QByteArray &packet, void *app);
