@@ -700,12 +700,13 @@ public:
 
 	virtual QString creditText()
 	{
-		QString str =
-		"This application uses GStreamer, a comprehensive "
+		QString str = QString(
+		"This application uses GStreamer %1, a comprehensive "
 		"open-source and cross-platform multimedia framework.  For "
 		"more information, see http://www.gstreamer.net/\n\n"
 		"If you enjoy this software, please give the GStreamer "
-		"people a million dollars.";
+		"people a million dollars."
+		).arg(thread->gstVersion());
 		return str;
 	}
 
