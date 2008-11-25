@@ -51,6 +51,7 @@ public:
 	QString vin;
 	QString infile;
 	QByteArray indata;
+	bool loopFile;
 	PAudioParams localAudioParams;
 	PVideoParams localVideoParams;
 	PPayloadInfo localAudioPayloadInfo;
@@ -76,6 +77,7 @@ public:
 	void pauseVideo();
 	void stop();
 
+	// the rtp input functions are safe to call from any thread
 	void rtpAudioIn(const PRtpPacket &packet);
 	void rtpVideoIn(const PRtpPacket &packet);
 
@@ -86,6 +88,7 @@ public:
 	void recordStop();
 
 	// callbacks
+
 	void (*cb_started)(void *app);
 	void (*cb_updated)(void *app);
 	void (*cb_stopped)(void *app);
@@ -93,10 +96,13 @@ public:
 	void (*cb_error)(void *app);
 
 	// callbacks - from alternate thread, be safe!
+
 	void (*cb_previewFrame)(const Frame &frame, void *app);
 	void (*cb_outputFrame)(const Frame &frame, void *app);
 	void (*cb_rtpAudioOut)(const PRtpPacket &packet, void *app);
 	void (*cb_rtpVideoOut)(const PRtpPacket &packet, void *app);
+
+	 // empty record packet = EOF/error
 	void (*cb_recordData)(const QByteArray &packet, void *app);
 
 private:

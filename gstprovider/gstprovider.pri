@@ -4,12 +4,16 @@ include(gstcustomelements/gstcustomelements.pri)
 HEADERS += \
 	$$PWD/devices.h \
 	$$PWD/payloadinfo.h \
-	$$PWD/rtpworker.h
+	$$PWD/rtpworker.h \
+	$$PWD/gstthread.h \
+	$$PWD/rwcontrol.h
 
 SOURCES += \
 	$$PWD/devices.cpp \
 	$$PWD/payloadinfo.cpp \
 	$$PWD/rtpworker.cpp \
+	$$PWD/gstthread.cpp \
+	$$PWD/rwcontrol.cpp \
 	$$PWD/gstprovider.cpp
 
 windows {

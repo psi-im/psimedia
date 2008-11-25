@@ -41,6 +41,7 @@ static GstElement *make_device_element(const QString &id, PDevice::Type type, QS
 }*/
 
 RtpWorker::RtpWorker(GMainContext *mainContext) :
+	loopFile(false),
 	cb_started(0),
 	cb_updated(0),
 	cb_stopped(0),
