@@ -96,6 +96,7 @@ public:
 	void (*cb_error)(void *app);
 
 	// callbacks - from alternate thread, be safe!
+	//   also, it is not safe to assign callbacks except before starting
 
 	void (*cb_previewFrame)(const Frame &frame, void *app);
 	void (*cb_outputFrame)(const Frame &frame, void *app);
