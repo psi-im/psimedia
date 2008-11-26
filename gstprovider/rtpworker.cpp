@@ -406,8 +406,8 @@ gboolean RtpWorker::doStart()
 
 		GstStructure *cs = gst_caps_get_structure(caps, 0);
 
-		localAudioPayloadInfo = structureToPayloadInfo(cs);
-		if(localAudioPayloadInfo.id == -1)
+		localAudioPayloadInfo = QList<PPayloadInfo>() << structureToPayloadInfo(cs);
+		if(localAudioPayloadInfo[0].id == -1)
 		{
 			// TODO: handle error
 		}
@@ -427,8 +427,8 @@ gboolean RtpWorker::doStart()
 
 		GstStructure *cs = gst_caps_get_structure(caps, 0);
 
-		localVideoPayloadInfo = structureToPayloadInfo(cs);
-		if(localVideoPayloadInfo.id == -1)
+		localVideoPayloadInfo = QList<PPayloadInfo>() << structureToPayloadInfo(cs);
+		if(localVideoPayloadInfo[0].id == -1)
 		{
 			// TODO: handle error
 		}
@@ -461,7 +461,7 @@ dorecv:
 
 	//GstStructure *cs = gst_structure_from_string("application/x-rtp, media=(string)audio, clock-rate=(int)16000, encoding-name=(string)SPEEX, encoding-params=(string)1, payload=(int)110", NULL);
 	//GstStructure *cs = gst_structure_from_string("application/x-rtp, media=(string)audio, clock-rate=(int)8000, encoding-name=(string)PCMU, payload=(int)0", NULL);
-	GstStructure *cs = payloadInfoToStructure(remoteAudioPayloadInfo, "audio");
+	GstStructure *cs = payloadInfoToStructure(remoteAudioPayloadInfo.first(), "audio");
 	if(!cs)
 	{
 		// TODO: handle error
@@ -479,7 +479,7 @@ dorecv:
 #else
 	videortpsrc = gst_element_factory_make("apprtpsrc", NULL);
 #endif
-	cs = payloadInfoToStructure(remoteVideoPayloadInfo, "video");
+	cs = payloadInfoToStructure(remoteVideoPayloadInfo.first(), "video");
 	if(!cs)
 	{
 		// TODO: handle error

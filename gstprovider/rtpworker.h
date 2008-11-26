@@ -52,19 +52,19 @@ public:
 	QString infile;
 	QByteArray indata;
 	bool loopFile;
-	PAudioParams localAudioParams;
-	PVideoParams localVideoParams;
-	PPayloadInfo localAudioPayloadInfo;
-	PPayloadInfo localVideoPayloadInfo;
-	PPayloadInfo remoteAudioPayloadInfo;
-	PPayloadInfo remoteVideoPayloadInfo;
+	QList<PAudioParams> localAudioParams;
+	QList<PVideoParams> localVideoParams;
+	QList<PPayloadInfo> localAudioPayloadInfo;
+	QList<PPayloadInfo> localVideoPayloadInfo;
+	QList<PPayloadInfo> remoteAudioPayloadInfo;
+	QList<PPayloadInfo> remoteVideoPayloadInfo;
 
 	// read-only
 	bool canTransmitAudio;
 	bool canTransmitVideo;
 	int outputVolume;
 	int inputVolume;
-	RtpSessionContext::Error error;
+	int error;
 
 	RtpWorker(GMainContext *mainContext);
 	~RtpWorker();
