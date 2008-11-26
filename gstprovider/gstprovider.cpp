@@ -527,7 +527,7 @@ public:
 
 	virtual void updatePreferences()
 	{
-		Q_ASSERT(control);
+		Q_ASSERT(control && !pending_status);
 
 		pending_status = true;
 		control->updateCodecs(codecs);
@@ -561,7 +561,7 @@ public:
 
 	virtual void stop()
 	{
-		Q_ASSERT(!isStopping);
+		Q_ASSERT(control && !pending_status && !isStopping);
 
 		isStopping = true;
 		pending_status = true;
