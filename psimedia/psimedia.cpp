@@ -865,7 +865,7 @@ void RtpChannel::connectNotify(const char *signal)
 {
 	int oldtotal = d->readyReadListeners;
 
-	if(signal == QMetaObject::normalizedSignature(SIGNAL(readyRead())))
+	if(QLatin1String(signal) == QMetaObject::normalizedSignature(SIGNAL(readyRead())).data())
 		++d->readyReadListeners;
 
 	int total = d->readyReadListeners;
@@ -880,7 +880,7 @@ void RtpChannel::disconnectNotify(const char *signal)
 {
 	int oldtotal = d->readyReadListeners;
 
-	if(signal == QMetaObject::normalizedSignature(SIGNAL(readyRead())))
+	if(QLatin1String(signal) == QMetaObject::normalizedSignature(SIGNAL(readyRead())).data())
 		--d->readyReadListeners;
 
 	int total = d->readyReadListeners;

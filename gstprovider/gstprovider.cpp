@@ -348,6 +348,9 @@ public:
 
 		codecs.useLocalAudioParams = true;
 		codecs.useLocalVideoParams = true;
+
+		audioRtp.session = this;
+		videoRtp.session = this;
 	}
 
 	~GstRtpSessionContext()
