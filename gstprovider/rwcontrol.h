@@ -412,6 +412,8 @@ private:
 	GMainContext *mainContext_;
 	QMutex m;
 	RwControlLocal *local_;
+	bool blocking;
+	bool pending_status;
 
 	RtpWorker *worker;
 	QList<RwControlMessage*> in;
@@ -440,8 +442,15 @@ private:
 	void worker_rtpVideoOut(const PRtpPacket &packet);
 	void worker_recordData(const QByteArray &packet);
 
+	void resumeMessages();
+
+	// return false to block further message processing
+	bool processMessage(RwControlMessage *msg);
+
 	friend class RwControlLocal;
 	void postMessage(RwControlMessage *msg);
+	void rtpAudioIn(const PRtpPacket &packet);
+	void rtpVideoIn(const PRtpPacket &packet);
 };
 
 }
