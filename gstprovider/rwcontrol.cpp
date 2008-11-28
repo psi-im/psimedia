@@ -363,6 +363,7 @@ RwControlRemote::RwControlRemote(GMainContext *mainContext, RwControlLocal *loca
 	worker->cb_stopped = cb_worker_stopped;
 	worker->cb_finished = cb_worker_finished;
 	worker->cb_error = cb_worker_error;
+	worker->cb_audioIntensity = cb_worker_audioIntensity;
 	worker->cb_previewFrame = cb_worker_previewFrame;
 	worker->cb_outputFrame = cb_worker_outputFrame;
 	worker->cb_rtpAudioOut = cb_worker_rtpAudioOut;
@@ -405,6 +406,11 @@ void RwControlRemote::cb_worker_finished(void *app)
 void RwControlRemote::cb_worker_error(void *app)
 {
 	((RwControlRemote *)app)->worker_error();
+}
+
+void RwControlRemote::cb_worker_audioIntensity(int value, void *app)
+{
+	((RwControlRemote *)app)->worker_audioIntensity(value);
 }
 
 void RwControlRemote::cb_worker_previewFrame(const RtpWorker::Frame &frame, void *app)
@@ -577,6 +583,13 @@ void RwControlRemote::worker_error()
 	RwControlStatusMessage *msg = statusFromWorker(worker);
 	msg->status.error = true;
 	msg->status.errorCode = worker->error;
+	local_->postMessage(msg);
+}
+
+void RwControlRemote::worker_audioIntensity(int value)
+{
+	RwControlAudioIntensityMessage *msg = new RwControlAudioIntensityMessage;
+	msg->intensity.value = value;
 	local_->postMessage(msg);
 }
 

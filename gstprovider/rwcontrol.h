@@ -424,6 +424,7 @@ private:
 	static void cb_worker_stopped(void *app);
 	static void cb_worker_finished(void *app);
 	static void cb_worker_error(void *app);
+	static void cb_worker_audioIntensity(int value, void *app);
 	static void cb_worker_previewFrame(const RtpWorker::Frame &frame, void *app);
 	static void cb_worker_outputFrame(const RtpWorker::Frame &frame, void *app);
 	static void cb_worker_rtpAudioOut(const PRtpPacket &packet, void *app);
@@ -436,6 +437,7 @@ private:
 	void worker_stopped();
 	void worker_finished();
 	void worker_error();
+	void worker_audioIntensity(int value);
 	void worker_previewFrame(const RtpWorker::Frame &frame);
 	void worker_outputFrame(const RtpWorker::Frame &frame);
 	void worker_rtpAudioOut(const PRtpPacket &packet);
