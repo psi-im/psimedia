@@ -94,6 +94,7 @@ public:
 	void (*cb_stopped)(void *app);
 	void (*cb_finished)(void *app);
 	void (*cb_error)(void *app);
+	void (*cb_audioIntensity)(int value, void *app);
 
 	// callbacks - from alternate thread, be safe!
 	//   also, it is not safe to assign callbacks except before starting
@@ -109,17 +110,16 @@ public:
 private:
 	GMainContext *mainContext_;
 	GSource *timer;
-	GstElement *pipeline;
-	GstElement *fileSource;
-	GstElement *fileDemux;
-	GstElement *audioTarget;
-	GstElement *videoTarget;
 
-	GstElement *rpipeline, *rvpipeline;
+	GstElement *sendPipeline, *rpipeline, *rvpipeline;
+	GstElement *fileDemux;
+	GstElement *audiosrc;
+	GstElement *videosrc;
 	GstElement *audiortpsrc;
 	GstElement *videortpsrc;
-
-	bool producerMode;
+	GstElement *audiortppay;
+	GstElement *videortppay;
+	GstElement *volumein, *volumeout;
 
 	void cleanup();
 
@@ -133,6 +133,7 @@ private:
 	static void cb_show_frame_output(int width, int height, const unsigned char *rgb24, gpointer data);
 	static void cb_packet_ready_rtp_audio(const unsigned char *buf, int size, gpointer data);
 	static void cb_packet_ready_rtp_video(const unsigned char *buf, int size, gpointer data);
+	static gboolean cb_fileReady(gpointer data);
 
 	gboolean doStart();
 	gboolean doStop();
@@ -144,6 +145,11 @@ private:
 	void show_frame_output(int width, int height, const unsigned char *rgb24);
 	void packet_ready_rtp_audio(const unsigned char *buf, int size);
 	void packet_ready_rtp_video(const unsigned char *buf, int size);
+	gboolean fileReady();
+
+	bool addAudioChain();
+	bool addVideoChain();
+	bool getCaps();
 };
 
 }
