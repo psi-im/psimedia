@@ -1251,7 +1251,9 @@ private slots:
 			QString fileName = QFileDialog::getSaveFileName(this,
 				tr("Save File"),
 				QDir::homePath(),
-				tr("Ogg Audio/Video (*.oga *.ogv *.ogg)"));
+				tr("Ogg Audio/Video (*.oga *.ogv)"));
+			if(fileName.isEmpty())
+				return;
 
 			recordFile = new QFile(fileName, this);
 			if(!recordFile->open(QIODevice::WriteOnly | QIODevice::Truncate))
