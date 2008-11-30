@@ -206,6 +206,60 @@ static bool video_codec_get_recv_elements(const QString &name, GstElement **dec,
 	return true;
 }
 
+// adapted from psimedia.cpp
+static bool compare_PPayloadInfo_Parameter(const PPayloadInfo::Parameter &a, const PPayloadInfo::Parameter &b)
+{
+	// according to xep-167, parameter names are case-sensitive
+	if(a.name == b.name && a.value == b.value)
+		return true;
+	else
+		return false;
+}
+
+static bool compareUnordered_PPayloadInfo_Parameter(const QList<PPayloadInfo::Parameter> &a, const QList<PPayloadInfo::Parameter> &b)
+{
+	if(a.count() != b.count())
+		return false;
+
+	// for every parameter in 'a'
+	foreach(const PPayloadInfo::Parameter &p, a)
+	{
+		// make sure it is found in 'b'
+		bool found = false;
+		foreach(const PPayloadInfo::Parameter &p2, b)
+		{
+			if(compare_PPayloadInfo_Parameter(p2, p))
+			{
+				found = true;
+				break;
+			}
+		}
+		if(!found)
+			return false;
+	}
+
+	return true;
+}
+
+static bool compare_PPayloadInfo(const PPayloadInfo &a, const PPayloadInfo &b)
+{
+	// according to xep-167, parameters are unordered
+	if(a.id == b.id &&
+		a.name == b.name &&
+		a.clockrate == b.clockrate &&
+		a.channels == b.channels &&
+		a.ptime == b.ptime &&
+		a.maxptime == b.maxptime &&
+		compareUnordered_PPayloadInfo_Parameter(a.parameters, b.parameters))
+	{
+		return true;
+	}
+	else
+		return false;
+
+	return true;
+}
+
 //----------------------------------------------------------------------------
 // GstBusSource
 //----------------------------------------------------------------------------
@@ -871,7 +925,7 @@ gboolean RtpWorker::doStart()
 
 			if(!getCaps())
 			{
-				error = RtpSessionContext::ErrorGeneric;
+				error = RtpSessionContext::ErrorCodec;
 				if(cb_error)
 					cb_error(app);
 				return FALSE;
@@ -1197,7 +1251,7 @@ gboolean RtpWorker::fileReady()
 
 	if(!getCaps())
 	{
-		error = RtpSessionContext::ErrorGeneric;
+		error = RtpSessionContext::ErrorCodec;
 		if(cb_error)
 			cb_error(app);
 		return FALSE;
@@ -1450,6 +1504,31 @@ bool RtpWorker::getCaps()
 		localVideoPayloadInfo = QList<PPayloadInfo>() << pi;
 		canTransmitVideo = true;
 	}
+
+	// FIXME: this is way wrong
+	bool okcodecs = true;
+	if(!localAudioPayloadInfo.isEmpty() && !remoteAudioPayloadInfo.isEmpty())
+	{
+		// reduce to 1 item
+		remoteAudioPayloadInfo = QList<PPayloadInfo>() << remoteAudioPayloadInfo.first();
+
+		if(!compare_PPayloadInfo(localAudioPayloadInfo.first(), remoteAudioPayloadInfo.first()))
+		{
+			okcodecs = false;
+		}
+	}
+	if(!localVideoPayloadInfo.isEmpty() && !remoteVideoPayloadInfo.isEmpty())
+	{
+		// reduce to 1 item
+		remoteVideoPayloadInfo = QList<PPayloadInfo>() << remoteVideoPayloadInfo.first();
+
+		if(!compare_PPayloadInfo(localVideoPayloadInfo.first(), remoteVideoPayloadInfo.first()))
+		{
+			okcodecs = false;
+		}
+	}
+	if(!okcodecs)
+		return false;
 
 	return true;
 }
