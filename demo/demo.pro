@@ -1,6 +1,8 @@
 CONFIG -= app_bundle
 QT += network
 
+CONFIG += debug
+
 include(../psimedia/psimedia.pri)
 INCLUDEPATH += ../psimedia
 
