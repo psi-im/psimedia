@@ -25,7 +25,6 @@
 #include <QByteArray>
 #include <QImage>
 #include <QMutex>
-#include <QTime>
 #include <gst/gst.h>
 #include "psimediaprovider.h"
 #include "gstcustomelements/gstcustomelements.h"
@@ -119,11 +118,23 @@ private:
 	GstElement *videortpsrc;
 	GstElement *audiortppay;
 	GstElement *videortppay;
-	GstElement *volumein, *volumeout;
+	GstElement *volumein;
+	GstElement *volumeout;
+	bool rtpaudioout;
+	bool rtpvideoout;
+	QMutex audiortpsrc_mutex;
+	QMutex videortpsrc_mutex;
+	QMutex volumein_mutex;
+	QMutex volumeout_mutex;
+	QMutex rtpaudioout_mutex;
+	QMutex rtpvideoout_mutex;
+
+	GSource *recordTimer;
 
 	void cleanup();
 
 	static gboolean cb_doStart(gpointer data);
+	static gboolean cb_doUpdate(gpointer data);
 	static gboolean cb_doStop(gpointer data);
 	static void cb_fileDemux_no_more_pads(GstElement *element, gpointer data);
 	static void cb_fileDemux_pad_added(GstElement *element, GstPad *pad, gpointer data);
@@ -136,6 +147,7 @@ private:
 	static gboolean cb_fileReady(gpointer data);
 
 	gboolean doStart();
+	gboolean doUpdate();
 	gboolean doStop();
 	void fileDemux_no_more_pads(GstElement *element);
 	void fileDemux_pad_added(GstElement *element, GstPad *pad);

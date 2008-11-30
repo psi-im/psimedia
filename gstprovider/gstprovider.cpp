@@ -24,6 +24,7 @@
 #include <QImage>
 #include <QMutex>
 #include <QWaitCondition>
+#include <QTime>
 #include <QtPlugin>
 #include <QIODevice>
 #include "devices.h"
@@ -369,14 +370,13 @@ public:
 		isStopping = false;
 		pending_status = false;
 
-		write_mutex.lock();
-		allow_writes = false;
-		write_mutex.unlock();
-
 		recorder.control = 0;
 
+		write_mutex.lock();
+		allow_writes = false;
 		delete control;
 		control = 0;
+		write_mutex.unlock();
 	}
 
 	virtual void setAudioOutputDevice(const QString &deviceId)
@@ -505,6 +505,8 @@ public:
 	{
 		Q_ASSERT(!control && !isStarted);
 
+		write_mutex.lock();
+
 		control = new RwControlLocal(gstThread, this);
 		connect(control, SIGNAL(statusReady(const RwControlStatus &)), SLOT(control_statusReady(const RwControlStatus &)));
 		connect(control, SIGNAL(previewFrame(const QImage &)), SLOT(control_previewFrame(const QImage &)));
@@ -516,11 +518,10 @@ public:
 		control->cb_rtpVideoOut = cb_control_rtpVideoOut;
 		control->cb_recordData = cb_control_recordData;
 
-		recorder.control = control;
-
-		write_mutex.lock();
 		allow_writes = true;
 		write_mutex.unlock();
+
+		recorder.control = control;
 
 		lastStatus = RwControlStatus();
 		isStarted = false;
@@ -644,7 +645,7 @@ public:
 	void push_packet_for_write(GstRtpChannel *from, const PRtpPacket &rtp)
 	{
 		QMutexLocker locker(&write_mutex);
-		if(!allow_writes)
+		if(!allow_writes || !control)
 			return;
 
 		if(from == &audioRtp)

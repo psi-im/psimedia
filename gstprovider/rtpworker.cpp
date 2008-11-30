@@ -21,6 +21,7 @@
 #include "rtpworker.h"
 
 #include <QStringList>
+#include <QTime>
 #include "devices.h"
 #include "payloadinfo.h"
 
@@ -282,6 +283,8 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
 	loopFile(false),
 	canTransmitAudio(false),
 	canTransmitVideo(false),
+	outputVolume(100),
+	inputVolume(100),
 	cb_started(0),
 	cb_updated(0),
 	cb_stopped(0),
@@ -296,7 +299,14 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
 	timer(0),
 	sendPipeline(0),
 	rpipeline(0),
-	rvpipeline(0)
+	rvpipeline(0),
+	audiortpsrc(0),
+	videortpsrc(0),
+	volumein(0),
+	volumeout(0),
+	rtpaudioout(false),
+	rtpvideoout(false),
+	recordTimer(0)
 {
 	source_ensureInit();
 }
@@ -304,11 +314,47 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
 RtpWorker::~RtpWorker()
 {
 	if(timer)
+	{
 		g_source_destroy(timer);
+		timer = 0;
+	}
+
+	if(recordTimer)
+	{
+		g_source_destroy(recordTimer);
+		recordTimer = 0;
+	}
+
+	cleanup();
 }
 
 void RtpWorker::cleanup()
 {
+	printf("cleaning up...\n");
+	volumein_mutex.lock();
+	volumein = 0;
+	volumein_mutex.unlock();
+
+	volumeout_mutex.lock();
+	volumeout = 0;
+	volumeout_mutex.unlock();
+
+	audiortpsrc_mutex.lock();
+	audiortpsrc = 0;
+	audiortpsrc_mutex.unlock();
+
+	videortpsrc_mutex.lock();
+	videortpsrc = 0;
+	videortpsrc_mutex.unlock();
+
+	rtpaudioout_mutex.lock();
+	rtpaudioout = false;
+	rtpaudioout_mutex.unlock();
+
+	rtpvideoout_mutex.lock();
+	rtpvideoout = false;
+	rtpvideoout_mutex.unlock();
+
 	if(sendPipeline)
 	{
 		gst_element_set_state(sendPipeline, GST_STATE_NULL);
@@ -335,6 +381,7 @@ void RtpWorker::cleanup()
 		gst_object_unref(GST_OBJECT(rvpipeline));
 		rvpipeline = 0;
 	}
+	printf("cleaning done.\n");
 }
 
 void RtpWorker::start()
@@ -347,29 +394,38 @@ void RtpWorker::start()
 
 void RtpWorker::update()
 {
-	// TODO
+	Q_ASSERT(!timer);
+	timer = g_timeout_source_new(0);
+	g_source_set_callback(timer, cb_doUpdate, this, NULL);
+	g_source_attach(timer, mainContext_);
 }
 
 void RtpWorker::transmitAudio(int index)
 {
-	// TODO
+	// FIXME
 	Q_UNUSED(index);
+	QMutexLocker locker(&rtpaudioout_mutex);
+	rtpaudioout = true;
 }
 
 void RtpWorker::transmitVideo(int index)
 {
-	// TODO
+	// FIXME
 	Q_UNUSED(index);
+	QMutexLocker locker(&rtpvideoout_mutex);
+	rtpvideoout = true;
 }
 
 void RtpWorker::pauseAudio()
 {
-	// TODO
+	QMutexLocker locker(&rtpaudioout_mutex);
+	rtpaudioout = false;
 }
 
 void RtpWorker::pauseVideo()
 {
-	// TODO
+	QMutexLocker locker(&rtpvideoout_mutex);
+	rtpvideoout = false;
 }
 
 void RtpWorker::stop()
@@ -382,43 +438,61 @@ void RtpWorker::stop()
 
 void RtpWorker::rtpAudioIn(const PRtpPacket &packet)
 {
-	// FIXME: mutex-protect rtpsrc which may or may not exist
+	QMutexLocker locker(&audiortpsrc_mutex);
 	if(packet.portOffset == 0 && audiortpsrc)
 		gst_apprtpsrc_packet_push((GstAppRtpSrc *)audiortpsrc, (const unsigned char *)packet.rawValue.data(), packet.rawValue.size());
 }
 
 void RtpWorker::rtpVideoIn(const PRtpPacket &packet)
 {
-	// FIXME: mutex-protect rtpsrc which may or may not exist
+	QMutexLocker locker(&videortpsrc_mutex);
 	if(packet.portOffset == 0 && videortpsrc)
 		gst_apprtpsrc_packet_push((GstAppRtpSrc *)videortpsrc, (const unsigned char *)packet.rawValue.data(), packet.rawValue.size());
 }
 
 void RtpWorker::setOutputVolume(int level)
 {
-	// TODO
-	Q_UNUSED(level);
+	QMutexLocker locker(&volumeout_mutex);
+	outputVolume = level;
+	if(volumeout)
+	{
+		double vol = (double)level / 100;
+		g_object_set(G_OBJECT(volumeout), "volume", vol, NULL);
+	}
 }
 
 void RtpWorker::setInputVolume(int level)
 {
-	// TODO
-	Q_UNUSED(level);
+	QMutexLocker locker(&volumein_mutex);
+	inputVolume = level;
+	if(volumein)
+	{
+		double vol = (double)level / 100;
+		g_object_set(G_OBJECT(volumein), "volume", vol, NULL);
+	}
 }
 
 void RtpWorker::recordStart()
 {
-	// TODO
+	// FIXME: for now we just send EOF/error
+	if(cb_recordData)
+		cb_recordData(QByteArray(), app);
 }
 
 void RtpWorker::recordStop()
 {
-	// TODO
+	// TODO: assert recording
+	// FIXME: don't just do nothing
 }
 
 gboolean RtpWorker::cb_doStart(gpointer data)
 {
 	return ((RtpWorker *)data)->doStart();
+}
+
+gboolean RtpWorker::cb_doUpdate(gpointer data)
+{
+	return ((RtpWorker *)data)->doUpdate();
 }
 
 gboolean RtpWorker::cb_doStop(gpointer data)
@@ -564,11 +638,14 @@ gboolean RtpWorker::doStart()
 		//GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(e_pipeline));
 		//gst_bus_add_watch(bus, bus_call, loop);
 		//gst_object_unref(bus);
-		GSource *source = g_source_new(&source_funcs, sizeof(GstBusSource));
+
+		// FIXME: commenting this out because it uses too much cpu.
+		//   downside is we lose looping file feature
+		/*GSource *source = g_source_new(&source_funcs, sizeof(GstBusSource));
 		((GstBusSource*)source)->bus = gst_pipeline_get_bus(GST_PIPELINE(sendPipeline));
 		g_source_set_callback(source, (GSourceFunc)cb_bus_call, this, NULL);
 		g_source_attach(source, mainContext_);
-		g_source_unref(source);
+		g_source_unref(source);*/
 	}
 
 	if(audiosrc)
@@ -605,7 +682,9 @@ gboolean RtpWorker::doStart()
 			GstStructure *cs;
 			GstCaps *caps;
 
+			audiortpsrc_mutex.lock();
 			audiortpsrc = gst_element_factory_make("apprtpsrc", NULL);
+			audiortpsrc_mutex.unlock();
 			cs = payloadInfoToStructure(remoteAudioPayloadInfo.first(), "audio");
 			if(!cs)
 			{
@@ -631,7 +710,9 @@ gboolean RtpWorker::doStart()
 			GstStructure *cs;
 			GstCaps *caps;
 
+			videortpsrc_mutex.lock();
 			videortpsrc = gst_element_factory_make("apprtpsrc", NULL);
+			videortpsrc_mutex.unlock();
 			cs = payloadInfoToStructure(remoteVideoPayloadInfo.first(), "video");
 			if(!cs)
 			{
@@ -659,6 +740,14 @@ gboolean RtpWorker::doStart()
 			//GstElement *audiortpdepay = gst_element_factory_make("rtpspeexdepay", NULL);
 			//GstElement *audiodec = gst_element_factory_make("speexdec", NULL);
 			GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
+
+			{
+				QMutexLocker locker(&volumeout_mutex);
+				volumeout = gst_element_factory_make("volume", NULL);
+				double vol = (double)outputVolume / 100;
+				g_object_set(G_OBJECT(volumeout), "volume", vol, NULL);
+			}
+
 			GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
 			GstElement *audioout = 0;
 
@@ -668,14 +757,14 @@ gboolean RtpWorker::doStart()
 
 			if(audiortpjitterbuffer)
 			{
-				gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
-				gst_element_link_many(audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
+				gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, volumeout, audioresample, NULL);
+				gst_element_link_many(audiortpsrc, audiortpjitterbuffer, audiortpdepay, audiodec, audioconvert, volumeout, audioresample, NULL);
 				g_object_set(G_OBJECT(audiortpjitterbuffer), "latency", (unsigned int)400, NULL);
 			}
 			else
 			{
-				gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
-				gst_element_link_many(audiortpsrc, audiortpdepay, audiodec, audioconvert, audioresample, NULL);
+				gst_bin_add_many(GST_BIN(rpipeline), audiortpsrc, audiortpdepay, audiodec, audioconvert, volumeout, audioresample, NULL);
+				gst_element_link_many(audiortpsrc, audiortpdepay, audiodec, audioconvert, volumeout, audioresample, NULL);
 			}
 
 			if(!aout.isEmpty())
@@ -765,12 +854,12 @@ gboolean RtpWorker::doStart()
 			gst_element_set_state(sendPipeline, GST_STATE_PAUSED);
 			gst_element_get_state(sendPipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 
-			if(loopFile)
+			/*if(loopFile)
 			{
 				gst_element_seek(sendPipeline, 1, GST_FORMAT_TIME,
 					(GstSeekFlags)(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_SEGMENT),
 					GST_SEEK_TYPE_SET, 0, GST_SEEK_TYPE_END, 0);
-			}
+			}*/
 
 			return FALSE;
 		}
@@ -792,6 +881,18 @@ gboolean RtpWorker::doStart()
 
 	if(cb_started)
 		cb_started(app);
+
+	return FALSE;
+}
+
+gboolean RtpWorker::doUpdate()
+{
+	timer = 0;
+
+	// TODO: an actual update
+
+	if(cb_updated)
+		cb_updated(app);
 
 	return FALSE;
 }
@@ -1043,7 +1144,8 @@ void RtpWorker::packet_ready_rtp_audio(const unsigned char *buf, int size)
 	}
 	++acalls;
 
-	if(cb_rtpAudioOut)
+	QMutexLocker locker(&rtpaudioout_mutex);
+	if(cb_rtpAudioOut && rtpaudioout)
 		cb_rtpAudioOut(packet, app);
 }
 
@@ -1073,12 +1175,23 @@ void RtpWorker::packet_ready_rtp_video(const unsigned char *buf, int size)
 	}
 	++vcalls;
 
-	if(cb_rtpVideoOut)
+	QMutexLocker locker(&rtpvideoout_mutex);
+	if(cb_rtpVideoOut && rtpvideoout)
 		cb_rtpVideoOut(packet, app);
 }
 
 gboolean RtpWorker::fileReady()
 {
+	if(loopFile)
+	{
+		//gst_element_set_state(sendPipeline, GST_STATE_PAUSED);
+		//gst_element_get_state(sendPipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+		gst_element_seek(sendPipeline, 1, GST_FORMAT_TIME,
+			(GstSeekFlags)(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_SEGMENT),
+			GST_SEEK_TYPE_SET, 0, GST_SEEK_TYPE_END, 0);
+	}
+
 	gst_element_set_state(sendPipeline, GST_STATE_PLAYING);
 	gst_element_get_state(sendPipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 
@@ -1113,7 +1226,14 @@ bool RtpWorker::addAudioChain()
 		return false;
 
 	GstElement *queue = gst_element_factory_make("queue", NULL);
-	volumein = gst_element_factory_make("volume", NULL);
+
+	{
+		QMutexLocker locker(&volumein_mutex);
+		volumein = gst_element_factory_make("volume", NULL);
+		double vol = (double)inputVolume / 100;
+		g_object_set(G_OBJECT(volumein), "volume", vol, NULL);
+	}
+
 	GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
 	GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
 
@@ -1181,6 +1301,8 @@ bool RtpWorker::addVideoChain()
 	GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videoplaysink;
 	appVideoSink->appdata = this;
 	appVideoSink->show_frame = cb_show_frame_preview;
+	// TODO: do we want to do this?
+	g_object_set(G_OBJECT(appVideoSink), "sync", FALSE, NULL);
 
 	GstElement *rtpqueue = gst_element_factory_make("queue", NULL);
 	GstElement *videoconvertrtp = gst_element_factory_make("ffmpegcolorspace", NULL);
@@ -1269,19 +1391,15 @@ bool RtpWorker::addVideoChain()
 
 bool RtpWorker::getCaps()
 {
-	//gst_element_get_state(audiortppay, NULL, NULL, GST_CLOCK_TIME_NONE);
-	//gst_element_set_state(sendPipeline, GST_STATE_PLAYING);
-	//gst_element_get_state(sendPipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-
 	if(audiortppay)
 	{
-		// make sure the payloader is playing
-		//gst_element_get_state(audiortppay, NULL, NULL, GST_CLOCK_TIME_NONE);
-		//gst_element_set_state(audiortppay, GST_STATE_PLAYING);
-		//gst_element_get_state(audiortppay, NULL, NULL, GST_CLOCK_TIME_NONE);
-
 		GstPad *pad = gst_element_get_static_pad(audiortppay, "src");
 		GstCaps *caps = gst_pad_get_negotiated_caps(pad);
+		if(!caps)
+		{
+			printf("can't get audio caps\n");
+			return false;
+		}
 		gchar *gstr = gst_caps_to_string(caps);
 		QString capsString = QString::fromUtf8(gstr);
 		g_free(gstr);
@@ -1305,17 +1423,13 @@ bool RtpWorker::getCaps()
 
 	if(videortppay)
 	{
-		// make sure the payloader is playing
-		//gst_element_get_state(videortppay, NULL, NULL, GST_CLOCK_TIME_NONE);
-		//gst_element_set_state(videortppay, GST_STATE_PLAYING);
-		//gst_element_get_state(videortppay, NULL, NULL, GST_CLOCK_TIME_NONE);
-
-		printf("video rtp is playing\n");
-
 		GstPad *pad = gst_element_get_static_pad(videortppay, "src");
 		GstCaps *caps = gst_pad_get_negotiated_caps(pad);
 		if(!caps)
-			printf("can't get caps\n");
+		{
+			printf("can't get video caps\n");
+			return false;
+		}
 		gchar *gstr = gst_caps_to_string(caps);
 		QString capsString = QString::fromUtf8(gstr);
 		g_free(gstr);

@@ -154,14 +154,14 @@ RwControlLocal::RwControlLocal(GstThread *thread, QObject *parent) :
 
 RwControlLocal::~RwControlLocal()
 {
-	qDeleteAll(in);
-
 	// delete RwControlRemote, block until done
 	QMutexLocker locker(&m);
 	timer = g_timeout_source_new(0);
 	g_source_set_callback(timer, cb_doDestroyRemote, this, NULL);
 	g_source_attach(timer, thread_->mainContext());
 	w.wait(&m);
+
+	qDeleteAll(in);
 }
 
 void RwControlLocal::start(const RwControlConfigDevices &devices, const RwControlConfigCodecs &codecs)
@@ -373,9 +373,9 @@ RwControlRemote::RwControlRemote(GMainContext *mainContext, RwControlLocal *loca
 
 RwControlRemote::~RwControlRemote()
 {
-	qDeleteAll(in);
-
 	delete worker;
+
+	qDeleteAll(in);
 }
 
 gboolean RwControlRemote::cb_processMessages(gpointer data)
