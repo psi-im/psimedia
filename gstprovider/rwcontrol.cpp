@@ -251,11 +251,11 @@ gboolean RwControlLocal::doDestroyRemote()
 
 void RwControlLocal::processMessages()
 {
-	m.lock();
+	in_mutex.lock();
 	wake_pending = false;
 	QList<RwControlMessage*> list = in;
 	in.clear();
-	m.unlock();
+	in_mutex.unlock();
 
 	QPointer<QObject> self = this;
 
@@ -326,7 +326,7 @@ void RwControlLocal::processMessages()
 // note: this may be called from the remote thread
 void RwControlLocal::postMessage(RwControlMessage *msg)
 {
-	QMutexLocker locker(&m);
+	QMutexLocker locker(&in_mutex);
 
 	// if this is a frame, and the queue is maxed, then bump off the
 	//   oldest frame to make room

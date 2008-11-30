@@ -389,6 +389,7 @@ private:
 	RwControlRemote *remote_;
 	bool wake_pending;
 
+	QMutex in_mutex;
 	QList<RwControlMessage*> in;
 
 	static gboolean cb_doCreateRemote(gpointer data);
