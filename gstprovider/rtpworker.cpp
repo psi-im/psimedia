@@ -1355,8 +1355,6 @@ bool RtpWorker::addVideoChain()
 	GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videoplaysink;
 	appVideoSink->appdata = this;
 	appVideoSink->show_frame = cb_show_frame_preview;
-	// TODO: do we want to do this?
-	g_object_set(G_OBJECT(appVideoSink), "sync", FALSE, NULL);
 
 	GstElement *rtpqueue = gst_element_factory_make("queue", NULL);
 	GstElement *videoconvertrtp = gst_element_factory_make("ffmpegcolorspace", NULL);
