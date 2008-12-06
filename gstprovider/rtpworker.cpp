@@ -1003,7 +1003,7 @@ void RtpWorker::fileDemux_pad_added(GstElement *element, GstPad *pad)
 		GstElement *decoder = 0;
 		//GstElement *target = 0;
 
-		bool isAudio;
+		bool isAudio = false;
 
 		// FIXME: we should really just use decodebin
 		if(type == "audio")
