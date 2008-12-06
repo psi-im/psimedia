@@ -1,5 +1,6 @@
 include(deviceenum/deviceenum.pri)
 include(gstcustomelements/gstcustomelements.pri)
+include(gstelements/gstelements.pri)
 
 HEADERS += \
 	$$PWD/devices.h \
