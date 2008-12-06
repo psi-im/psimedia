@@ -654,23 +654,3 @@ gst_osx_video_sink_get_type (void)
 
   return osxvideosink_type;
 }
-
-static gboolean
-plugin_init (GstPlugin * plugin)
-{
-
-  if (!gst_element_register (plugin, "osxvideosink",
-          GST_RANK_PRIMARY, GST_TYPE_OSX_VIDEO_SINK))
-    return FALSE;
-
-  GST_DEBUG_CATEGORY_INIT (gst_debug_osx_video_sink, "osxvideosink", 0,
-      "osxvideosink element");
-
-  return TRUE;
-}
-
-GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
-    GST_VERSION_MINOR,
-    "osxvideo",
-    "OSX native video output plugin",
-    plugin_init, VERSION, GST_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

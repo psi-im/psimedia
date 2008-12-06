@@ -37,7 +37,6 @@
 #import "cocoawindow.h"
 
 GST_DEBUG_CATEGORY_EXTERN (gst_debug_osx_video_sink);
-#define GST_CAT_DEFAULT gst_debug_osx_video_sink
 
 G_BEGIN_DECLS
 
