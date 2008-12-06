@@ -30,13 +30,16 @@
 #endif
 
 #include "gstdirectsoundsink.h"
+#include "gstdirectsoundsrc.h"
 
 
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
   if (!gst_element_register (plugin, "directsoundsink", GST_RANK_PRIMARY,
-          GST_TYPE_DIRECTSOUND_SINK))
+          GST_TYPE_DIRECTSOUND_SINK) || 
+      !gst_element_register (plugin, "directsoundsrc", GST_RANK_PRIMARY,
+          GST_TYPE_DIRECTSOUND_SRC))
     return FALSE;
 
   return TRUE;
