@@ -1,17 +1,31 @@
-plugin_LTLIBRARIES = libgstdirectsoundsink.la
+plugin_LTLIBRARIES = libgstdirectsound.la
 
-libgstdirectsoundsink_la_SOURCES = gstdirectsoundsink.c \
+libgstdirectsound_la_SOURCES = \
+	gstdirectsoundplugin.c \
+	gstdirectsoundsink.c \
 	gstdirectsoundsrc.c \
-	gstdirectsoundplugin.c
+	gstdirectsound.c
 
-libgstdirectsoundsink_la_CFLAGS = $(GST_CFLAGS) $(GST_BASE_CFLAGS) \
-	$(GST_PLUGINS_BASE_CFLAGS) $(DIRECTSOUND_CFLAGS)
+libgstdirectsound_la_CFLAGS = \
+	$(GST_PLUGINS_BASE_CFLAGS) \
+	$(GST_BASE_CFLAGS) \
+	$(GST_CFLAGS) \
+	$(DIRECTSOUND_CFLAGS)
 
-libgstdirectsoundsink_la_LIBADD = $(DIRECTSOUND_LIBS) \
-	$(GST_BASE_LIBS) $(GST_PLUGINS_BASE_LIBS) \
-	-lgstaudio-$(GST_MAJORMINOR) -lgstinterfaces-$(GST_MAJORMINOR)
+libgstdirectsound_la_LIBADD = \
+	$(GST_PLUGINS_BASE_LIBS) \
+	$(GST_BASE_LIBS) \
+	$(DIRECTSOUND_LIBS) \
+	-lgstinterfaces-$(GST_MAJORMINOR) \
+	-lgstaudio-$(GST_MAJORMINOR)
 
-libgstdirectsoundsink_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS) $(DIRECTSOUND_LDFLAGS)
-libgstdirectsoundsink_la_LIBTOOLFLAGS = --tag=disable-static
+libgstdirectsound_la_LDFLAGS = \
+	$(GST_PLUGIN_LDFLAGS) \
+	$(DIRECTSOUND_LDFLAGS)
 
-noinst_HEADERS = gstdirectsoundsink.h gstdirectsoundsrc.h
+libgstdirectsound_la_LIBTOOLFLAGS = --tag=disable-static
+
+noinst_HEADERS = \
+	gstdirectsoundsink.h \
+	gstdirectsoundsrc.h \
+	gstdirectsound.h

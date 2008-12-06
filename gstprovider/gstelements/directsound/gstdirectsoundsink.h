@@ -1,8 +1,6 @@
-/* GStreamer
- * Copyright (C)  2005 Sebastien Moutte <sebastien@moutte.net>
+/*
+ * Copyright (C) 2005 Sebastien Moutte <sebastien@moutte.net>
  * Copyright (C) 2007 Pioneers of the Inevitable <songbird@songbirdnest.com>
- *
- * gstdirectsoundsink.h: 
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -19,10 +17,10 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  *
+ *
  * The development of this code was made possible due to the involvement
  * of Pioneers of the Inevitable, the creators of the Songbird Music player
  *
- * 
  */
 
 #ifndef __GST_DIRECTSOUNDSINK_H__

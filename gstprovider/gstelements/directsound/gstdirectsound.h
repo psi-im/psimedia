@@ -1,5 +1,8 @@
 /*
+ * Copyright (C) 2005 Thomas Vander Stichele <thomas@apestaart.org>
+ * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
  * Copyright (C) 2005 Sebastien Moutte <sebastien@moutte.net>
+ * Copyright (C) 2006 Joni Valtanen <joni.valtanen@movial.fi>
  * Copyright (C) 2007 Pioneers of the Inevitable <songbird@songbirdnest.com>
  * Copyright (C) 2008 Barracuda Networks
  *
@@ -24,28 +27,7 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+#ifndef __GST_DIRECTSOUND_H__
+#define __GST_DIRECTSOUND_H__
 
-#include "gstdirectsoundsink.h"
-#include "gstdirectsoundsrc.h"
-
-static gboolean
-plugin_init (GstPlugin * plugin)
-{
-  if (!gst_element_register (plugin, "directsoundsink", GST_RANK_PRIMARY,
-          GST_TYPE_DIRECTSOUND_SINK))
-    return FALSE;
-  if (!gst_element_register (plugin, "directsoundsrc", GST_RANK_PRIMARY,
-          GST_TYPE_DIRECTSOUND_SRC))
-    return FALSE;
-
-  return TRUE;
-}
-
-GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
-    GST_VERSION_MINOR,
-    "directsound",
-    "Direct Sound plugin library",
-    plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)
+#endif /* __GST_DIRECTSOUND_H__ */
