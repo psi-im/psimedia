@@ -4,7 +4,7 @@
  * Copyright (C) 2005 Sebastien Moutte <sebastien@moutte.net>
  * Copyright (C) 2006 Joni Valtanen <joni.valtanen@movial.fi>
  * Copyright (C) 2007 Pioneers of the Inevitable <songbird@songbirdnest.com>
- * Copyright (C) 2008 Barracuda Networks
+ * Copyright (C) 2008 Barracuda Networks, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public

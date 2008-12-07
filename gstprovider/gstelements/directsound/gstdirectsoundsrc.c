@@ -3,7 +3,7 @@
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
  * Copyright (C) 2005 Sebastien Moutte <sebastien@moutte.net>
  * Copyright (C) 2006 Joni Valtanen <joni.valtanen@movial.fi>
- * Copyright (C) 2008 Barracuda Networks
+ * Copyright (C) 2008 Barracuda Networks, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
