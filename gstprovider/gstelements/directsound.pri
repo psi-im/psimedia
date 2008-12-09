@@ -7,7 +7,8 @@ SOURCES += \
 	$$PWD/directsound/gstdirectsound.c \
 	$$PWD/directsound/gstdirectsoundsrc.c \
 	$$PWD/directsound/gstdirectsoundsink.c \
-	$$PWD/directsound/gstdirectsoundplugin.c
+	#$$PWD/directsound/gstdirectsoundplugin.c
+	$$PWD/directsound_static.c
 
 LIBS *= \
 	-lgstinterfaces-0.10 \

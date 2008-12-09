@@ -11,4 +11,5 @@ SOURCES += \
 	$$PWD/winks/ksvideohelpers.c \
 	$$PWD/winks/gstksclock.c \
 	$$PWD/winks/gstksvideodevice.c \
-	$$PWD/winks/gstksvideosrc.c
+	#$$PWD/winks/gstksvideosrc.c
+	$$PWD/winks_static.c
