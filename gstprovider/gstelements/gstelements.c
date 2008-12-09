@@ -20,6 +20,8 @@
 
 #include "gstelements.h"
 
+#include <QtGlobal>
+
 void gstelements_rtpmanager_register();
 
 #ifdef Q_OS_WIN
