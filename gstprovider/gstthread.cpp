@@ -28,6 +28,7 @@
 #include <QWaitCondition>
 #include <gst/gst.h>
 #include "gstcustomelements/gstcustomelements.h"
+#include "gstelements/gstelements.h"
 
 namespace PsiMedia {
 
@@ -162,6 +163,7 @@ public:
 			loadPlugins(pluginPath);
 
 		gstcustomelements_register();
+		gstelements_register();
 
 		QStringList reqelem = QStringList()
 			<< "speexenc" << "speexdec"

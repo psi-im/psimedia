@@ -9,3 +9,6 @@ mac {
 	include(osxaudio.pri)
 	include(osxvideo.pri)
 }
+
+HEADERS += $$PWD/gstelements.h
+SOURCES += $$PWD/gstelements.c

@@ -46,7 +46,9 @@
  * </refsect2>
  */
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 /* Object header */
 #include "osxvideosink.h"

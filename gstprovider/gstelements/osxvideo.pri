@@ -5,7 +5,7 @@ HEADERS += \
 
 SOURCES += \
 	#$$PWD/osxvideo/osxvideoplugin.m \
-	$$PWD/osxvideo/osxvideo_static.m \
+	$$PWD/osxvideo_static.m \
 	$$PWD/osxvideo/osxvideosink.m \
 	$$PWD/osxvideo/cocoawindow.m \
 	$$PWD/osxvideo/osxvideosrc.c
@@ -15,6 +15,6 @@ LIBS *= \
 	-lgstvideo-0.10
 
 LIBS += \
-	-framework Cocoa
-	-framework QuickTime
+	-framework Cocoa \
+	-framework QuickTime \
 	-framework OpenGL
