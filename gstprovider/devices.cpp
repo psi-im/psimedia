@@ -91,7 +91,11 @@ static bool element_should_use_probe(const QString &element_name)
 		element_name == "v4lsrc" ||
 		element_name == "v4l2src" ||
 		element_name == "osxaudiosrc" ||
-		element_name == "osxaudiosink")
+		element_name == "osxaudiosink" ||
+		element_name == "osxvideosrc" ||
+		element_name == "directsoundsrc" ||
+		element_name == "directsoundsink" ||
+		element_name == "ksvideosrc")
 	{
 		return false;
 	}
@@ -224,14 +228,17 @@ static QString element_name_for_driver(const QString &driver, PDevice::Type type
 		if(type == PDevice::VideoIn)
 			element_name = "v4l2src";
 	}
-	else if(driver == "directshow")
+	else if(driver == "directsound")
 	{
 		if(type == PDevice::AudioOut)
 			element_name = "directsoundsink";
 		else if(type == PDevice::AudioIn)
-			element_name = "dshowaudiosrc";
-		else if(type == PDevice::VideoIn)
-			element_name = "dshowvideosrc";
+			element_name = "directsoundsrc";
+	}
+	else if(driver == "winks")
+	{
+		if(type == PDevice::VideoIn)
+			element_name = "ksvideosrc";
 	}
 
 	return element_name;
@@ -366,14 +373,14 @@ QList<GstDevice> devices_list(PDevice::Type type)
 		drivers
 		<< "alsa"
 		<< "osxaudio"
-		<< "directshow";
+		<< "directsound";
 	}
 	else if(type == PDevice::AudioIn)
 	{
 		drivers
 		<< "alsa"
 		<< "osxaudio"
-		<< "directshow";
+		<< "directsound";
 	}
 	else // PDevice::VideoIn
 	{
@@ -381,7 +388,7 @@ QList<GstDevice> devices_list(PDevice::Type type)
 		<< "v4l"
 		<< "v4l2"
 		<< "osxvideo"
-		<< "directshow";
+		<< "winks";
 	}
 
 	return devices_for_drivers(drivers, type);
@@ -400,6 +407,8 @@ GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *ca
 		return 0;
 
 	GstElement *e = make_element_with_device(element_name, device_id);
+	if(!e)
+		return 0;
 
 	gst_element_set_state(e, GST_STATE_READY);
 	int ret = gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);

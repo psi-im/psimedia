@@ -24,57 +24,54 @@ namespace DeviceEnum {
 
 QList<Item> audioOutputItems(const QString &driver)
 {
+	Q_UNUSED(driver);
+
 	QList<Item> out;
 
-	if(driver == "directshow")
-	{
-		// hardcode a default output device
-		Item i;
-		i.type = Item::Audio;
-		i.dir = Item::Output;
-		i.name = "Default";
-		i.driver = "directshow";
-		i.id = QString(); // unspecified
-		out += i;
-	}
+	// hardcode a default output device
+	Item i;
+	i.type = Item::Audio;
+	i.dir = Item::Output;
+	i.name = "Default";
+	i.driver = "directsound";
+	i.id = QString(); // unspecified
+	out += i;
 
 	return out;
 }
 
 QList<Item> audioInputItems(const QString &driver)
 {
+	Q_UNUSED(driver);
+
 	QList<Item> out;
 
-	if(driver == "directshow")
-	{
-		// hardcode a default input device
-		Item i;
-		i.type = Item::Audio;
-		i.dir = Item::Input;
-		i.name = "Default";
-		i.driver = "directshow";
-		i.id = QString(); // unspecified
-		out += i;
-	}
+	// hardcode a default input device
+	Item i;
+	i.type = Item::Audio;
+	i.dir = Item::Input;
+	i.name = "Default";
+	i.driver = "directsound";
+	i.id = QString(); // unspecified
+	out += i;
 
 	return out;
 }
 
 QList<Item> videoInputItems(const QString &driver)
 {
+	Q_UNUSED(driver);
+
 	QList<Item> out;
 
-	if(driver == "directshow")
-	{
-		// hardcode a default input device
-		Item i;
-		i.type = Item::Video;
-		i.dir = Item::Input;
-		i.name = "Default";
-		i.driver = "directshow";
-		i.id = QString(); // unspecified
-		out += i;
-	}
+	// hardcode a default input device
+	Item i;
+	i.type = Item::Video;
+	i.dir = Item::Input;
+	i.name = "Default";
+	i.driver = "winks";
+	i.id = QString(); // unspecified
+	out += i;
 
 	return out;
 }
