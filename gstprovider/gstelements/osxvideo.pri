@@ -4,11 +4,12 @@ HEADERS += \
 	$$PWD/osxvideo/osxvideosrc.h
 
 SOURCES += \
-	#$$PWD/osxvideo/osxvideoplugin.m \
-	$$PWD/osxvideo_static.m \
 	$$PWD/osxvideo/osxvideosink.m \
 	$$PWD/osxvideo/cocoawindow.m \
 	$$PWD/osxvideo/osxvideosrc.c
+
+plugin:$$PWD/osxvideo/osxvideoplugin.m
+!plugin:$$PWD/osxvideo_static.m
 
 LIBS *= \
 	-lgstinterfaces-0.10 \
