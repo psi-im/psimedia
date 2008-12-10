@@ -48,9 +48,9 @@
 #endif
 
 
-#include "osxaudio/gstosxaudioelement.h"
-#include "osxaudio/gstosxaudiosink.h"
-#include "osxaudio/gstosxaudiosrc.h"
+#include "../osxaudio/gstosxaudioelement.h"
+#include "../osxaudio/gstosxaudiosink.h"
+#include "../osxaudio/gstosxaudiosrc.h"
 
 static gboolean
 plugin_init (GstPlugin * plugin)

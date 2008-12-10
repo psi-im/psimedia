@@ -10,9 +10,10 @@ SOURCES += \
 	$$PWD/winks/kshelpers.c \
 	$$PWD/winks/ksvideohelpers.c \
 	$$PWD/winks/gstksclock.c \
-	$$PWD/winks/gstksvideodevice.c \
-	#$$PWD/winks/gstksvideosrc.c
-	$$PWD/winks_static.c
+	$$PWD/winks/gstksvideodevice.c
+
+gstplugin:SOURCES += $$PWD/winks/gstksvideosrc.c
+!gstplugin:SOURCES += $$PWD/static/winks_static.c
 
 LIBS *= \
 	-lsetupapi \

@@ -38,12 +38,12 @@
 # include <config.h>
 #endif
 
-#include "winks/gstksvideosrc.h"
+#include "../winks/gstksvideosrc.h"
 
-#include "winks/gstksclock.h"
-#include "winks/gstksvideodevice.h"
-#include "winks/kshelpers.h"
-#include "winks/ksvideohelpers.h"
+#include "../winks/gstksclock.h"
+#include "../winks/gstksvideodevice.h"
+#include "../winks/kshelpers.h"
+#include "../winks/ksvideohelpers.h"
 
 #define DEFAULT_DEVICE_PATH     NULL
 #define DEFAULT_DEVICE_NAME     NULL

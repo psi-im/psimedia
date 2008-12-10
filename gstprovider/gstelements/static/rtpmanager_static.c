@@ -21,12 +21,12 @@
 #include "config.h"
 #endif
 
-#include "rtpmanager/gstrtpbin.h"
-#include "rtpmanager/gstrtpclient.h"
-#include "rtpmanager/gstrtpjitterbuffer.h"
-#include "rtpmanager/gstrtpptdemux.h"
-#include "rtpmanager/gstrtpsession.h"
-#include "rtpmanager/gstrtpssrcdemux.h"
+#include "../rtpmanager/gstrtpbin.h"
+#include "../rtpmanager/gstrtpclient.h"
+#include "../rtpmanager/gstrtpjitterbuffer.h"
+#include "../rtpmanager/gstrtpptdemux.h"
+#include "../rtpmanager/gstrtpsession.h"
+#include "../rtpmanager/gstrtpssrcdemux.h"
 
 static gboolean
 plugin_init (GstPlugin * plugin)

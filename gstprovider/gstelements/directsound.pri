@@ -6,9 +6,10 @@ HEADERS += \
 SOURCES += \
 	$$PWD/directsound/gstdirectsound.c \
 	$$PWD/directsound/gstdirectsoundsrc.c \
-	$$PWD/directsound/gstdirectsoundsink.c \
-	#$$PWD/directsound/gstdirectsoundplugin.c
-	$$PWD/directsound_static.c
+	$$PWD/directsound/gstdirectsoundsink.c
+
+gstplugin:SOURCES += $$PWD/directsound/gstdirectsoundplugin.c
+!gstplugin:SOURCES += $$PWD/static/directsound_static.c
 
 LIBS *= \
 	-lgstinterfaces-0.10 \

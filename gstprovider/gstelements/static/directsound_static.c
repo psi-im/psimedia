@@ -1,8 +1,8 @@
-/* GStreamer
- * OSX video sink
- * Copyright (C) 2004-6 Zaheer Abbas Merali <zaheerabbas at merali dot org>
+/*
+ * Copyright (C) 2005 Sebastien Moutte <sebastien@moutte.net>
  * Copyright (C) 2007 Pioneers of the Inevitable <songbird@songbirdnest.com>
- * 
+ * Copyright (C) 2008 Barracuda Networks, Inc.
+ *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
  * License as published by the Free Software Foundation; either
@@ -18,47 +18,39 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  *
- * The development of this code was made possible due to the involvement of
- * Pioneers of the Inevitable, the creators of the Songbird Music player.
- * 
+ *
+ * The development of this code was made possible due to the involvement
+ * of Pioneers of the Inevitable, the creators of the Songbird Music player
+ *
  */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-/* Object header */
-#include "osxvideo/osxvideosink.h"
-#include "osxvideo/osxvideosrc.h"
+#include "../directsound/gstdirectsoundsink.h"
+#include "../directsound/gstdirectsoundsrc.h"
 
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
-
-  if (!gst_element_register (plugin, "osxvideosink",
-          GST_RANK_PRIMARY, GST_TYPE_OSX_VIDEO_SINK))
+  if (!gst_element_register (plugin, "directsoundsink", GST_RANK_PRIMARY,
+          GST_TYPE_DIRECTSOUND_SINK))
     return FALSE;
-
-  GST_DEBUG_CATEGORY_INIT (gst_debug_osx_video_sink, "osxvideosink", 0,
-      "osxvideosink element");
-
-  if (!gst_element_register (plugin, "osxvideosrc",
-                             GST_RANK_PRIMARY, GST_TYPE_OSX_VIDEO_SRC))
+  if (!gst_element_register (plugin, "directsoundsrc", GST_RANK_PRIMARY,
+          GST_TYPE_DIRECTSOUND_SRC))
     return FALSE;
-  
-  GST_DEBUG_CATEGORY_INIT (gst_debug_osx_video_src, "osxvideosrc", 0,
-                           "osxvideosrc element");
 
   return TRUE;
 }
 
-void gstelements_osxvideo_register()
+void gstelements_directsound_register()
 {
   gst_plugin_register_static(
     GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
-    "osxvideo",
-    "OSX native video input/output plugin",
+    "directsound",
+    "Direct Sound plugin library",
     plugin_init,
     "1.0.0",
     "LGPL",

@@ -12,8 +12,6 @@ HEADERS += \
 	$$PWD/rtpmanager/gstrtpsession.h
 
 SOURCES += \
-	#$$PWD/rtpmanager/gstrtpmanager.c \
-	$$PWD/rtpmanager_static.c \
 	$$PWD/rtpmanager/gstrtpbin-marshal.c \
 	$$PWD/rtpmanager/gstrtpbin.c \
 	$$PWD/rtpmanager/gstrtpclient.c \
@@ -25,6 +23,9 @@ SOURCES += \
 	$$PWD/rtpmanager/rtpsource.c \
 	$$PWD/rtpmanager/rtpstats.c \
 	$$PWD/rtpmanager/gstrtpsession.c
+
+gstplugin:SOURCES += $$PWD/rtpmanager/gstrtpmanager.c
+!gstplugin:SOURCES += $$PWD/static/rtpmanager_static.c
 
 LIBS *= \
 	-lgstnetbuffer-0.10 \
