@@ -8,4 +8,4 @@ include(../../../gstconf.pri)
 DEFINES += HAVE_CONFIG_H
 INCLUDEPATH += $$PWD/..
 
-include(../../osxvideo.pri)
+include(../../winks.pri)
