@@ -999,7 +999,7 @@ plugin_init (GstPlugin * plugin)
       GST_RANK_NONE, GST_TYPE_KS_VIDEO_SRC);
 }
 
-void gstelements_osxvideo_register()
+void gstelements_winks_register()
 {
   gst_plugin_register_static(
     GST_VERSION_MAJOR,
