@@ -15,6 +15,6 @@ SOURCES += \
 	$$PWD/winks_static.c
 
 LIBS *= \
-	-lsetupapi
-	-lksuser
+	-lsetupapi \
+	-lksuser \
 	-lamstrmid
