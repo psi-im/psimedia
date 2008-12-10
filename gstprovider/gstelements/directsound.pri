@@ -12,4 +12,6 @@ SOURCES += \
 
 LIBS *= \
 	-lgstinterfaces-0.10 \
-	-lgstaudio-0.10
+	-lgstaudio-0.10 \
+	-ldsound \
+	-ldxerr9

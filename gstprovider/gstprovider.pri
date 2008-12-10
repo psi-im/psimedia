@@ -21,16 +21,11 @@ SOURCES += \
 
 windows {
 	INCLUDEPATH += \
-		"C:\Program Files\Common Files\gtk+\include\glib-2.0" \
-		"C:\Program Files\Common Files\gtk+\lib\glib-2.0\include" \
-		"C:\Program Files\Common Files\libxml2\include" \
-		"C:\Program Files\Common Files\GStreamer\0.10\include" \
-		"C:\Program Files\Common Files\iconv\include" \
-		"C:\Program Files\Common Files\zlib\include"
-	LIBPATH += \
-		"C:\Progra~1\Common~1\gtk+\lib" \
-		"C:\Progra~1\Common~1\GStreamer\0.10\lib"
-	LIBS += -llibgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lgobject-2.0 -llibgstvideo-0.10 -llibgstbase-0.10 -llibgstinterfaces-0.10
+		c:/mingw/include/glib-2.0 \
+		c:/mingw/lib/glib-2.0/include \
+		c:/msys/1.0/home/gst/include/gstreamer-0.10
+	LIBS += \
+		-Lc:/msys/1.0/home/gst/lib -llibgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lgobject-2.0 -llibgstvideo-0.10 -llibgstbase-0.10 -llibgstinterfaces-0.10
 }
 
 unix:!mac {

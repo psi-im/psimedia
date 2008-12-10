@@ -13,3 +13,8 @@ SOURCES += \
 	$$PWD/winks/gstksvideodevice.c \
 	#$$PWD/winks/gstksvideosrc.c
 	$$PWD/winks_static.c
+
+LIBS *= \
+	-lsetupapi
+	-lksuser
+	-lamstrmid
