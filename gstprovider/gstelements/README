@@ -1,0 +1,8 @@
+We keep copies of GStreamer elements that either need maintenance to function
+or are from gst-plugins-bad.
+
+  directsound - windows audio in/out
+  winks - windows video in
+  osxaudio - mac audio in/out
+  osxvideo - mac video in/out
+  rtpmanager - rtp subsystem
