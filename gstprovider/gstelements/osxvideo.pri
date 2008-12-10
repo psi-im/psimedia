@@ -8,8 +8,11 @@ SOURCES += \
 	$$PWD/osxvideo/cocoawindow.m \
 	$$PWD/osxvideo/osxvideosrc.c
 
-plugin:$$PWD/osxvideo/osxvideoplugin.m
-!plugin:$$PWD/osxvideo_static.m
+plugin {
+	$$PWD/osxvideo/osxvideoplugin.m
+} else {
+	$$PWD/osxvideo_static.m
+}
 
 LIBS *= \
 	-lgstinterfaces-0.10 \
