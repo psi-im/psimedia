@@ -180,6 +180,7 @@ public:
 			<< "level"
 			<< "ffmpegcolorspace"
 			<< "videorate"
+			<< "videomaxrate"
 			<< "videoscale"
 			<< "gstrtpjitterbuffer";
 

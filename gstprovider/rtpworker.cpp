@@ -1345,7 +1345,7 @@ bool RtpWorker::addVideoChain()
 
 	GstElement *queue = gst_element_factory_make("queue", NULL);
 	GstElement *videoconvertprep = gst_element_factory_make("ffmpegcolorspace", NULL);
-	GstElement *videorate = gst_element_factory_make("videorate", NULL);
+	GstElement *videorate = gst_element_factory_make("videomaxrate", NULL);
 	GstElement *videoscale = gst_element_factory_make("videoscale", NULL);
 	GstElement *videotee = gst_element_factory_make("tee", NULL);
 
@@ -1421,8 +1421,8 @@ bool RtpWorker::addVideoChain()
 	}
 
 	gst_element_set_state(queue, GST_STATE_PAUSED);
-	gst_element_set_state(videorate, GST_STATE_PAUSED);
 	gst_element_set_state(videoconvertprep, GST_STATE_PAUSED);
+	gst_element_set_state(videorate, GST_STATE_PAUSED);
 	gst_element_set_state(videoscale, GST_STATE_PAUSED);
 	gst_element_set_state(videotee, GST_STATE_PAUSED);
 	gst_element_set_state(playqueue, GST_STATE_PAUSED);
