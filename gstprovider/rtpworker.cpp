@@ -1345,7 +1345,11 @@ bool RtpWorker::addVideoChain()
 
 	GstElement *queue = gst_element_factory_make("queue", NULL);
 	GstElement *videoconvertprep = gst_element_factory_make("ffmpegcolorspace", NULL);
-	GstElement *videorate = gst_element_factory_make("videomaxrate", NULL);
+	GstElement *videorate;
+	if(fileDemux)
+		videorate = gst_element_factory_make("videorate", NULL);
+	else // use videomaxrate for live sources
+		videorate = gst_element_factory_make("videomaxrate", NULL);
 	GstElement *videoscale = gst_element_factory_make("videoscale", NULL);
 	GstElement *videotee = gst_element_factory_make("tee", NULL);
 
