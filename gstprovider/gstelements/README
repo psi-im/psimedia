@@ -1,8 +1,9 @@
-We keep copies of GStreamer elements that either need maintenance to function
-or are from gst-plugins-bad.
+Here are GStreamer elements that we maintain outside of GStreamer CVS.  We also
+keep copies of elements from gst-plugins-bad.
 
   directsound - windows audio in/out
   winks - windows video in
   osxaudio - mac audio in/out
   osxvideo - mac video in/out
   rtpmanager - rtp subsystem
+  videomaxrate - limit framerate from a camera

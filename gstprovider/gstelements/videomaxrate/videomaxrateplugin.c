@@ -18,35 +18,24 @@
  *
  */
 
-#include "gstelements.h"
-
-#include <QtGlobal>
-
-void gstelements_rtpmanager_register();
-void gstelements_videomaxrate_register();
-
-#ifdef Q_OS_WIN
-void gstelements_directsound_register();
-void gstelements_winks_register();
+#ifdef HAVE_CONFIG_H
+#include "config.h"
 #endif
 
-#ifdef Q_OS_MAC
-void gstelements_osxaudio_register();
-void gstelements_osxvideo_register();
-#endif
+#include "videomaxrate.h"
 
-void gstelements_register()
+static gboolean
+plugin_init (GstPlugin * plugin)
 {
-	gstelements_rtpmanager_register();
-	gstelements_videomaxrate_register();
+  if (!gst_element_register (plugin, "videomaxrate", GST_RANK_NONE,
+          GST_TYPE_VIDEOMAXRATE))
+    return FALSE;
 
-#ifdef Q_OS_WIN
-	gstelements_directsound_register();
-	gstelements_winks_register();
-#endif
-
-#ifdef Q_OS_MAC
-	gstelements_osxaudio_register();
-	gstelements_osxvideo_register();
-#endif
+  return TRUE;
 }
+
+GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
+    GST_VERSION_MINOR,
+    "videomaxrate",
+    "Drop extra frames",
+    plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)
