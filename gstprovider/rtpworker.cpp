@@ -27,6 +27,7 @@
 
 // TODO: support playing from bytearray
 // TODO: support recording
+// FIXME: we probably shouldn't be looking up pads by name?
 
 namespace PsiMedia {
 
@@ -259,6 +260,13 @@ static bool compare_PPayloadInfo(const PPayloadInfo &a, const PPayloadInfo &b)
 
 	return true;
 }
+
+class VideoCaps
+{
+public:
+	QSize size;
+	QList<double> framerates;
+};
 
 //----------------------------------------------------------------------------
 // GstBusSource
@@ -666,6 +674,82 @@ gboolean RtpWorker::doStart()
 				return FALSE;
 			}
 
+			if(localVideoParams.isEmpty())
+			{
+				g_object_unref(G_OBJECT(videoin));
+				error = RtpSessionContext::ErrorGeneric;
+				if(cb_error)
+					cb_error(app);
+				return FALSE;
+			}
+
+			QSize sendSize = localVideoParams[0].size;
+
+			// obtain video modes
+			gst_element_set_state(videoin, GST_STATE_PAUSED);
+			gst_element_get_state(videoin, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+			QList<VideoCaps> modes;
+			GstPad *pad = gst_element_get_static_pad(videoin, "src");
+			GstCaps *caps = gst_pad_get_caps(pad);
+			int num = gst_caps_get_size(caps);
+			QStringList mediaTypes;
+			mediaTypes << "video/x-raw-yuv" << "video/x-raw-rgb";
+			for(int n = 0; n < num; ++n)
+			{
+				VideoCaps m;
+				GstStructure *cs = gst_caps_get_structure(caps, n);
+				const gchar *name = gst_structure_get_name(cs);
+				if(!name)
+					continue;
+				if(!mediaTypes.contains(QString(name)))
+					continue;
+				//printf("cs=[%s]\n", gst_structure_to_string(cs));
+				gint w, h, fn, fd;
+				if(!gst_structure_get_int(cs, "width", &w))
+					continue;
+				if(!gst_structure_get_int(cs, "height", &h))
+					continue;
+				const GValue *val = gst_structure_get_value(cs, "framerate");
+				if(!val)
+					continue;
+				if(GST_VALUE_HOLDS_LIST(val))
+				{
+					for(int i = 0; i < (int)gst_value_list_get_size(val); ++i)
+					{
+						const GValue *sval = gst_value_list_get_value(val, i);
+						if(GST_VALUE_HOLDS_FRACTION(sval))
+						{
+							fn = gst_value_get_fraction_numerator(sval);
+							fd = gst_value_get_fraction_denominator(sval);
+
+							m.framerates += (double)fn / (double)fd;
+						}
+					}
+				}
+				else if(GST_VALUE_HOLDS_FRACTION(val))
+				{
+					if(!gst_structure_get_fraction(cs, "framerate", &fn, &fd))
+						continue;
+
+					m.framerates += (double)fn / (double)fd;
+				}
+				if(w < 1 || h < 1)
+					continue;
+
+				m.size = QSize(w, h);
+				modes += m;
+			}
+			gst_caps_unref(caps);
+			gst_object_unref(pad);
+
+			printf("capture modes:\n");
+			foreach(const VideoCaps &m, modes)
+			{
+				foreach(const double &rate, m.framerates)
+					printf("  %dx%d @ %dfps\n", m.size.width(), m.size.height(), (int)rate);
+			}
+
 			gst_bin_add(GST_BIN(sendPipeline), videoin);
 
 			if(captureSize.isValid())
@@ -683,7 +767,36 @@ gboolean RtpWorker::doStart()
 				videosrc = capsfilter;
 			}
 			else
-				videosrc = videoin;
+			{
+				QList<int> widths;
+				widths << 160 << 320 << 640 << 800 << 1024;
+				for(int n = 0; n < widths.count(); ++n)
+				{
+					if(widths[n] < sendSize.width())
+					{
+						widths.removeAt(n);
+						--n; // adjust position
+					}
+				}
+				GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
+				GstCaps *caps = gst_caps_new_empty();
+				for(int n = 0; n < widths.count(); ++n)
+				{
+					GstStructure *cs = gst_structure_new("video/x-raw-yuv",
+						"width", GST_TYPE_INT_RANGE, 1, widths[n],
+						"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
+					gst_caps_merge_structure(caps, cs);
+				}
+				g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
+				gst_caps_unref(caps);
+
+				gst_bin_add(GST_BIN(sendPipeline), capsfilter);
+				gst_element_link(videoin, capsfilter);
+
+				videosrc = capsfilter;
+			}
+			//else
+			//	videosrc = videoin;
 		}
 	}
 
