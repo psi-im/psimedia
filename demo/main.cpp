@@ -717,8 +717,8 @@ public:
 		ui.sl_mic->setMaximum(100);
 		ui.sl_spk->setMinimum(0);
 		ui.sl_spk->setMaximum(100);
-		ui.sl_mic->setValue(90);
-		ui.sl_spk->setValue(90);
+		ui.sl_mic->setValue(100);
+		ui.sl_spk->setValue(100);
 
 		ui.le_remoteAddress->setText("127.0.0.1");
 		ui.le_remoteAudioPort->setText("60000");
