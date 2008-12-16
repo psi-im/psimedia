@@ -17,6 +17,10 @@
  * Boston, MA 02111-1307, USA.
  */
 
+#ifdef UNICODE
+#undef UNICODE
+#endif
+
 #include "gstksvideodevice.h"
 
 #include "gstksclock.h"

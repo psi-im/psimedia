@@ -18,6 +18,10 @@
  * Boston, MA 02111-1307, USA.
  */
 
+#ifdef UNICODE
+#undef UNICODE
+#endif
+
 #include "ksvideohelpers.h"
 
 #include <uuids.h>

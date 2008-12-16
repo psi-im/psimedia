@@ -17,6 +17,10 @@
  * Boston, MA 02111-1307, USA.
  */
 
+#ifdef UNICODE
+#undef UNICODE
+#endif
+
 #include "kshelpers.h"
 
 #include <ksmedia.h>
@@ -413,15 +417,15 @@ static const KsPropertySetMapping known_property_sets[] = {
   {{STATIC_KSPROPSETID_RtAudio}, "RtAudio"},
   {{STATIC_KSPROPSETID_DrmAudioStream}, "DrmAudioStream"},
   {{STATIC_KSPROPSETID_Audio}, "Audio"},
-  {{STATIC_KSPROPSETID_Acoustic_Echo_Cancel}, "Acoustic_Echo_Cancel"},
-  {{STATIC_KSPROPSETID_Wave_Queued}, "Wave_Queued"},
+  //{{STATIC_KSPROPSETID_Acoustic_Echo_Cancel}, "Acoustic_Echo_Cancel"},
+  //{{STATIC_KSPROPSETID_Wave_Queued}, "Wave_Queued"},
   {{STATIC_KSPROPSETID_Wave}, "Wave"},
-  {{STATIC_KSPROPSETID_WaveTable}, "WaveTable"},
+  //{{STATIC_KSPROPSETID_WaveTable}, "WaveTable"},
   {{STATIC_KSPROPSETID_Cyclic}, "Cyclic"},
-  {{STATIC_KSPROPSETID_Sysaudio}, "Sysaudio"},
-  {{STATIC_KSPROPSETID_Sysaudio_Pin}, "Sysaudio_Pin"},
-  {{STATIC_KSPROPSETID_AudioGfx}, "AudioGfx"},
-  {{STATIC_KSPROPSETID_Linear}, "Linear"},
+  //{{STATIC_KSPROPSETID_Sysaudio}, "Sysaudio"},
+  //{{STATIC_KSPROPSETID_Sysaudio_Pin}, "Sysaudio_Pin"},
+  //{{STATIC_KSPROPSETID_AudioGfx}, "AudioGfx"},
+  //{{STATIC_KSPROPSETID_Linear}, "Linear"},
   {{STATIC_KSPROPSETID_Mpeg2Vid}, "Mpeg2Vid"},
   {{STATIC_KSPROPSETID_AC3}, "AC3"},
   {{STATIC_KSPROPSETID_AudioDecoderOut}, "AudioDecoderOut"},
