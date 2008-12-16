@@ -23,6 +23,7 @@
 #include <glib.h>
 #include <windows.h>
 #include <ks.h>
+#include <winioctl.h>
 
 G_BEGIN_DECLS
 
