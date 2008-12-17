@@ -908,12 +908,16 @@ private slots:
 				producer.setAudioInputDevice(config.audioInDeviceId);
 				transmitAudio = true;
 			}
+			else
+				producer.setAudioInputDevice(QString());
 
 			if(!config.videoInDeviceId.isEmpty())
 			{
 				producer.setVideoInputDevice(config.videoInDeviceId);
 				transmitVideo = true;
 			}
+			else
+				producer.setVideoInputDevice(QString());
 		}
 		else // non-live (file) input
 		{
@@ -928,19 +932,15 @@ private slots:
 			transmitVideo = true;
 		}
 
+		QList<PsiMedia::AudioParams> audioParamsList;
 		if(transmitAudio)
-		{
-			QList<PsiMedia::AudioParams> audioParamsList;
 			audioParamsList += config.audioParams;
-			producer.setLocalAudioPreferences(audioParamsList);
-		}
+		producer.setLocalAudioPreferences(audioParamsList);
 
+		QList<PsiMedia::VideoParams> videoParamsList;
 		if(transmitVideo)
-		{
-			QList<PsiMedia::VideoParams> videoParamsList;
 			videoParamsList += config.videoParams;
-			producer.setLocalVideoPreferences(videoParamsList);
-		}
+		producer.setLocalVideoPreferences(videoParamsList);
 
 		ui.pb_startSend->setEnabled(false);
 		ui.pb_stopSend->setEnabled(true);
