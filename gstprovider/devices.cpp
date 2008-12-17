@@ -302,6 +302,28 @@ static bool test_video(const QString &element_name, const QString &device_id)
 	return true;
 }
 
+// for elements that we can't enumerate devices for, we need a way to ensure
+//   that at least the default device works
+// FIXME: why do we have both this function and test_video() ?
+static bool test_element(const QString &element_name)
+{
+	GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), NULL);
+	if(!e)
+		return 0;
+
+	gst_element_set_state(e, GST_STATE_READY);
+	int ret = gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+	gst_element_set_state(e, GST_STATE_NULL);
+	gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
+	g_object_unref(G_OBJECT(e));
+
+	if(ret != GST_STATE_CHANGE_SUCCESS)
+		return false;
+
+	return true;
+}
+
 static QList<GstDevice> devices_for_drivers(const QStringList &drivers, PDevice::Type type)
 {
 	QList<GstDevice> out;
@@ -342,6 +364,11 @@ static QList<GstDevice> devices_for_drivers(const QStringList &drivers, PDevice:
 				if(type == PDevice::VideoIn && (element_name == "v4lsrc" || element_name == "v4l2src"))
 				{
 					if(!test_video(element_name, i.id))
+						continue;
+				}
+				else if(element_name == "directsoundsrc" || element_name == "directsoundsink" || element_name == "ksvideosrc" || element_name == "osxvideosrc")
+				{
+					if(!test_element(element_name))
 						continue;
 				}
 
