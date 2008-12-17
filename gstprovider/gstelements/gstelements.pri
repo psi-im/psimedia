@@ -1,5 +1,6 @@
 include(rtpmanager.pri)
 include(videomaxrate.pri)
+include(speexdsp.pri)
 
 windows {
 	include(directsound.pri)

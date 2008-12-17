@@ -24,6 +24,7 @@
 
 void gstelements_rtpmanager_register();
 void gstelements_videomaxrate_register();
+void gstelements_speexdsp_register();
 
 #ifdef Q_OS_WIN
 void gstelements_directsound_register();
@@ -39,6 +40,7 @@ void gstelements_register()
 {
 	gstelements_rtpmanager_register();
 	gstelements_videomaxrate_register();
+	gstelements_speexdsp_register();
 
 #ifdef Q_OS_WIN
 	gstelements_directsound_register();
