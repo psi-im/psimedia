@@ -20,13 +20,46 @@
 
 #include "modes.h"
 
+#include <gst/gst.h>
+
 namespace PsiMedia {
 
 // FIXME: any better way besides hardcoding?
 
+static bool have_element(const QString &name)
+{
+	GstElement *e = gst_element_factory_make(name.toLatin1().data(), NULL);
+	if(!e)
+		return false;
+
+	g_object_unref(G_OBJECT(e));
+	return true;
+}
+
+static bool have_codec(const QString &enc, const QString &dec, const QString &pay, const QString &depay)
+{
+	if(have_element(enc) && have_element(dec) && have_element(pay) && have_element(depay))
+		return true;
+	else
+		return false;
+}
+
+static bool have_pcmu()
+{
+	return have_codec("mulawenc", "mulawdec", "rtppcmupay", "rtppcmudepay");
+}
+
+static bool have_h263p()
+{
+	return have_codec("ffenc_h263p", "ffdec_h263", "rtph263ppay", "rtph263pdepay");
+}
+
+// speex, theora, and vorbis are guaranteed to exist
+
 QList<PAudioParams> modes_supportedAudio()
 {
 	QList<PAudioParams> list;
+	if(have_pcmu())
 	{
 		PAudioParams p;
 		p.codec = "pcmu";
@@ -73,6 +106,7 @@ QList<PAudioParams> modes_supportedAudio()
 QList<PVideoParams> modes_supportedVideo()
 {
 	QList<PVideoParams> list;
+	if(have_h263p())
 	{
 		PVideoParams p;
 		p.codec = "h263p";
