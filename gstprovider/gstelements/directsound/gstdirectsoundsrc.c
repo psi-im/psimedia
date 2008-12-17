@@ -48,6 +48,10 @@
   TODO: add device selection and check rate etc.
 */
 
+#ifdef UNICODE
+#undef UNICODE
+#endif
+
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
