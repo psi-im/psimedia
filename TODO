@@ -1,0 +1,18 @@
+psimedia:
+- fix assert that happens if you stop before started() is emitted
+- if you stop during a start, the transmit button stays lit?
+- support playing file from bytearray
+- support recording
+- use farsight
+
+gstreamer:
+- fix warnings in gstelements
+- make osxaudiosrc work
+- make speexdsp/speexechoprobe work properly
+- enumeration in directsound
+- enumeration in ksvideosrc
+- rewrite directsound
+- rewrite osxaudio
+- rewrite osxvideo
+- frame-accurate looping (oggdemux/theoradec bug)
+- GstBus doesn't work with non-default GMainContext
