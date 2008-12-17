@@ -184,6 +184,21 @@ public:
 			<< "videoscale"
 			<< "gstrtpjitterbuffer";
 
+#if defined(Q_OS_LINUX)
+			reqelem
+			<< "alsasrc" << "alsasink"
+			<< "v4lsrc"
+			<< "v4l2src";
+#elif defined(Q_OS_MAC)
+			reqelem
+			<< "osxaudiosrc" << "osxaudiosink"
+			<< "osxvideosrc";
+#elif defined(Q_OS_WIN)
+			reqelem
+			<< "directsoundsrc" << "directsoundsink"
+			<< "ksvideosrc";
+#endif
+
 		foreach(const QString &name, reqelem)
 		{
 			GstElement *e = gst_element_factory_make(name.toLatin1().data(), NULL);
