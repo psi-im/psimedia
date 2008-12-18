@@ -65,7 +65,7 @@ struct _GstOsxAudioSrc
   GstBaseAudioSrc src;
 
   AudioDeviceID device_id;
-  AudioStreamID stream_id;
+  AudioUnit audiounit;
 };
 
 struct _GstOsxAudioSrcClass 

@@ -64,12 +64,9 @@
 #endif
 
 #include <gst/gst.h>
-
 #include <CoreAudio/CoreAudio.h>
 #include <CoreAudio/AudioHardware.h>
 #include "gstosxaudiosink.h"
-#include "gstosxaudiosrc.h"
-
 #include "gstosxaudioelement.h"
 
 GST_DEBUG_CATEGORY_STATIC (osx_audiosink_debug);
@@ -105,7 +102,8 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
         "signed = (boolean) { TRUE }, "
         "width = (int) 32, "
         "depth = (int) 32, "
-        "rate = (int) [1, MAX], " "channels = (int) [1, MAX]")
+        "rate = (int) [1, MAX], "
+        "channels = (int) [1, MAX]")
     );
 
 static void gst_osx_audio_sink_set_property (GObject * object, guint prop_id,
@@ -113,7 +111,7 @@ static void gst_osx_audio_sink_set_property (GObject * object, guint prop_id,
 static void gst_osx_audio_sink_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static GstRingBuffer *gst_osx_audio_sink_create_ringbuffer (
+static GstRingBuffer * gst_osx_audio_sink_create_ringbuffer (
     GstBaseAudioSink * sink);
 static void gst_osx_audio_sink_osxelement_init (gpointer g_iface,
     gpointer iface_data);
@@ -246,8 +244,8 @@ gst_osx_audio_sink_create_audio_unit (GstOsxAudioSink * osxsink)
   /* Create a HALOutput AudioUnit.
    * This is the lowest-level output API that is actually sensibly usable
    * (the lower level ones require that you do channel-remapping yourself,
-   * and the CoreAudio channel mapping is sufficiently complex that that would
-   * be very difficult)
+   * and the CoreAudio channel mapping is sufficiently complex that doing
+   * so would be very difficult)
    */
   desc.componentType = kAudioUnitType_Output;
   desc.componentSubType = kAudioUnitSubType_HALOutput;
@@ -293,12 +291,13 @@ gst_osx_audio_sink_create_ringbuffer (GstBaseAudioSink * sink)
   gst_osx_audio_sink_set_volume (osxsink);
 
   ringbuffer->element = GST_OSX_AUDIO_ELEMENT_GET_INTERFACE (osxsink);
-  ringbuffer->audiounit = osxsink->audiounit;
+  ringbuffer->audiounit = osxsink->audiounit; /* transfer ownership */
   ringbuffer->device_id = osxsink->device_id;
 
   return GST_RING_BUFFER (ringbuffer);
 }
 
+// TODO: confirm correctness.  is it okay to always index buffer 0?
 /* HALOutput AudioUnit will request fairly arbitrarily-sized chunks of data,
  * not of a fixed size. So, we keep track of where in the current ringbuffer
  * segment we are, and only advance the segment once we've read the whole
@@ -354,7 +353,8 @@ gst_osx_audio_sink_osxelement_init (gpointer g_iface, gpointer iface_data)
   iface->io_proc = (AURenderCallback) gst_osx_audio_sink_io_proc;
 }
 
-static void gst_osx_audio_sink_set_volume(GstOsxAudioSink *sink)
+static void
+gst_osx_audio_sink_set_volume(GstOsxAudioSink * sink)
 {
   if (!sink->audiounit)
     return;
@@ -374,19 +374,22 @@ gst_osx_audio_sink_select_device (GstOsxAudioSink * osxsink)
      * default device */
     GST_DEBUG_OBJECT (osxsink, "Selecting device for OSXAudioSink");
     propertySize = sizeof (osxsink->device_id);
-    status =
-        AudioHardwareGetProperty (kAudioHardwarePropertyDefaultOutputDevice,
+    status = AudioHardwareGetProperty (
+        kAudioHardwarePropertyDefaultOutputDevice,
         &propertySize, &osxsink->device_id);
 
-    if (status)
+    if (status) {
       GST_WARNING_OBJECT (osxsink,
           "AudioHardwareGetProperty returned %d", (int) status);
-    else
+    }
+    else {
       GST_DEBUG_OBJECT (osxsink, "AudioHardwareGetProperty returned 0");
+    }
 
-    if (osxsink->device_id == kAudioDeviceUnknown)
+    if (osxsink->device_id == kAudioDeviceUnknown) {
       GST_WARNING_OBJECT (osxsink,
           "AudioHardwareGetProperty: device_id is kAudioDeviceUnknown");
+    }
 
     GST_DEBUG_OBJECT (osxsink, "AudioHardwareGetProperty: device_id is %lu",
         (long) osxsink->device_id);
