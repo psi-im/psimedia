@@ -1,8 +1,8 @@
 /*
  * GStreamer
- * Copyright 2005,2006 Zaheer Abbas Merali  <zaheerabbas at merali dot org>
- *                2008 Pioneers of the Inevitable <songbird@songbirdnest.com>
- * 
+ * Copyright (C) 2005,2006 Zaheer Abbas Merali <zaheerabbas at merali dot org>
+ * Copyright (C) 2008 Pioneers of the Inevitable <songbird@songbirdnest.com>
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -102,21 +102,19 @@ static void gst_osx_audio_src_set_property (GObject * object, guint prop_id,
 static void gst_osx_audio_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-
 static GstRingBuffer *gst_osx_audio_src_create_ringbuffer (GstBaseAudioSrc *
     src);
 static void gst_osx_audio_src_osxelement_init (gpointer g_iface,
     gpointer iface_data);
-static OSStatus 
-gst_osx_audio_src_io_proc (GstOsxRingBuffer *buf, 
-        AudioUnitRenderActionFlags * ioActionFlags, 
-        const AudioTimeStamp * inTimeStamp, 
-        UInt32 inBusNumber, UInt32 inNumberFrames, 
-        AudioBufferList * bufferList);
+static OSStatus gst_osx_audio_src_io_proc (GstOsxRingBuffer *buf,
+    AudioUnitRenderActionFlags * ioActionFlags,
+    const AudioTimeStamp * inTimeStamp,
+    UInt32 inBusNumber, UInt32 inNumberFrames,
+    AudioBufferList * bufferList);
 static void gst_osx_audio_src_select_device (GstOsxAudioSrc * osxsrc);
 
 static void
-gst_osx_audio_src_osxelement_do_init (GType type)
+gst_osx_audio_src_do_init (GType type)
 {
   static const GInterfaceInfo osxelement_info = {
     gst_osx_audio_src_osxelement_init,
@@ -132,8 +130,7 @@ gst_osx_audio_src_osxelement_do_init (GType type)
 }
 
 GST_BOILERPLATE_FULL (GstOsxAudioSrc, gst_osx_audio_src, GstBaseAudioSrc,
-    GST_TYPE_BASE_AUDIO_SRC, gst_osx_audio_src_osxelement_do_init);
-
+    GST_TYPE_BASE_AUDIO_SRC, gst_osx_audio_src_do_init);
 
 static void
 gst_osx_audio_src_base_init (gpointer g_class)
@@ -146,7 +143,6 @@ gst_osx_audio_src_base_init (gpointer g_class)
   gst_element_class_set_details (element_class, &gst_osx_audio_src_details);
 }
 
-/* initialize the plugin's class */
 static void
 gst_osx_audio_src_class_init (GstOsxAudioSrcClass * klass)
 {
@@ -171,18 +167,11 @@ gst_osx_audio_src_class_init (GstOsxAudioSrcClass * klass)
 
   gstbaseaudiosrc_class->create_ringbuffer =
       GST_DEBUG_FUNCPTR (gst_osx_audio_src_create_ringbuffer);
-
 }
 
-/* initialize the new element
- * instantiate pads and add them to element
- * set functions
- * initialize structure
- */
 static void
 gst_osx_audio_src_init (GstOsxAudioSrc * src, GstOsxAudioSrcClass * gclass)
 {
-/*  GstElementClass *klass = GST_ELEMENT_GET_CLASS (src); */
   gst_base_src_set_live (GST_BASE_SRC (src), TRUE);
 
   src->device_id = kAudioDeviceUnknown;
@@ -193,7 +182,7 @@ static void
 gst_osx_audio_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstOsxAudioSrc *src = GST_OSX_AUDIO_SRC (object);
+  GstOsxAudioSrc * src = GST_OSX_AUDIO_SRC (object);
 
   switch (prop_id) {
     case ARG_DEVICE:
@@ -209,7 +198,7 @@ static void
 gst_osx_audio_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstOsxAudioSrc *src = GST_OSX_AUDIO_SRC (object);
+  GstOsxAudioSrc * src = GST_OSX_AUDIO_SRC (object);
 
   switch (prop_id) {
     case ARG_DEVICE:
@@ -221,15 +210,11 @@ gst_osx_audio_src_get_property (GObject * object, guint prop_id,
   }
 }
 
-/* GstElement vmethod implementations */
-
-
-/* GstBaseAudioSrc vmethod implementations */
 static GstRingBuffer *
 gst_osx_audio_src_create_ringbuffer (GstBaseAudioSrc * src)
 {
-  GstOsxAudioSrc *osxsrc;
-  GstOsxRingBuffer *ringbuffer;
+  GstOsxAudioSrc * osxsrc;
+  GstOsxRingBuffer * ringbuffer;
 
   osxsrc = GST_OSX_AUDIO_SRC (src);
 
@@ -250,14 +235,14 @@ gst_osx_audio_src_create_ringbuffer (GstBaseAudioSrc * src)
   return GST_RING_BUFFER (ringbuffer);
 }
 
-static OSStatus 
-gst_osx_audio_src_io_proc (GstOsxRingBuffer *buf, 
-        AudioUnitRenderActionFlags * ioActionFlags, 
-        const AudioTimeStamp * inTimeStamp, 
-        UInt32 inBusNumber, UInt32 inNumberFrames, 
-        AudioBufferList * bufferList)
+static OSStatus
+gst_osx_audio_src_io_proc (GstOsxRingBuffer *buf,
+    AudioUnitRenderActionFlags * ioActionFlags,
+    const AudioTimeStamp * inTimeStamp,
+    UInt32 inBusNumber, UInt32 inNumberFrames,
+    AudioBufferList * bufferList)
 {
-  guint8 *writeptr;
+  guint8 * writeptr;
   gint writeseg;
   gint len;
   gint bytesToCopy;
@@ -281,7 +266,7 @@ gst_osx_audio_src_osxelement_init (gpointer g_iface, gpointer iface_data)
 {
   GstOsxAudioElementInterface *iface = (GstOsxAudioElementInterface *) g_iface;
 
-  iface->io_proc = (AURenderCallback)gst_osx_audio_src_io_proc;
+  iface->io_proc = (AURenderCallback) gst_osx_audio_src_io_proc;
 }
 
 static void
@@ -314,8 +299,9 @@ gst_osx_audio_src_select_device (GstOsxAudioSrc * osxsrc)
     AudioStreamID *streams;
 
     GST_DEBUG_OBJECT (osxsrc, "Getting streamid");
-    status = AudioDeviceGetPropertyInfo (osxsrc->device_id, 0,  /* Master channel */
-        FALSE,                  /* isInput */
+    status = AudioDeviceGetPropertyInfo (osxsrc->device_id,
+        0,     /* Master channel */
+        FALSE, /* isInput */
         kAudioDevicePropertyStreams, &propertySize, NULL);
 
     if (status) {
@@ -329,8 +315,9 @@ gst_osx_audio_src_select_device (GstOsxAudioSrc * osxsrc)
         (int) (propertySize / sizeof (AudioStreamID)),
         (unsigned int) propertySize);
     streams = g_malloc (propertySize);
-    status = AudioDeviceGetProperty (osxsrc->device_id, 0,      /* Master channel */
-        FALSE,                  /* isInput */
+    status = AudioDeviceGetProperty (osxsrc->device_id,
+        0,     /* Master channel */
+        FALSE, /* isInput */
         kAudioDevicePropertyStreams, &propertySize, streams);
 
     if (status) {

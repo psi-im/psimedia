@@ -1,8 +1,8 @@
 /*
  * GStreamer
- * Copyright 2005,2006 Zaheer Abbas Merali  <zaheerabbas at merali dot org>
- * Copyright 2007,2008 Pioneers of the Inevitable <songbird@songbirdnest.com>
- * 
+ * Copyright (C) 2005,2006 Zaheer Abbas Merali <zaheerabbas at merali dot org>
+ * Copyright (C) 2007,2008 Pioneers of the Inevitable <songbird@songbirdnest.com>
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -41,8 +41,8 @@
  * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
  * Boston, MA 02111-1307, USA.
  *
- *  The development of this code was made possible due to the involvement of 
- *  Pioneers of the Inevitable, the creators of the Songbird Music player.
+ * The development of this code was made possible due to the involvement of
+ * Pioneers of the Inevitable, the creators of the Songbird Music player
  *
  */
 
@@ -113,21 +113,21 @@ static void gst_osx_audio_sink_set_property (GObject * object, guint prop_id,
 static void gst_osx_audio_sink_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static GstRingBuffer *gst_osx_audio_sink_create_ringbuffer (GstBaseAudioSink *
-    sink);
+static GstRingBuffer *gst_osx_audio_sink_create_ringbuffer (
+    GstBaseAudioSink * sink);
 static void gst_osx_audio_sink_osxelement_init (gpointer g_iface,
     gpointer iface_data);
 static void gst_osx_audio_sink_select_device (GstOsxAudioSink * osxsink);
-static void gst_osx_audio_sink_set_volume(GstOsxAudioSink *sink);
+static void gst_osx_audio_sink_set_volume(GstOsxAudioSink * sink);
 
-static OSStatus gst_osx_audio_sink_io_proc(GstOsxRingBuffer *buf, 
-        AudioUnitRenderActionFlags * ioActionFlags,
-        const AudioTimeStamp * inTimeStamp,
-        UInt32 inBusNumber, UInt32 inNumberFrames,
-        AudioBufferList * bufferList);
+static OSStatus gst_osx_audio_sink_io_proc(GstOsxRingBuffer * buf,
+    AudioUnitRenderActionFlags * ioActionFlags,
+    const AudioTimeStamp * inTimeStamp,
+    UInt32 inBusNumber, UInt32 inNumberFrames,
+    AudioBufferList * bufferList);
 
 static void
-gst_osx_audio_sink_osxelement_do_init (GType type)
+gst_osx_audio_sink_do_init (GType type)
 {
   static const GInterfaceInfo osxelement_info = {
     gst_osx_audio_sink_osxelement_init,
@@ -143,7 +143,7 @@ gst_osx_audio_sink_osxelement_do_init (GType type)
 }
 
 GST_BOILERPLATE_FULL (GstOsxAudioSink, gst_osx_audio_sink, GstBaseAudioSink,
-    GST_TYPE_BASE_AUDIO_SINK, gst_osx_audio_sink_osxelement_do_init);
+    GST_TYPE_BASE_AUDIO_SINK, gst_osx_audio_sink_do_init);
 
 static void
 gst_osx_audio_sink_base_init (gpointer g_class)
@@ -156,14 +156,13 @@ gst_osx_audio_sink_base_init (gpointer g_class)
   gst_element_class_set_details (element_class, &gst_osx_audio_sink_details);
 }
 
-/* initialize the plugin's class */
 static void
 gst_osx_audio_sink_class_init (GstOsxAudioSinkClass * klass)
 {
-  GObjectClass *gobject_class;
-  GstElementClass *gstelement_class;
-  GstBaseSinkClass *gstbasesink_class;
-  GstBaseAudioSinkClass *gstbaseaudiosink_class;
+  GObjectClass * gobject_class;
+  GstElementClass * gstelement_class;
+  GstBaseSinkClass * gstbasesink_class;
+  GstBaseAudioSinkClass * gstbaseaudiosink_class;
 
   gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
@@ -187,18 +186,11 @@ gst_osx_audio_sink_class_init (GstOsxAudioSinkClass * klass)
 
   gstbaseaudiosink_class->create_ringbuffer =
       GST_DEBUG_FUNCPTR (gst_osx_audio_sink_create_ringbuffer);
-
 }
 
-/* initialize the new element
- * instantiate pads and add them to element
- * set functions
- * initialize structure
- */
 static void
 gst_osx_audio_sink_init (GstOsxAudioSink * sink, GstOsxAudioSinkClass * gclass)
 {
-/*  GstElementClass *klass = GST_ELEMENT_GET_CLASS (sink); */
   GST_DEBUG ("Initialising object");
 
   sink->device_id = kAudioDeviceUnknown;
@@ -209,7 +201,7 @@ static void
 gst_osx_audio_sink_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstOsxAudioSink *sink = GST_OSX_AUDIO_SINK (object);
+  GstOsxAudioSink * sink = GST_OSX_AUDIO_SINK (object);
 
   switch (prop_id) {
     case ARG_DEVICE:
@@ -217,7 +209,7 @@ gst_osx_audio_sink_set_property (GObject * object, guint prop_id,
       break;
     case ARG_VOLUME:
       sink->volume = g_value_get_double (value);
-      gst_osx_audio_sink_set_volume(sink);
+      gst_osx_audio_sink_set_volume (sink);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -243,7 +235,8 @@ gst_osx_audio_sink_get_property (GObject * object, guint prop_id,
   }
 }
 
-static AudioUnit gst_osx_audio_sink_create_audio_unit (GstOsxAudioSink *osxsink)
+static AudioUnit
+gst_osx_audio_sink_create_audio_unit (GstOsxAudioSink * osxsink)
 {
   ComponentDescription desc;
   Component comp;
@@ -251,7 +244,7 @@ static AudioUnit gst_osx_audio_sink_create_audio_unit (GstOsxAudioSink *osxsink)
   AudioUnit unit;
 
   /* Create a HALOutput AudioUnit.
-   * This is the lowest-level output API that is actually sensibly usable 
+   * This is the lowest-level output API that is actually sensibly usable
    * (the lower level ones require that you do channel-remapping yourself,
    * and the CoreAudio channel mapping is sufficiently complex that that would
    * be very difficult)
@@ -280,12 +273,11 @@ static AudioUnit gst_osx_audio_sink_create_audio_unit (GstOsxAudioSink *osxsink)
   return unit;
 }
 
-/* GstBaseAudioSink vmethod implementations */
 static GstRingBuffer *
 gst_osx_audio_sink_create_ringbuffer (GstBaseAudioSink * sink)
 {
-  GstOsxAudioSink *osxsink;
-  GstOsxRingBuffer *ringbuffer;
+  GstOsxAudioSink * osxsink;
+  GstOsxRingBuffer * ringbuffer;
 
   osxsink = GST_OSX_AUDIO_SINK (sink);
 
@@ -298,7 +290,7 @@ gst_osx_audio_sink_create_ringbuffer (GstBaseAudioSink * sink)
       (void *) gst_osx_audio_sink_io_proc);
 
   osxsink->audiounit = gst_osx_audio_sink_create_audio_unit (osxsink);
-  gst_osx_audio_sink_set_volume(osxsink);
+  gst_osx_audio_sink_set_volume (osxsink);
 
   ringbuffer->element = GST_OSX_AUDIO_ELEMENT_GET_INTERFACE (osxsink);
   ringbuffer->audiounit = osxsink->audiounit;
@@ -311,21 +303,22 @@ gst_osx_audio_sink_create_ringbuffer (GstBaseAudioSink * sink)
  * not of a fixed size. So, we keep track of where in the current ringbuffer
  * segment we are, and only advance the segment once we've read the whole
  * thing */
-static OSStatus gst_osx_audio_sink_io_proc(GstOsxRingBuffer *buf, 
-        AudioUnitRenderActionFlags * ioActionFlags,
-        const AudioTimeStamp * inTimeStamp,
-        UInt32 inBusNumber, UInt32 inNumberFrames,
-        AudioBufferList * bufferList)
+static OSStatus
+gst_osx_audio_sink_io_proc (GstOsxRingBuffer * buf,
+    AudioUnitRenderActionFlags * ioActionFlags,
+    const AudioTimeStamp * inTimeStamp,
+    UInt32 inBusNumber, UInt32 inNumberFrames,
+    AudioBufferList * bufferList)
 {
-  guint8 *readptr;
+  guint8 * readptr;
   gint readseg;
   gint len;
   gint remaining = bufferList->mBuffers[0].mDataByteSize;
   gint offset = 0;
 
   while (remaining) {
-    if (!gst_ring_buffer_prepare_read (GST_RING_BUFFER (buf), 
-                &readseg, &readptr, &len))
+    if (!gst_ring_buffer_prepare_read (GST_RING_BUFFER (buf),
+            &readseg, &readptr, &len))
       return 0;
 
     len -= buf->segoffset;
@@ -333,8 +326,8 @@ static OSStatus gst_osx_audio_sink_io_proc(GstOsxRingBuffer *buf,
     if (len > remaining)
       len = remaining;
 
-    memcpy ((char *) bufferList->mBuffers[0].mData + offset, 
-            readptr + buf->segoffset, len);
+    memcpy ((char *) bufferList->mBuffers[0].mData + offset,
+        readptr + buf->segoffset, len);
 
     buf->segoffset += len;
     offset += len;
@@ -358,7 +351,7 @@ gst_osx_audio_sink_osxelement_init (gpointer g_iface, gpointer iface_data)
 {
   GstOsxAudioElementInterface *iface = (GstOsxAudioElementInterface *) g_iface;
 
-  iface->io_proc = (AURenderCallback)gst_osx_audio_sink_io_proc;
+  iface->io_proc = (AURenderCallback) gst_osx_audio_sink_io_proc;
 }
 
 static void gst_osx_audio_sink_set_volume(GstOsxAudioSink *sink)
@@ -367,7 +360,7 @@ static void gst_osx_audio_sink_set_volume(GstOsxAudioSink *sink)
     return;
 
   AudioUnitSetParameter (sink->audiounit, kHALOutputParam_Volume,
-          kAudioUnitScope_Global, 0, (float)sink->volume, 0);
+      kAudioUnitScope_Global, 0, (float)sink->volume, 0);
 }
 
 static void
