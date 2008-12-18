@@ -135,7 +135,7 @@ gst_osx_ring_buffer_dispose (GObject * object)
   osxbuf = GST_OSX_RING_BUFFER (object);
 
   if (osxbuf->audiounit) {
-    CloseAComponent (osxbuf->audiounit);
+    CloseComponent (osxbuf->audiounit);
     osxbuf->audiounit = NULL;
   }
 
@@ -433,7 +433,7 @@ gst_osx_ring_buffer_start (GstRingBuffer * buf)
   GstOsxRingBuffer * osxbuf;
   AURenderCallbackStruct input;
   AudioUnitScope scope;
-  AudioUnitProperty callback_type;
+  AudioUnitPropertyID callback_type;
   int element;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
@@ -459,7 +459,7 @@ gst_osx_ring_buffer_start (GstRingBuffer * buf)
         &input, sizeof (input));
 
     if (status) {
-      GST_WARNING ("AudioUnitSetProperty returned %d" (int) status);
+      GST_WARNING ("AudioUnitSetProperty returned %d", (int) status);
       return FALSE;
     }
 
@@ -546,7 +546,7 @@ gst_osx_ring_buffer_delay (GstRingBuffer * buf)
       &size);
 
   if (status) {
-    GST_WARNING_OBJECT (buf, "Failed to get latency: %x", status);
+    GST_WARNING_OBJECT (buf, "Failed to get latency: %d", (int) status);
     return 0;
   }
 

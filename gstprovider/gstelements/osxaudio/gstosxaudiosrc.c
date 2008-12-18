@@ -260,7 +260,7 @@ gst_osx_audio_src_create_audio_unit (GstOsxAudioSrc * osxsrc)
       sizeof (enableIO));
 
   if (status) {
-    CloseAComponent (unit);
+    CloseComponent (unit);
     GST_WARNING_OBJECT (osxsrc, "Failed to enable input: %lx", status);
     return NULL;
   }
@@ -275,7 +275,7 @@ gst_osx_audio_src_create_audio_unit (GstOsxAudioSrc * osxsrc)
       sizeof (enableIO));
 
   if (status) {
-    CloseAComponent (unit);
+    CloseComponent (unit);
     GST_WARNING_OBJECT (osxsrc, "Failed to disable output: %lx", status);
     return NULL;
   }
@@ -326,8 +326,8 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
   gint len;
   gint bytesToCopy;
 
-  status = AudioUnitRender(InputUnit, ioActionFlags, inTimeStamp, inBusNumber,
-      inNumberFrames, recBufferList);
+  status = AudioUnitRender (buf->audiounit, ioActionFlags, inTimeStamp,
+      inBusNumber, inNumberFrames, recBufferList);
 
   if (status)
     return status;
