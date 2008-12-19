@@ -83,7 +83,7 @@ gst_osx_ring_buffer_do_init (GType type)
 }
 
 GST_BOILERPLATE_FULL (GstOsxRingBuffer, gst_osx_ring_buffer, GstRingBuffer,
-    GST_TYPE_OSX_RING_BUFFER, gst_osx_ring_buffer_do_init);
+    GST_TYPE_RING_BUFFER, gst_osx_ring_buffer_do_init);
 
 static void
 gst_osx_ring_buffer_base_init (gpointer g_class)
