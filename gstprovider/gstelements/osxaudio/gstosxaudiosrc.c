@@ -176,6 +176,8 @@ gst_osx_audio_src_class_init (GstOsxAudioSrcClass * klass)
 static void
 gst_osx_audio_src_init (GstOsxAudioSrc * src, GstOsxAudioSrcClass * gclass)
 {
+  UNUSED (gclass);
+
   gst_base_src_set_live (GST_BASE_SRC (src), TRUE);
 
   src->device_id = kAudioDeviceUnknown;
@@ -326,6 +328,8 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
   gint len;
   gint bytesToCopy;
 
+  UNUSED (bufferList);
+
   status = AudioUnitRender (buf->audiounit, ioActionFlags, inTimeStamp,
       inBusNumber, inNumberFrames, recBufferList);
 
@@ -350,6 +354,8 @@ static void
 gst_osx_audio_src_osxelement_init (gpointer g_iface, gpointer iface_data)
 {
   GstOsxAudioElementInterface *iface = (GstOsxAudioElementInterface *) g_iface;
+
+  UNUSED (iface_data);
 
   iface->io_proc = (AURenderCallback) gst_osx_audio_src_io_proc;
 }

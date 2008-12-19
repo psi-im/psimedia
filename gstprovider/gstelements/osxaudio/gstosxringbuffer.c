@@ -43,10 +43,12 @@
  */
 
 #include <CoreAudio/CoreAudio.h>
-
+#include <AudioUnit/AUNTComponent.h>
 #include <gst/gst.h>
 #include <gst/audio/multichannel.h>
 #include "gstosxringbuffer.h"
+
+#define UNUSED(x) (void)x;
 
 GST_DEBUG_CATEGORY_STATIC (osx_audio_debug);
 #define GST_CAT_DEFAULT osx_audio_debug
@@ -74,6 +76,8 @@ static OSStatus gst_osx_ring_buffer_render_notify (GstOsxRingBuffer * osxbuf,
 static void
 gst_osx_ring_buffer_do_init (GType type)
 {
+  UNUSED (type);
+
   GST_DEBUG_CATEGORY_INIT (osx_audio_debug, "osxaudio", 0,
       "OSX Audio Elements");
 }
@@ -84,6 +88,8 @@ GST_BOILERPLATE_FULL (GstOsxRingBuffer, gst_osx_ring_buffer, GstRingBuffer,
 static void
 gst_osx_ring_buffer_base_init (gpointer g_class)
 {
+  UNUSED (g_class);
+
   /* Nothing to do right now */
 }
 
@@ -125,6 +131,10 @@ static void
 gst_osx_ring_buffer_init (GstOsxRingBuffer * ringbuffer,
     GstOsxRingBufferClass * g_class)
 {
+  UNUSED (ringbuffer);
+  UNUSED (g_class);
+
+  /* Nothing to do right now */
 }
 
 static void
@@ -151,6 +161,8 @@ gst_osx_ring_buffer_finalize (GObject * object)
 static gboolean
 gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
 {
+  UNUSED (buf);
+
   /* According to the documentation of open_device(), we should merely open
    * the device here but not set any parameters.  However, the AudioUnit is
    * already open at this point, and all that's left is to set parameters,
@@ -162,6 +174,8 @@ gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
 static gboolean
 gst_osx_ring_buffer_close_device (GstRingBuffer * buf)
 {
+  UNUSED (buf);
+
   /* Since we initialize the device in acquire(), we uninitialize it in
    * release().  So there's nothing to do here.
    */
@@ -212,12 +226,11 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   AudioStreamBasicDescription format;
   AudioChannelLayout * layout = NULL;
   OSStatus status;
-  UInt32 buffer_len;
   UInt32 propertySize;
   int layoutSize;
-  int element;
+  // ### int element;
   int i;
-  AudioUnitScope scope;
+  // ### AudioUnitScope scope;
   gboolean ret = FALSE;
   GstStructure * structure;
   GstAudioChannelPosition * positions;
@@ -310,7 +323,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   }
 
   /* Specify which device we're using. */
-  GST_DEBUG_OBJECT (osxbuf, "Setting device to %d", osxbuf->device_id);
+  GST_DEBUG_OBJECT (osxbuf, "Setting device to %d", (int) osxbuf->device_id);
   status = AudioUnitSetProperty (osxbuf->audiounit,
       kAudioOutputUnitProperty_CurrentDevice,
       kAudioUnitScope_Global,
@@ -410,6 +423,11 @@ gst_osx_ring_buffer_render_notify (GstOsxRingBuffer * osxbuf,
     unsigned int inNumberFrames,
     AudioBufferList * ioData)
 {
+  UNUSED (inTimeStamp);
+  UNUSED (inBusNumber);
+  UNUSED (inNumberFrames);
+  UNUSED (ioData);
+
   /* Before rendering a frame, we get the PreRender notification.
    * Here, we detach the RenderCallback if we've been paused.
    *

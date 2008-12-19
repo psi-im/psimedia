@@ -69,6 +69,8 @@
 #include "gstosxaudiosink.h"
 #include "gstosxaudioelement.h"
 
+#define UNUSED(x) (void)x;
+
 GST_DEBUG_CATEGORY_STATIC (osx_audiosink_debug);
 #define GST_CAT_DEFAULT osx_audiosink_debug
 
@@ -189,6 +191,8 @@ gst_osx_audio_sink_class_init (GstOsxAudioSinkClass * klass)
 static void
 gst_osx_audio_sink_init (GstOsxAudioSink * sink, GstOsxAudioSinkClass * gclass)
 {
+  UNUSED (gclass);
+
   GST_DEBUG ("Initialising object");
 
   sink->device_id = kAudioDeviceUnknown;
@@ -315,6 +319,12 @@ gst_osx_audio_sink_io_proc (GstOsxRingBuffer * buf,
   gint remaining = bufferList->mBuffers[0].mDataByteSize;
   gint offset = 0;
 
+  UNUSED (ioActionFlags);
+  UNUSED (inTimeStamp);
+  UNUSED (inBusNumber);
+  UNUSED (inNumberFrames);
+  UNUSED (iface_data);
+
   while (remaining) {
     if (!gst_ring_buffer_prepare_read (GST_RING_BUFFER (buf),
             &readseg, &readptr, &len))
@@ -332,7 +342,7 @@ gst_osx_audio_sink_io_proc (GstOsxRingBuffer * buf,
     offset += len;
     remaining -= len;
 
-    if (buf->segoffset == GST_RING_BUFFER (buf)->spec.segsize) {
+    if ((gint)buf->segoffset == GST_RING_BUFFER (buf)->spec.segsize) {
       /* clear written samples */
       gst_ring_buffer_clear (GST_RING_BUFFER (buf), readseg);
 

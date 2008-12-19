@@ -47,7 +47,6 @@
 #include <gst/gst.h>
 #include <gst/audio/gstringbuffer.h>
 #include <CoreAudio/CoreAudio.h>
-
 #include "gstosxaudioelement.h"
 
 G_BEGIN_DECLS

@@ -68,6 +68,7 @@ gst_osx_audio_element_get_type ()
       0,
       0,
       NULL,
+      NULL
     };
 
     gst_osxaudioelement_type = g_type_register_static (G_TYPE_INTERFACE,
