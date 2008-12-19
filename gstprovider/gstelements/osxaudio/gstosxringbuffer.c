@@ -228,9 +228,9 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   OSStatus status;
   UInt32 propertySize;
   int layoutSize;
-  // ### int element;
+  int element;
   int i;
-  // ### AudioUnitScope scope;
+  AudioUnitScope scope;
   gboolean ret = FALSE;
   GstStructure * structure;
   GstAudioChannelPosition * positions;
@@ -378,9 +378,9 @@ gst_osx_ring_buffer_release (GstRingBuffer * buf)
 static void
 gst_osx_ring_buffer_remove_render_callback (GstOsxRingBuffer * osxbuf)
 {
-  AudioUnitScope scope = osxbuf->is_src ?
-      kAudioUnitScope_Output:kAudioUnitScope_Input;
-  int element = osxbuf->is_src ? 1 : 0;
+  // ### AudioUnitScope scope = osxbuf->is_src ?
+  //    kAudioUnitScope_Output:kAudioUnitScope_Input;
+  // ### int element = osxbuf->is_src ? 1 : 0;
   AURenderCallbackStruct input;
   OSStatus status;
 
