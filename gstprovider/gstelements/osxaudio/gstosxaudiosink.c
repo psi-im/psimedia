@@ -323,7 +323,6 @@ gst_osx_audio_sink_io_proc (GstOsxRingBuffer * buf,
   UNUSED (inTimeStamp);
   UNUSED (inBusNumber);
   UNUSED (inNumberFrames);
-  UNUSED (iface_data);
 
   while (remaining) {
     if (!gst_ring_buffer_prepare_read (GST_RING_BUFFER (buf),
@@ -359,6 +358,8 @@ static void
 gst_osx_audio_sink_osxelement_init (gpointer g_iface, gpointer iface_data)
 {
   GstOsxAudioElementInterface *iface = (GstOsxAudioElementInterface *) g_iface;
+
+  UNUSED (iface_data);
 
   iface->io_proc = (AURenderCallback) gst_osx_audio_sink_io_proc;
 }
