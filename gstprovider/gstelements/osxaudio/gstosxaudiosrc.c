@@ -338,7 +338,7 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
     return status;
   }
 
-  remaining = bufferList->mBuffers[0].mDataByteSize;
+  remaining = buf->recBufferList->mBuffers[0].mDataByteSize;
 
   while (remaining) {
     if (!gst_ring_buffer_prepare_read (GST_RING_BUFFER (buf),
@@ -359,7 +359,7 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
 
     if ((gint)buf->segoffset == GST_RING_BUFFER (buf)->spec.segsize) {
       /* clear written samples */
-      gst_ring_buffer_clear (GST_RING_BUFFER (buf), writeseg);
+      /* gst_ring_buffer_clear (GST_RING_BUFFER (buf), writeseg); */
 
       /* we wrote one segment */
       gst_ring_buffer_advance (GST_RING_BUFFER (buf), 1);
