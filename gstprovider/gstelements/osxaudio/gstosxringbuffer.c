@@ -237,7 +237,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   gboolean ret = FALSE;
   GstStructure * structure;
   GstAudioChannelPosition * positions;
-  Uint32 frameSize;
+  UInt32 frameSize;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
@@ -613,7 +613,7 @@ buffer_list_alloc (int channels, int size)
   int total_size;
   int n;
 
-  total_size = sizeof (AudioBufferList) + channels * sizeof (AudioBuffer));
+  total_size = sizeof (AudioBufferList) + channels * sizeof (AudioBuffer);
   list = (AudioBufferList *) g_malloc (total_size);
 
   list->mNumberBuffers = channels;
