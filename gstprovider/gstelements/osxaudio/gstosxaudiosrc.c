@@ -327,14 +327,27 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
   gint writeseg;
   gint len;
   gint bytesToCopy;
+  gint n;
 
   UNUSED (bufferList);
+
+  recBufferList = (AudioBufferList *) g_malloc (sizeof (AudioBufferList) +
+      1 * sizeof (AudioBuffer));
+  memset (recBufferList, 0, sizeof (AudioBufferList) + 1 *
+      sizeof (AudioBuffer));
+  recBufferList->mNumBuffers = 1;
+  for (n = 0; n < 1; ++n) {
+    AudioBuffer *buffer = &recBufferList->mBuffers[n];
+    buffer->mNumberChannels = 2;
+    buffer->mDataByteSize = 0;
+    buffer->mData = NULL;
+  }
 
   status = AudioUnitRender (buf->audiounit, ioActionFlags, inTimeStamp,
       inBusNumber, inNumberFrames, recBufferList);
 
   if (status) {
-    GST_WARNING_OBJECT (osxsrc, "AudioUnitRender returned %d", (int) status);
+    GST_WARNING_OBJECT (buf, "AudioUnitRender returned %d", (int) status);
     return status;
   }
 
