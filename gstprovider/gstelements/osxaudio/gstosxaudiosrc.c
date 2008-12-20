@@ -333,8 +333,10 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
   status = AudioUnitRender (buf->audiounit, ioActionFlags, inTimeStamp,
       inBusNumber, inNumberFrames, recBufferList);
 
-  if (status)
+  if (status) {
+    GST_WARNING_OBJECT (osxsrc, "AudioUnitRender returned %d", (int) status);
     return status;
+  }
 
   if (gst_ring_buffer_prepare_read (GST_RING_BUFFER (buf), &writeseg,
           &writeptr, &len)) {

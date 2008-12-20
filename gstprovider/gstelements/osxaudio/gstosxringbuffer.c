@@ -460,7 +460,7 @@ gst_osx_ring_buffer_start (GstRingBuffer * buf)
       osxbuf->element->io_proc, osxbuf->device_id);
   if (!osxbuf->io_proc_active) {
     callback_type = osxbuf->is_src ?
-        kAudioUnitProperty_SetInputCallback :
+        kAudioOutputUnitProperty_SetInputCallback :
         kAudioUnitProperty_SetRenderCallback;
     scope = osxbuf->is_src ?
         kAudioUnitScope_Output:kAudioUnitScope_Input;
