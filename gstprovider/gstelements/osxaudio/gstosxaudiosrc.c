@@ -326,7 +326,6 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
   gint writeseg;
   gint len;
   gint bytesToCopy;
-  gint n;
 
   UNUSED (bufferList);
 
@@ -340,8 +339,9 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
 
   if (gst_ring_buffer_prepare_read (GST_RING_BUFFER (buf), &writeseg,
           &writeptr, &len)) {
-    bytesToCopy = recBufferList->mBuffers[0].mDataByteSize;
-    memcpy (writeptr, (char *) recBufferList->mBuffers[0].mData, bytesToCopy);
+    bytesToCopy = buf->recBufferList->mBuffers[0].mDataByteSize;
+    memcpy (writeptr, (char *) buf->recBufferList->mBuffers[0].mData,
+        bytesToCopy);
 
     /* we wrote one segment */
     gst_ring_buffer_advance (GST_RING_BUFFER (buf), 1);
