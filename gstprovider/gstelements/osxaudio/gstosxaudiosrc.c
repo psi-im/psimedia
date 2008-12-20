@@ -325,7 +325,8 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
   guint8 * writeptr;
   gint writeseg;
   gint len;
-  gint bytesToCopy;
+  gint remaining;
+  gint offset = 0;
 
   UNUSED (bufferList);
 
@@ -337,14 +338,34 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
     return status;
   }
 
-  if (gst_ring_buffer_prepare_read (GST_RING_BUFFER (buf), &writeseg,
-          &writeptr, &len)) {
-    bytesToCopy = buf->recBufferList->mBuffers[0].mDataByteSize;
-    memcpy (writeptr, (char *) buf->recBufferList->mBuffers[0].mData,
-        bytesToCopy);
+  remaining = bufferList->mBuffers[0].mDataByteSize;
 
-    /* we wrote one segment */
-    gst_ring_buffer_advance (GST_RING_BUFFER (buf), 1);
+  while (remaining) {
+    if (!gst_ring_buffer_prepare_read (GST_RING_BUFFER (buf),
+            &writeseg, &writeptr, &len))
+      return 0;
+
+    len -= buf->segoffset;
+
+    if (len > remaining)
+      len = remaining;
+
+    memcpy (writeptr + buf->segoffset,
+        (char *) buf->recBufferList->mBuffers[0].mData + offset, len);
+
+    buf->segoffset += len;
+    offset += len;
+    remaining -= len;
+
+    if ((gint)buf->segoffset == GST_RING_BUFFER (buf)->spec.segsize) {
+      /* clear written samples */
+      gst_ring_buffer_clear (GST_RING_BUFFER (buf), writeseg);
+
+      /* we wrote one segment */
+      gst_ring_buffer_advance (GST_RING_BUFFER (buf), 1);
+
+      buf->segoffset = 0;
+    }
   }
   return 0;
 }
