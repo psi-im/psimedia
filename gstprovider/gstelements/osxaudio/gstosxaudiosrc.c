@@ -322,7 +322,6 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
     AudioBufferList * bufferList)
 {
   OSStatus status;
-  AudioBufferList * recBufferList;
   guint8 * writeptr;
   gint writeseg;
   gint len;
@@ -331,20 +330,8 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
 
   UNUSED (bufferList);
 
-  recBufferList = (AudioBufferList *) g_malloc (sizeof (AudioBufferList) +
-      1 * sizeof (AudioBuffer));
-  memset (recBufferList, 0, sizeof (AudioBufferList) + 1 *
-      sizeof (AudioBuffer));
-  recBufferList->mNumBuffers = 1;
-  for (n = 0; n < 1; ++n) {
-    AudioBuffer *buffer = &recBufferList->mBuffers[n];
-    buffer->mNumberChannels = 2;
-    buffer->mDataByteSize = 0;
-    buffer->mData = NULL;
-  }
-
   status = AudioUnitRender (buf->audiounit, ioActionFlags, inTimeStamp,
-      inBusNumber, inNumberFrames, recBufferList);
+      inBusNumber, inNumberFrames, buf->recBufferList);
 
   if (status) {
     GST_WARNING_OBJECT (buf, "AudioUnitRender returned %d", (int) status);
@@ -355,9 +342,6 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
           &writeptr, &len)) {
     bytesToCopy = recBufferList->mBuffers[0].mDataByteSize;
     memcpy (writeptr, (char *) recBufferList->mBuffers[0].mData, bytesToCopy);
-
-    /* clear written samples */
-    /*gst_ring_buffer_clear (GST_RING_BUFFER(buf), writeseg); */
 
     /* we wrote one segment */
     gst_ring_buffer_advance (GST_RING_BUFFER (buf), 1);

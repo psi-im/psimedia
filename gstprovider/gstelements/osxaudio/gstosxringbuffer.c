@@ -73,6 +73,9 @@ static OSStatus gst_osx_ring_buffer_render_notify (GstOsxRingBuffer * osxbuf,
     const AudioTimeStamp * inTimeStamp, unsigned int inBusNumber,
     unsigned int inNumberFrames, AudioBufferList * ioData);
 
+static AudioBufferList * buffer_list_alloc (int channels, int size);
+static void buffer_list_free (AudioBufferList * list);
+
 static void
 gst_osx_ring_buffer_do_init (GType type)
 {
@@ -234,6 +237,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   gboolean ret = FALSE;
   GstStructure * structure;
   GstAudioChannelPosition * positions;
+  Uint32 frameSize;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
@@ -339,6 +343,24 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   spec->segsize = 4096;
   spec->segtotal = 16;
 
+  /* create AudioBufferList needed for recording */
+  if (osxbuf->is_src) {
+    propertySize = sizeof (frameSize);
+    status = AudioUnitGetProperty (osxbuf->audiounit,
+        kAudioDevicePropertyBufferFrameSize,
+        kAudioUnitScope_Global,
+        0, /* N/A for global */
+        &frameSize, &propertySize);
+
+    if (status) {
+      GST_WARNING_OBJECT (osxbuf, "Failed to get frame size: %lx", status);
+      goto done;
+    }
+
+    osxbuf->recBufferList = buffer_list_alloc (format.mChannelsPerFrame,
+        frameSize * format.mBytesPerFrame);
+  }
+
   buf->data = gst_buffer_new_and_alloc (spec->segtotal * spec->segsize);
   memset (GST_BUFFER_DATA (buf->data), 0, GST_BUFFER_SIZE (buf->data));
 
@@ -346,6 +368,12 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   if (status) {
     gst_buffer_unref (buf->data);
     buf->data = NULL;
+
+    if (osxbuf->recBufferList) {
+      buffer_list_free (osxbuf->recBufferList);
+      osxbuf->recBufferList = NULL;
+    }
+
     GST_WARNING_OBJECT (osxbuf,
         "Failed to initialise AudioUnit: %d", (int) status);
     goto done;
@@ -371,6 +399,11 @@ gst_osx_ring_buffer_release (GstRingBuffer * buf)
 
   gst_buffer_unref (buf->data);
   buf->data = NULL;
+
+  if (osxbuf->recBufferList) {
+    buffer_list_free (osxbuf->recBufferList);
+    osxbuf->recBufferList = NULL;
+  }
 
   return TRUE;
 }
@@ -571,4 +604,37 @@ gst_osx_ring_buffer_delay (GstRingBuffer * buf)
   samples = latency * GST_RING_BUFFER (buf)->spec.rate;
   GST_DEBUG_OBJECT (buf, "Got latency: %f seconds -> %d samples", latency, samples);
   return samples;
+}
+
+static AudioBufferList *
+buffer_list_alloc (int channels, int size)
+{
+  AudioBufferList * list;
+  int total_size;
+  int n;
+
+  total_size = sizeof (AudioBufferList) + channels * sizeof (AudioBuffer));
+  list = (AudioBufferList *) g_malloc (total_size);
+
+  list->mNumberBuffers = channels;
+  for (n = 0; n < channels; ++n) {
+    list->mBuffers[n].mNumberChannels = 1;
+    list->mBuffers[n].mDataByteSize = size;
+    list->mBuffers[n].mData = g_malloc (size);
+  }
+
+  return list;
+}
+
+static void
+buffer_list_free (AudioBufferList * list)
+{
+  int n;
+
+  for (n = 0; n < (int)list->mNumberBuffers; ++n) {
+    if (list->mBuffers[n].mData)
+      g_free (list->mBuffers[n].mData);
+  }
+
+  g_free (list);
 }

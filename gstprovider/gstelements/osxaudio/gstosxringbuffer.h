@@ -78,6 +78,7 @@ struct _GstOsxRingBuffer
   gboolean io_proc_needs_deactivation;
   guint buffer_len;
   guint segoffset;
+  AudioBufferList * recBufferList;
   GstOsxAudioElementInterface * element;
 };
 
