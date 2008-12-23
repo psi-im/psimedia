@@ -46,6 +46,7 @@
 #include <gst/gst.h>
 #include <gst/audio/multichannel.h>
 #include "gstosxringbuffer.h"
+#include "gstosxaudiosink.h"
 #include "gstosxaudiosrc.h"
 
 #define UNUSED(x) (void)x;
@@ -280,6 +281,8 @@ gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
     src->deviceChannels = asbd_in.mChannelsPerFrame;
   }
   else {
+    sink = GST_OSX_AUDIO_SINK (GST_OBJECT_PARENT (buf));
+
     /* needed for the sink's volume control */
     sink->audiounit = osxbuf->audiounit;
   }
