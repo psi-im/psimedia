@@ -246,12 +246,14 @@ static gboolean
 gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
 {
   GstOsxRingBuffer * osxbuf;
+  GstOsxAudioSink * sink;
   GstOsxAudioSrc * src;
   AudioStreamBasicDescription asbd_in;
   OSStatus status;
   UInt32 propertySize;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
+  sink = NULL;
   src = NULL;
 
   osxbuf->audiounit = gst_osx_ring_buffer_create_audio_unit (osxbuf,
@@ -265,7 +267,7 @@ gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
         kAudioUnitProperty_StreamFormat,
         kAudioUnitScope_Input,
         1,
-        &asbd_in, propertySize);
+        &asbd_in, &propertySize);
 
     if (status) {
       CloseComponent (osxbuf->audiounit);
@@ -277,12 +279,11 @@ gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
 
     src->deviceChannels = asbd_in.mChannelsPerFrame;
   }
+  else {
+    /* needed for the sink's volume control */
+    sink->audiounit = osxbuf->audiounit;
+  }
 
-  /* According to the documentation of open_device(), we should merely open
-   * the device here but not set any parameters.  However, the AudioUnit is
-   * already open at this point, and all that's left is to set parameters,
-   * which we'll do in acquire().  So there's nothing to do here.
-   */
   return TRUE;
 }
 
