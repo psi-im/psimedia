@@ -237,44 +237,6 @@ gst_osx_audio_sink_get_property (GObject * object, guint prop_id,
   }
 }
 
-static AudioUnit
-gst_osx_audio_sink_create_audio_unit (GstOsxAudioSink * osxsink)
-{
-  ComponentDescription desc;
-  Component comp;
-  OSStatus status;
-  AudioUnit unit;
-
-  /* Create a HALOutput AudioUnit.
-   * This is the lowest-level output API that is actually sensibly usable
-   * (the lower level ones require that you do channel-remapping yourself,
-   * and the CoreAudio channel mapping is sufficiently complex that doing
-   * so would be very difficult)
-   */
-  desc.componentType = kAudioUnitType_Output;
-  desc.componentSubType = kAudioUnitSubType_HALOutput;
-  desc.componentManufacturer = kAudioUnitManufacturer_Apple;
-  desc.componentFlags = 0;
-  desc.componentFlagsMask = 0;
-
-  comp = FindNextComponent (NULL, &desc);
-  if (comp == NULL) {
-    GST_WARNING_OBJECT (osxsink, "Couldn't find HALOutput component");
-    return NULL;
-  }
-
-  status = OpenAComponent (comp, &unit);
-
-  if (status) {
-    GST_WARNING_OBJECT (osxsink, "Couldn't open HALOutput component");
-    return NULL;
-  }
-
-  GST_DEBUG_OBJECT (osxsink, "Create HALOutput AudioUnit: %p", unit);
-
-  return unit;
-}
-
 static GstRingBuffer *
 gst_osx_audio_sink_create_ringbuffer (GstBaseAudioSink * sink)
 {
@@ -291,17 +253,14 @@ gst_osx_audio_sink_create_ringbuffer (GstBaseAudioSink * sink)
       GST_OSX_AUDIO_ELEMENT_GET_INTERFACE (osxsink),
       (void *) gst_osx_audio_sink_io_proc);
 
-  osxsink->audiounit = gst_osx_audio_sink_create_audio_unit (osxsink);
   gst_osx_audio_sink_set_volume (osxsink);
 
   ringbuffer->element = GST_OSX_AUDIO_ELEMENT_GET_INTERFACE (osxsink);
-  ringbuffer->audiounit = osxsink->audiounit; /* transfer ownership */
   ringbuffer->device_id = osxsink->device_id;
 
   return GST_RING_BUFFER (ringbuffer);
 }
 
-// TODO: confirm correctness.  is it okay to always index buffer 0?
 /* HALOutput AudioUnit will request fairly arbitrarily-sized chunks of data,
  * not of a fixed size. So, we keep track of where in the current ringbuffer
  * segment we are, and only advance the segment once we've read the whole

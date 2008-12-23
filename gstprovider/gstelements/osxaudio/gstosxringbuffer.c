@@ -43,10 +43,10 @@
  */
 
 #include <CoreAudio/CoreAudio.h>
-#include <AudioUnit/AUNTComponent.h>
 #include <gst/gst.h>
 #include <gst/audio/multichannel.h>
 #include "gstosxringbuffer.h"
+#include "gstosxaudiosrc.h"
 
 #define UNUSED(x) (void)x;
 
@@ -143,15 +143,6 @@ gst_osx_ring_buffer_init (GstOsxRingBuffer * ringbuffer,
 static void
 gst_osx_ring_buffer_dispose (GObject * object)
 {
-  GstOsxRingBuffer * osxbuf;
-
-  osxbuf = GST_OSX_RING_BUFFER (object);
-
-  if (osxbuf->audiounit) {
-    CloseComponent (osxbuf->audiounit);
-    osxbuf->audiounit = NULL;
-  }
-
   G_OBJECT_CLASS (ring_parent_class)->dispose (object);
 }
 
@@ -161,10 +152,131 @@ gst_osx_ring_buffer_finalize (GObject * object)
   G_OBJECT_CLASS (ring_parent_class)->finalize (object);
 }
 
+static AudioUnit
+gst_osx_ring_buffer_create_audio_unit (GstOsxRingBuffer * osxbuf,
+    gboolean input, AudioDeviceID device_id)
+{
+  ComponentDescription desc;
+  Component comp;
+  OSStatus status;
+  AudioUnit unit;
+  UInt32 enableIO;
+
+  /* Create a HALOutput AudioUnit.
+   * This is the lowest-level output API that is actually sensibly usable
+   * (the lower level ones require that you do channel-remapping yourself,
+   * and the CoreAudio channel mapping is sufficiently complex that doing
+   * so would be very difficult)
+   *
+   * Note that for input we request an output unit even though we will do
+   * input with it: http://developer.apple.com/technotes/tn2002/tn2091.html
+   */
+  desc.componentType = kAudioUnitType_Output;
+  desc.componentSubType = kAudioUnitSubType_HALOutput;
+  desc.componentManufacturer = kAudioUnitManufacturer_Apple;
+  desc.componentFlags = 0;
+  desc.componentFlagsMask = 0;
+
+  comp = FindNextComponent (NULL, &desc);
+  if (comp == NULL) {
+    GST_WARNING_OBJECT (osxbuf, "Couldn't find HALOutput component");
+    return NULL;
+  }
+
+  status = OpenAComponent (comp, &unit);
+
+  if (status) {
+    GST_WARNING_OBJECT (osxbuf, "Couldn't open HALOutput component");
+    return NULL;
+  }
+
+  if (input) {
+    /* enable input */
+    enableIO = 1;
+    status = AudioUnitSetProperty (unit,
+        kAudioOutputUnitProperty_EnableIO,
+        kAudioUnitScope_Input,
+        1, /* 1 = input element */
+        &enableIO,
+        sizeof (enableIO));
+
+    if (status) {
+      CloseComponent (unit);
+      GST_WARNING_OBJECT (osxbuf, "Failed to enable input: %lx", status);
+      return NULL;
+    }
+
+    /* disable output */
+    enableIO = 0;
+    status = AudioUnitSetProperty (unit,
+        kAudioOutputUnitProperty_EnableIO,
+        kAudioUnitScope_Output,
+        0, /* 0 = output element */
+        &enableIO,
+        sizeof (enableIO));
+
+    if (status) {
+      CloseComponent (unit);
+      GST_WARNING_OBJECT (osxbuf, "Failed to disable output: %lx", status);
+      return NULL;
+    }
+  }
+
+  /* Specify which device we're using. */
+  GST_DEBUG_OBJECT (osxbuf, "Setting device to %d", (int) device_id);
+  status = AudioUnitSetProperty (unit,
+      kAudioOutputUnitProperty_CurrentDevice,
+      kAudioUnitScope_Global,
+      0, /* N/A for global */
+      &device_id,
+      sizeof (AudioDeviceID));
+
+  if (status) {
+    CloseComponent (unit);
+    GST_WARNING_OBJECT (osxbuf, "Failed to set device: %lx", status);
+    return NULL;
+  }
+
+  GST_DEBUG_OBJECT (osxbuf, "Create HALOutput AudioUnit: %p", unit);
+
+  return unit;
+}
+
 static gboolean
 gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
 {
-  UNUSED (buf);
+  GstOsxRingBuffer * osxbuf;
+  GstOsxAudioSrc * src;
+  AudioStreamBasicDescription asbd_in;
+  OSStatus status;
+  UInt32 propertySize;
+
+  osxbuf = GST_OSX_RING_BUFFER (buf);
+  src = NULL;
+
+  osxbuf->audiounit = gst_osx_ring_buffer_create_audio_unit (osxbuf,
+      osxbuf->is_src, osxbuf->device_id);
+
+  if (osxbuf->is_src) {
+    src = GST_OSX_AUDIO_SRC (GST_OBJECT_PARENT (buf));
+
+    propertySize = sizeof (asbd_in);
+    status = AudioUnitGetProperty (osxbuf->audiounit,
+        kAudioUnitProperty_StreamFormat,
+        kAudioUnitScope_Input,
+        1,
+        &asbd_in, propertySize);
+
+    if (status) {
+      CloseComponent (osxbuf->audiounit);
+      osxbuf->audiounit = NULL;
+      GST_WARNING_OBJECT (osxbuf, "Unable to obtain device properties: %lx",
+          status);
+      return FALSE;
+    }
+
+    src->deviceChannels = asbd_in.mChannelsPerFrame;
+  }
 
   /* According to the documentation of open_device(), we should merely open
    * the device here but not set any parameters.  However, the AudioUnit is
@@ -177,11 +289,12 @@ gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
 static gboolean
 gst_osx_ring_buffer_close_device (GstRingBuffer * buf)
 {
-  UNUSED (buf);
+  GstOsxRingBuffer * osxbuf;
+  osxbuf = GST_OSX_RING_BUFFER (buf);
 
-  /* Since we initialize the device in acquire(), we uninitialize it in
-   * release().  So there's nothing to do here.
-   */
+  CloseComponent (osxbuf->audiounit);
+  osxbuf->audiounit = NULL;
+
   return TRUE;
 }
 
@@ -226,7 +339,6 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
 {
   /* Configure the output stream and allocate ringbuffer memory */
   GstOsxRingBuffer * osxbuf;
-  //AudioStreamBasicDescription asbd_in;
   AudioStreamBasicDescription format;
   AudioChannelLayout * layout = NULL;
   OSStatus status;
@@ -241,15 +353,6 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   UInt32 frameSize;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
-
-  /*if (osxbuf->is_src) {
-    propertySize = sizeof (asbd_in);
-    status = AudioUnitGetProperty (osxbuf->audiounit,
-        kAudioUnitProperty_StreamFormat,
-        kAudioUnitScope_Input,
-        1,
-        &asbd_in, propertySize);
-  }*/
 
   /* Fill out the audio description we're going to be using */
   format.mFormatID = kAudioFormatLinearPCM;
@@ -333,20 +436,6 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   if (status) {
     GST_WARNING_OBJECT (osxbuf, "Failed to set output channel layout: %lx",
         status);
-    goto done;
-  }
-
-  /* Specify which device we're using. */
-  GST_DEBUG_OBJECT (osxbuf, "Setting device to %d", (int) osxbuf->device_id);
-  status = AudioUnitSetProperty (osxbuf->audiounit,
-      kAudioOutputUnitProperty_CurrentDevice,
-      kAudioUnitScope_Global,
-      0, /* N/A for global */
-      &osxbuf->device_id,
-      sizeof (AudioDeviceID));
-
-  if (status) {
-    GST_WARNING_OBJECT (osxbuf, "Failed to set device: %lx", status);
     goto done;
   }
 

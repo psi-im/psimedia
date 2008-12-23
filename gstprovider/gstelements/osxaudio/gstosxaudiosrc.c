@@ -106,6 +106,8 @@ static void gst_osx_audio_src_set_property (GObject * object, guint prop_id,
 static void gst_osx_audio_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
+static GstCaps * gst_osx_audio_src_get_caps (GstBaseSrc * src);
+
 static GstRingBuffer * gst_osx_audio_src_create_ringbuffer (
     GstBaseAudioSrc * src);
 static void gst_osx_audio_src_osxelement_init (gpointer g_iface,
@@ -152,10 +154,12 @@ gst_osx_audio_src_class_init (GstOsxAudioSrcClass * klass)
 {
   GObjectClass * gobject_class;
   GstElementClass * gstelement_class;
+  GstBaseSrcClass * gstbasesrc_class;
   GstBaseAudioSrcClass * gstbaseaudiosrc_class;
 
   gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
+  gstbasesrc_class = (GstBaseSrcClass *) klass;
   gstbaseaudiosrc_class = (GstBaseAudioSrcClass *) klass;
 
   parent_class = g_type_class_peek_parent (klass);
@@ -164,6 +168,8 @@ gst_osx_audio_src_class_init (GstOsxAudioSrcClass * klass)
       GST_DEBUG_FUNCPTR (gst_osx_audio_src_set_property);
   gobject_class->get_property =
       GST_DEBUG_FUNCPTR (gst_osx_audio_src_get_property);
+
+  gstbasesrc_class->get_caps = GST_DEBUG_FUNCPTR (gst_osx_audio_src_get_caps);
 
   g_object_class_install_property (gobject_class, ARG_DEVICE,
       g_param_spec_int ("device", "Device ID", "Device ID of input device",
@@ -181,6 +187,7 @@ gst_osx_audio_src_init (GstOsxAudioSrc * src, GstOsxAudioSrcClass * gclass)
   gst_base_src_set_live (GST_BASE_SRC (src), TRUE);
 
   src->device_id = kAudioDeviceUnknown;
+  src->deviceChannels = -1;
 }
 
 static void
@@ -215,76 +222,39 @@ gst_osx_audio_src_get_property (GObject * object, guint prop_id,
   }
 }
 
-static AudioUnit
-gst_osx_audio_src_create_audio_unit (GstOsxAudioSrc * osxsrc)
+static GstCaps *
+gst_osx_audio_src_get_caps (GstBaseSrc * src)
 {
-  ComponentDescription desc;
-  Component comp;
-  OSStatus status;
-  AudioUnit unit;
-  UInt32 enableIO;
+  GstElementClass * gstelement_class;
+  GstOsxAudioSrc * osxsrc;
+  GstPadTemplate * pad_template;
+  GstCaps * caps;
+  gint min, max;
 
-  /* Create a HALOutput AudioUnit.
-   * This is the lowest-level output API that is actually sensibly usable
-   * (the lower level ones require that you do channel-remapping yourself,
-   * and the CoreAudio channel mapping is sufficiently complex that doing
-   * so would be very difficult)
-   *
-   * Note that we request an output unit even though we will do input with
-   * it: http://developer.apple.com/technotes/tn2002/tn2091.html
-   */
-  desc.componentType = kAudioUnitType_Output;
-  desc.componentSubType = kAudioUnitSubType_HALOutput;
-  desc.componentManufacturer = kAudioUnitManufacturer_Apple;
-  desc.componentFlags = 0;
-  desc.componentFlagsMask = 0;
+  gstelement_class = GST_ELEMENT_GET_CLASS (src);
+  osxsrc = GST_OSX_AUDIO_SRC (src);
 
-  comp = FindNextComponent (NULL, &desc);
-  if (comp == NULL) {
-    GST_WARNING_OBJECT (osxsrc, "Couldn't find HALOutput component");
+  if (osxsrc->deviceChannels == -1) {
+    /* -1 means we don't know the number of channels yet.  for now, return
+     * template caps.
+     */
     return NULL;
   }
 
-  status = OpenAComponent (comp, &unit);
+  max = osxsrc->deviceChannels;
+  min = MIN (1, max);
 
-  if (status) {
-    GST_WARNING_OBJECT (osxsrc, "Couldn't open HALOutput component");
-    return NULL;
-  }
+  pad_template = gst_element_class_get_pad_template (gstelement_class, "src");
+  g_return_val_if_fail (pad_template != NULL, NULL);
 
-  /* enable input */
-  enableIO = 1;
-  status = AudioUnitSetProperty (unit,
-      kAudioOutputUnitProperty_EnableIO,
-      kAudioUnitScope_Input,
-      1, /* 1 = input element */
-      &enableIO,
-      sizeof (enableIO));
+  caps = gst_caps_copy (gst_pad_template_get_caps (pad_template));
 
-  if (status) {
-    CloseComponent (unit);
-    GST_WARNING_OBJECT (osxsrc, "Failed to enable input: %lx", status);
-    return NULL;
-  }
+  structure = gst_structure_copy (gst_caps_get_structure (caps, 0));
+  gst_structure_set (structure, "channels", GST_TYPE_INT_RANGE, min, max,
+      NULL);
+  gst_caps_merge_structure (caps, structure); /* takes ownership */
 
-  /* disable output */
-  enableIO = 0;
-  status = AudioUnitSetProperty (unit,
-      kAudioOutputUnitProperty_EnableIO,
-      kAudioUnitScope_Output,
-      0, /* 0 = output element */
-      &enableIO,
-      sizeof (enableIO));
-
-  if (status) {
-    CloseComponent (unit);
-    GST_WARNING_OBJECT (osxsrc, "Failed to disable output: %lx", status);
-    return NULL;
-  }
-
-  GST_DEBUG_OBJECT (osxsrc, "Create HALOutput AudioUnit: %p", unit);
-
-  return unit;
+  return caps;
 }
 
 static GstRingBuffer *
@@ -303,17 +273,13 @@ gst_osx_audio_src_create_ringbuffer (GstBaseAudioSrc * src)
       GST_OSX_AUDIO_ELEMENT_GET_INTERFACE (osxsrc),
       (void *) gst_osx_audio_src_io_proc);
 
-  osxsrc->audiounit = gst_osx_audio_src_create_audio_unit (osxsrc);
-
   ringbuffer->element = GST_OSX_AUDIO_ELEMENT_GET_INTERFACE (osxsrc);
   ringbuffer->is_src = TRUE;
-  ringbuffer->audiounit = osxsrc->audiounit; /* transfer ownership */
   ringbuffer->device_id = osxsrc->device_id;
 
   return GST_RING_BUFFER (ringbuffer);
 }
 
-// ###
 static OSStatus
 gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
     AudioUnitRenderActionFlags * ioActionFlags,
@@ -358,9 +324,6 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
     remaining -= len;
 
     if ((gint)buf->segoffset == GST_RING_BUFFER (buf)->spec.segsize) {
-      /* clear written samples */
-      /* gst_ring_buffer_clear (GST_RING_BUFFER (buf), writeseg); */
-
       /* we wrote one segment */
       gst_ring_buffer_advance (GST_RING_BUFFER (buf), 1);
 

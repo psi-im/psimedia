@@ -65,7 +65,9 @@ struct _GstOsxAudioSrc
   GstBaseAudioSrc src;
 
   AudioDeviceID device_id;
-  AudioUnit audiounit;
+
+  /* actual number of channels reported by input device */
+  int deviceChannels;
 };
 
 struct _GstOsxAudioSrcClass 
