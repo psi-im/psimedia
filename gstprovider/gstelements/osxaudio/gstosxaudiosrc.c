@@ -253,7 +253,7 @@ gst_osx_audio_src_get_caps (GstBaseSrc * src)
 
   caps = gst_caps_copy (gst_pad_template_get_caps (pad_template));
 
-  structure = gst_caps_get_structure (caps, 0));
+  structure = gst_caps_get_structure (caps, 0);
   gst_structure_set (structure, "channels", GST_TYPE_INT_RANGE, min, max,
       NULL);
 
