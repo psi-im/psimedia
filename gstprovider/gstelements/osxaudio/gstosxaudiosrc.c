@@ -229,6 +229,7 @@ gst_osx_audio_src_get_caps (GstBaseSrc * src)
   GstOsxAudioSrc * osxsrc;
   GstPadTemplate * pad_template;
   GstCaps * caps;
+  GstStructure * structure;
   gint min, max;
 
   gstelement_class = GST_ELEMENT_GET_CLASS (src);
