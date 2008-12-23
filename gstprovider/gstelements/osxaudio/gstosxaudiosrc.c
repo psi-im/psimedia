@@ -243,6 +243,9 @@ gst_osx_audio_src_get_caps (GstBaseSrc * src)
   }
 
   max = osxsrc->deviceChannels;
+  if (max < 1)
+    max = 1; /* 0 channels means 1 channel? */
+
   min = MIN (1, max);
 
   pad_template = gst_element_class_get_pad_template (gstelement_class, "src");
@@ -250,10 +253,9 @@ gst_osx_audio_src_get_caps (GstBaseSrc * src)
 
   caps = gst_caps_copy (gst_pad_template_get_caps (pad_template));
 
-  structure = gst_structure_copy (gst_caps_get_structure (caps, 0));
+  structure = gst_caps_get_structure (caps, 0));
   gst_structure_set (structure, "channels", GST_TYPE_INT_RANGE, min, max,
       NULL);
-  gst_caps_merge_structure (caps, structure); /* takes ownership */
 
   return caps;
 }
