@@ -226,6 +226,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
 {
   /* Configure the output stream and allocate ringbuffer memory */
   GstOsxRingBuffer * osxbuf;
+  //AudioStreamBasicDescription asbd_in;
   AudioStreamBasicDescription format;
   AudioChannelLayout * layout = NULL;
   OSStatus status;
@@ -240,6 +241,15 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   UInt32 frameSize;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
+
+  /*if (osxbuf->is_src) {
+    propertySize = sizeof (asbd_in);
+    status = AudioUnitGetProperty (osxbuf->audiounit,
+        kAudioUnitProperty_StreamFormat,
+        kAudioUnitScope_Input,
+        1,
+        &asbd_in, propertySize);
+  }*/
 
   /* Fill out the audio description we're going to be using */
   format.mFormatID = kAudioFormatLinearPCM;
@@ -411,9 +421,6 @@ gst_osx_ring_buffer_release (GstRingBuffer * buf)
 static void
 gst_osx_ring_buffer_remove_render_callback (GstOsxRingBuffer * osxbuf)
 {
-  // ### AudioUnitScope scope = osxbuf->is_src ?
-  //    kAudioUnitScope_Output:kAudioUnitScope_Input;
-  // ### int element = osxbuf->is_src ? 1 : 0;
   AURenderCallbackStruct input;
   OSStatus status;
 
@@ -425,7 +432,6 @@ gst_osx_ring_buffer_remove_render_callback (GstOsxRingBuffer * osxbuf)
 
   status = AudioUnitSetProperty (osxbuf->audiounit,
       kAudioUnitProperty_SetRenderCallback,
-      // ### scope, element,
       kAudioUnitScope_Global,
       0, /* N/A for global */
       &input, sizeof (input));
@@ -483,9 +489,7 @@ gst_osx_ring_buffer_start (GstRingBuffer * buf)
   OSStatus status;
   GstOsxRingBuffer * osxbuf;
   AURenderCallbackStruct input;
-  AudioUnitScope scope;
   AudioUnitPropertyID callback_type;
-  int element;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
@@ -495,16 +499,12 @@ gst_osx_ring_buffer_start (GstRingBuffer * buf)
     callback_type = osxbuf->is_src ?
         kAudioOutputUnitProperty_SetInputCallback :
         kAudioUnitProperty_SetRenderCallback;
-    scope = osxbuf->is_src ?
-        kAudioUnitScope_Output:kAudioUnitScope_Input;
-    element = osxbuf->is_src ? 1 : 0;
 
     input.inputProc = (AURenderCallback) osxbuf->element->io_proc;
     input.inputProcRefCon = osxbuf;
 
     status = AudioUnitSetProperty (osxbuf->audiounit,
         callback_type,
-        // ### scope, element,
         kAudioUnitScope_Global,
         0, /* N/A for global */
         &input, sizeof (input));
@@ -613,12 +613,12 @@ buffer_list_alloc (int channels, int size)
   int total_size;
   int n;
 
-  total_size = sizeof (AudioBufferList) + channels * sizeof (AudioBuffer);
+  total_size = sizeof (AudioBufferList) + 1 * sizeof (AudioBuffer);
   list = (AudioBufferList *) g_malloc (total_size);
 
-  list->mNumberBuffers = channels;
-  for (n = 0; n < channels; ++n) {
-    list->mBuffers[n].mNumberChannels = 1;
+  list->mNumberBuffers = 1;
+  for (n = 0; n < (int)list->mNumberBuffers; ++n) {
+    list->mBuffers[n].mNumberChannels = channels;
     list->mBuffers[n].mDataByteSize = size;
     list->mBuffers[n].mData = g_malloc (size);
   }
