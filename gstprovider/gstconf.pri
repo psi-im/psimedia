@@ -14,7 +14,7 @@ unix:!mac {
 		/usr/lib/glib-2.0/include \
 		/usr/include/libxml2 \
 		/usr/include/gstreamer-0.10
-	LIBS += -lgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lrt -lgstvideo-0.10 -lgstinterfaces-0.10
+	LIBS += -lgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lgobject-2.0 -lrt -lgstvideo-0.10 -lgstbase-0.10 -lgstinterfaces-0.10
 }
 
 mac {
