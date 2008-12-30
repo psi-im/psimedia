@@ -1,6 +1,6 @@
 /*
  * GStreamer
- * Copyright 2007 Ole André Vadla Ravnås <ole.andre.ravnas@tandberg.com>
+ * Copyright 2007 Ole AndrÃ© Vadla RavnÃ¥s <ole.andre.ravnas@tandberg.com>
  * Copyright 2007 Ali Sabil <ali.sabil@tandberg.com>
  *
  * This library is free software; you can redistribute it and/or
@@ -42,7 +42,7 @@ G_BEGIN_DECLS
 #define GST_IS_OSX_VIDEO_SRC_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_OSX_VIDEO_SRC))
 
-typedef struct _GstOSXVideoSrc      GstOSXVideoSrc;
+typedef struct _GstOSXVideoSrc GstOSXVideoSrc;
 typedef struct _GstOSXVideoSrcClass GstOSXVideoSrcClass;
 
 struct _GstOSXVideoSrc

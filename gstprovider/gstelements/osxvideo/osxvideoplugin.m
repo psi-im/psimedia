@@ -2,7 +2,7 @@
  * OSX video sink
  * Copyright (C) 2004-6 Zaheer Abbas Merali <zaheerabbas at merali dot org>
  * Copyright (C) 2007 Pioneers of the Inevitable <songbird@songbirdnest.com>
- * 
+ *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
  * License as published by the Free Software Foundation; either
@@ -20,7 +20,7 @@
  *
  * The development of this code was made possible due to the involvement of
  * Pioneers of the Inevitable, the creators of the Songbird Music player.
- * 
+ *
  */
 
 #ifdef HAVE_CONFIG_H
@@ -34,7 +34,6 @@
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
-
   if (!gst_element_register (plugin, "osxvideosink",
           GST_RANK_PRIMARY, GST_TYPE_OSX_VIDEO_SINK))
     return FALSE;
@@ -43,9 +42,9 @@ plugin_init (GstPlugin * plugin)
       "osxvideosink element");
 
   if (!gst_element_register (plugin, "osxvideosrc",
-                             GST_RANK_PRIMARY, GST_TYPE_OSX_VIDEO_SRC))
+          GST_RANK_PRIMARY, GST_TYPE_OSX_VIDEO_SRC))
     return FALSE;
-  
+
   GST_DEBUG_CATEGORY_INIT (gst_debug_osx_video_src, "osxvideosrc", 0,
                            "osxvideosrc element");
 

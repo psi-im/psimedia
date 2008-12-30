@@ -1,6 +1,6 @@
 /*
  * GStreamer
- * Copyright 2007 Ole André Vadla Ravnås <ole.andre.ravnas@tandberg.com>
+ * Copyright 2007 Ole AndrÃ© Vadla RavnÃ¥s <ole.andre.ravnas@tandberg.com>
  * Copyright 2007 Ali Sabil <ali.sabil@tandberg.com>
  *
  * This library is free software; you can redistribute it and/or
@@ -59,9 +59,7 @@ enum
   ARG_0,
 };
 
-static GstStaticPadTemplate src_template =
-  GST_STATIC_PAD_TEMPLATE (
-    "src",
+static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("video/x-raw-yuv, "
@@ -69,7 +67,7 @@ static GstStaticPadTemplate src_template =
         "width = (int) 640, "
         "height = (int) 480, "
         "framerate = (fraction) 30/1")
-  );
+    );
 
 GST_BOILERPLATE (GstOSXVideoSrc, gst_osx_video_src, GstPushSrc,
     GST_TYPE_PUSH_SRC);
@@ -80,16 +78,16 @@ static void gst_osx_video_src_finalize (GstOSXVideoSrc * osx_video_src);
 static gboolean gst_osx_video_src_set_caps (GstBaseSrc * src, GstCaps * caps);
 static gboolean gst_osx_video_src_start (GstBaseSrc * src);
 static gboolean gst_osx_video_src_stop (GstBaseSrc * src);
-static GstStateChangeReturn gst_osx_video_src_change_state (GstElement *element,
-    GstStateChange transition);
+static GstStateChangeReturn gst_osx_video_src_change_state (
+    GstElement * element, GstStateChange transition);
 static GstFlowReturn gst_osx_video_src_create (GstPushSrc * src,
     GstBuffer ** buf);
-
 
 static gboolean init_components (GstOSXVideoSrc * self);
 static gboolean init_gworld (GstOSXVideoSrc * self);
 static gboolean select_device (GstOSXVideoSrc * self, guint device_index);
-static gboolean select_resolution (GstOSXVideoSrc * self, short width, short height);
+static gboolean select_resolution (GstOSXVideoSrc * self, short width,
+    short height);
 static gboolean select_framerate (GstOSXVideoSrc * self, gfloat rate);
 static gboolean prepare_capture(GstOSXVideoSrc * self);
 
@@ -97,13 +95,14 @@ static void
 gst_osx_video_src_base_init (gpointer gclass)
 {
   static GstElementDetails element_details = {
-    "Video Source (OSX)",
-    "Source/Video",
-    "Reads raw frames from a capture device on OS X",
-    "Ole Andre Vadla Ravnaas <ole.andre.ravnas@tandberg.com>, "
-    "Ali Sabil <ali.sabil@tandberg.com>"
+      "Video Source (OSX)",
+      "Source/Video",
+      "Reads raw frames from a capture device on OS X",
+      "Ole Andre Vadla Ravnaas <ole.andre.ravnas@tandberg.com>, "
+      "Ali Sabil <ali.sabil@tandberg.com>"
   };
-  GstElementClass *element_class = GST_ELEMENT_CLASS (gclass);
+
+  GstElementClass * element_class = GST_ELEMENT_CLASS (gclass);
 
   GST_DEBUG (G_STRFUNC);
 
@@ -116,10 +115,10 @@ gst_osx_video_src_base_init (gpointer gclass)
 static void
 gst_osx_video_src_class_init (GstOSXVideoSrcClass * klass)
 {
-  GObjectClass *gobject_class;
-  GstElementClass *element_class;
-  GstBaseSrcClass *basesrc_class;
-  GstPushSrcClass *pushsrc_class;
+  GObjectClass * gobject_class;
+  GstElementClass * element_class;
+  GstBaseSrcClass * basesrc_class;
+  GstPushSrcClass * pushsrc_class;
 
   GST_DEBUG (G_STRFUNC);
 
@@ -130,7 +129,7 @@ gst_osx_video_src_class_init (GstOSXVideoSrcClass * klass)
 
   gobject_class->dispose = gst_osx_video_src_dispose;
   gobject_class->finalize = (GObjectFinalizeFunc) gst_osx_video_src_finalize;
-  
+
   element_class->change_state = gst_osx_video_src_change_state;
 
   basesrc_class->set_caps = gst_osx_video_src_set_caps;
@@ -153,10 +152,10 @@ gst_osx_video_src_init (GstOSXVideoSrc * self, GstOSXVideoSrcClass * klass)
   self->world = NULL;
   self->buffer = NULL;
   self->seq = 0;
-  
+
   if (!init_components (self))
     return;
-  
+
   gst_base_src_set_format (GST_BASE_SRC (self), GST_FORMAT_TIME);
   gst_base_src_set_live (GST_BASE_SRC (self), TRUE);
 
@@ -171,9 +170,8 @@ gst_osx_video_src_dispose (GObject * object)
 {
   GstOSXVideoSrc * self = GST_OSX_VIDEO_SRC (object);
   GST_DEBUG_OBJECT (object, G_STRFUNC);
-  
-  if (self->buffer != NULL)
-  {
+
+  if (self->buffer != NULL) {
     gst_buffer_unref (self->buffer);
     self->buffer = NULL;
   }
@@ -195,23 +193,23 @@ gst_osx_video_src_set_caps (GstBaseSrc * src, GstCaps * caps)
   GstOSXVideoSrc * self = GST_OSX_VIDEO_SRC (src);
   GstStructure * structure = gst_caps_get_structure (caps, 0);
   gint width, height, framerate_num, framerate_denom;
-  
+
   GST_DEBUG_OBJECT (src, G_STRFUNC);
-  
+
   gst_structure_get_int (structure, "width", &width);
   gst_structure_get_int (structure, "height", &height);
   gst_structure_get_fraction (structure, "framerate", &framerate_num, &framerate_denom);
-  
+
   GST_DEBUG_OBJECT (src, "changing caps to %dx%d@%f", width, height, (float) (framerate_num / framerate_denom));
-  
+
   if (!select_resolution(self, width, height))
     return FALSE;
-  
+
   /*if (!select_framerate(self, (float) (framerate_num / framerate_denom)))
     return FALSE;*/
-  
+
   return TRUE;
-}  
+}
 
 static gboolean
 gst_osx_video_src_start (GstBaseSrc * src)
@@ -220,8 +218,7 @@ gst_osx_video_src_start (GstBaseSrc * src)
 
   GST_DEBUG_OBJECT (src, "entering");
 
-  if (self->buffer != NULL)
-  {
+  if (self->buffer != NULL) {
     gst_buffer_unref (self->buffer);
     self->buffer = NULL;
   }
@@ -232,7 +229,7 @@ gst_osx_video_src_start (GstBaseSrc * src)
 
   if (!select_device (self, 0))
     return FALSE;
-  
+
   /*if (!select_resolution (self, WIDTH, HEIGHT))
     return FALSE;
 
@@ -240,7 +237,7 @@ gst_osx_video_src_start (GstBaseSrc * src)
     return FALSE;
   }*/
 
-  GST_DEBUG_OBJECT (self, "started"); 
+  GST_DEBUG_OBJECT (self, "started");
   return TRUE;
 }
 
@@ -250,12 +247,11 @@ gst_osx_video_src_stop (GstBaseSrc * src)
   GstOSXVideoSrc * self = GST_OSX_VIDEO_SRC (src);
 
   GST_DEBUG_OBJECT (src, "stopping");
-  
+
   if (self->world != NULL)
     DisposeGWorld (self->world);
 
-  if (self->buffer != NULL)
-  {
+  if (self->buffer != NULL) {
     gst_buffer_unref (self->buffer);
     self->buffer = NULL;
   }
@@ -263,16 +259,17 @@ gst_osx_video_src_stop (GstBaseSrc * src)
 }
 
 static GstStateChangeReturn
-gst_osx_video_src_change_state (GstElement *element, GstStateChange transition)
+gst_osx_video_src_change_state (GstElement * element,
+    GstStateChange transition)
 {
   GstStateChangeReturn result = GST_STATE_CHANGE_SUCCESS;
   GstOSXVideoSrc * self = GST_OSX_VIDEO_SRC (element);
-  
+
   switch (transition) {
     case GST_STATE_CHANGE_PAUSED_TO_PLAYING:
         if (!prepare_capture(self))
           return GST_STATE_CHANGE_FAILURE;
-        
+
         if (SGStartRecord (self->seq_grab) != noErr) {
           GST_ERROR_OBJECT (self, "SGStartRecord failed");
           return GST_STATE_CHANGE_FAILURE;
@@ -281,11 +278,12 @@ gst_osx_video_src_change_state (GstElement *element, GstStateChange transition)
     default:
       break;
   }
-  
-  result = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
+
+  result = GST_ELEMENT_CLASS (parent_class)->change_state (element,
+      transition);
   if (result == GST_STATE_CHANGE_FAILURE)
     return result;
-  
+
   switch (transition) {
     case GST_STATE_CHANGE_PAUSED_TO_READY:
       SGStop (self->seq_grab);
@@ -293,7 +291,7 @@ gst_osx_video_src_change_state (GstElement *element, GstStateChange transition)
     default:
       break;
   }
-  
+
   return result;
 }
 
@@ -303,8 +301,8 @@ gst_osx_video_src_create (GstPushSrc * src, GstBuffer ** buf)
   GstOSXVideoSrc * self = GST_OSX_VIDEO_SRC (src);
   ComponentResult result;
   GstCaps * caps;
-  GstClock* clock;
-  
+  GstClock * clock;
+
   clock = gst_system_clock_obtain ();
   do {
     if ((result = SGIdle (self->seq_grab)) != noErr) {
@@ -313,12 +311,12 @@ gst_osx_video_src_create (GstPushSrc * src, GstBuffer ** buf)
       return GST_FLOW_UNEXPECTED;
     }
 
-    if (self->buffer == NULL)
-    {
+    if (self->buffer == NULL) {
       GstClockID clock_id;
-      
+
       clock_id = gst_clock_new_single_shot_id (clock,
-          (GstClockTime) (gst_clock_get_time(clock) + (GST_SECOND / (FRAMERATE * 2))));
+          (GstClockTime) (gst_clock_get_time(clock) +
+          (GST_SECOND / (FRAMERATE * 2))));
       gst_clock_id_wait (clock_id, NULL);
       gst_clock_id_unref (clock_id);
     }
@@ -341,9 +339,8 @@ data_proc (SGChannel c, Ptr p, long len, long * offset, long chRefCon,
     TimeValue time, short writeType, long refCon)
 {
   GstOSXVideoSrc * self = GST_OSX_VIDEO_SRC (refCon);
-  
-  if (self->buffer != NULL)
-  {
+
+  if (self->buffer != NULL) {
     gst_buffer_unref (self->buffer);
     self->buffer = NULL;
   }
@@ -398,16 +395,16 @@ static gboolean
 init_gworld (GstOSXVideoSrc * self)
 {
   ComponentResult result = noErr;
-  
+
   g_return_val_if_fail (self->world == NULL, FALSE);
-  
+
   result = QTNewGWorld (&self->world, k422YpCbCr8PixelFormat,
-                        &self->rect, 0, NULL, 0);
+      &self->rect, 0, NULL, 0);
   if (result != noErr) {
     GST_ERROR ("QTNewGWorld failed");
     return FALSE;
   }
-  
+
   if (LockPixels (GetPortPixMap (self->world)) == 0) {
     GST_ERROR ("LockPixels failed");
     return FALSE;
@@ -425,9 +422,9 @@ static gboolean
 select_device (GstOSXVideoSrc * self, guint device_index)
 {
   // ComponentResult result = noErr;
-  
+
   // FIXME: select the device, instead of ignoring the parameter
-  
+
   return TRUE;
 }
 
@@ -435,7 +432,7 @@ static gboolean
 select_resolution (GstOSXVideoSrc * self, short width, short height)
 {
   ComponentResult result = noErr;
-  
+
   SetRect(&self->rect, 0, 0, width, height);
 
   result = SGSetChannelBounds (self->video_chan, &self->rect);
@@ -464,8 +461,9 @@ static
 gboolean prepare_capture(GstOSXVideoSrc * self)
 {
   ComponentResult result = noErr;
-  
-  result = SGSetDataProc (self->seq_grab, NewSGDataUPP (data_proc), (long) self);
+
+  result = SGSetDataProc (self->seq_grab, NewSGDataUPP (data_proc),
+      (long) self);
   if (result != noErr) {
     GST_ERROR_OBJECT (self, "SGSetDataProc failed");
     return FALSE;
