@@ -49,16 +49,19 @@ struct _GstOSXVideoSrc
 {
   GstPushSrc pushsrc;
 
+  gchar *device_id;
+  gchar *device_name;
   SeqGrabComponent seq_grab;
   SGChannel video_chan;
   GWorldPtr world;
   Rect rect;
+  ImageSequence dec_seq;
 
   GstBuffer * buffer;
-  guint seq;
+  guint seq_num;
 };
 
-struct _GstOSXVideoSrcClass 
+struct _GstOSXVideoSrcClass
 {
   GstPushSrcClass parent_class;
 };
