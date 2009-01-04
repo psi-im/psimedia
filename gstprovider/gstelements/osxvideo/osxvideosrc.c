@@ -39,6 +39,7 @@
 #endif
 
 #include <string.h>
+#include <gst/interfaces/propertyprobe.h>
 #include "osxvideosrc.h"
 
 #define WIDTH  640
@@ -99,6 +100,9 @@ SGPrepare
   prepares for recording.  this initializes the camera (the light should
   come on) so that when you call SGStartRecord you hit the ground running.
   maybe we should call SGPrepare when READY->PAUSED happens?
+
+SGRelease
+  unprepare the recording
 
 SGStartRecord
   kick off the recording
@@ -164,8 +168,11 @@ static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
         "framerate = (fraction) 30/1")
     );
 
-GST_BOILERPLATE (GstOSXVideoSrc, gst_osx_video_src, GstPushSrc,
-    GST_TYPE_PUSH_SRC);
+static void gst_osx_video_src_init_interfaces (GType type);
+static void gst_osx_video_src_type_add_device_property_probe_interface (GType type);
+
+GST_BOILERPLATE_FULL (GstOSXVideoSrc, gst_osx_video_src, GstPushSrc,
+    GST_TYPE_PUSH_SRC, gst_osx_video_src_init_interfaces);
 
 static void gst_osx_video_src_dispose (GObject * object);
 static void gst_osx_video_src_finalize (GstOSXVideoSrc * osx_video_src);
@@ -192,84 +199,164 @@ static gboolean select_resolution (GstOSXVideoSrc * self, short width,
 static gboolean select_framerate (GstOSXVideoSrc * self, gfloat rate);
 static gboolean prepare_capture (GstOSXVideoSrc * self);
 
-// ### rewrite these function using glib-isms.  also, escape ':' in case it
-//   appears in sgname
+/* \ = \\, : = \c */
+static GString *
+escape_string (const GString * in)
+{
+  GString * out;
+  int n;
+
+  out = g_string_sized_new (64);
+  for (n = 0; n < (int) in->len; ++n) {
+    if (in->str[n] == '\\')
+      g_string_append (out, "\\\\");
+    else if (in->str[n] == ':')
+      g_string_append (out, "\\:");
+    else
+      g_string_append_c (out, in->str[n]);
+  }
+
+  return out;
+}
+
+/* \\ = \, \c = : */
+static GString *
+unescape_string (const GString * in)
+{
+  GString * out;
+  int n;
+
+  out = g_string_sized_new (64);
+  for (n = 0; n < (int) in->len; ++n) {
+    if (in->str[n] == '\\') {
+      if (n + 1 < (int) in->len) {
+        ++n;
+        if (in->str[n] == '\\')
+          g_string_append_c (out, '\\');
+        else if (in->str[n] == 'c')
+          g_string_append_c (out, ':');
+        else {
+          /* unknown code, we will eat the escape sequence */
+        }
+      }
+      else {
+        /* string ends with backslash, we will eat it */
+      }
+    }
+    else
+      g_string_append_c (out, in->str[n]);
+  }
+
+  return out;
+}
+
 static gchar *
 create_device_id (const gchar * sgname, int inputIndex)
 {
-  gchar * out;
-  gchar inputstr[3];
-  int len1, len2;
+  GString * out;
+  GString * name;
+  GString * nameenc;
+  gchar * ret;
 
-  if (inputIndex < 0 || inputIndex > 99)
-    return NULL;
+  name = g_string_new (sgname);
+  nameenc = escape_string (name);
+  g_string_free (name, TRUE);
 
-  g_sprintf (inputstr, "%d", inputIndex);
-  len1 = strlen (sgname);
-  len2 = strlen (inputstr);
+  if (inputIndex >= 0) {
+    out = g_string_new ("");
+    g_string_printf (out, "%s:%d", nameenc->str, inputIndex);
+  }
+  else {
+    /* unspecified index */
+    out = g_string_new (nameenc->str);
+  }
 
-  out = g_malloc (len1 + 1 + len2 + 1);
-  if (!out)
-    return NULL;
-
-  memcpy (out, sgname, len1);
-  out[len1] = ':';
-  memcpy (out + len1 + 1, inputstr, len2);
-  out[len1 + 1 + len2] = 0;
-  return out;
+  g_string_free (nameenc, TRUE);
+  ret = g_string_free (out, FALSE);
+  return ret;
 }
 
 static gboolean
 parse_device_id (const gchar * id, gchar ** sgname, int * inputIndex)
 {
-  gchar * p;
-  gchar * out1;
-  int len1;
+  gchar ** parts;
+  int numparts;
+  GString * p1;
+  GString * out1;
   int out2;
 
-  p = g_strrstr (id, ":");
-  if (p) {
-    len1 = p - id;
-    out2 = strtol (p + 1, NULL, 10);
-    if (out2 == 0 && (errno == ERANGE || errno == EINVAL))
-      return FALSE;
-    out1 = g_malloc (len1 + 1);
-    if (!out1)
-      return FALSE;
-    memcpy (out1, id, len1);
-    out1[len1] = 0;
-  }
-  else {
-    len1 = strlen (id);
-    out2 = 0;
-    out1 = g_malloc (len1 + 1);
-    if (!out1)
-      return FALSE;
-    memcpy (out1, id, len1);
-    out1[len1] = 0;
+  parts = g_strsplit (id, ":", -1);
+  numparts = 0;
+  while (parts[numparts])
+    ++numparts;
+
+  /* must be exactly 1 or 2 parts */
+  if (numparts < 1 || numparts > 2) {
+    g_strfreev (parts);
+    return FALSE;
   }
 
-  *sgname = out1;
+  p1 = g_string_new (parts[0]);
+  out1 = unescape_string (p1);
+  g_string_free (p1, TRUE);
+
+  if (numparts >= 2) {
+    errno = 0;
+    out2 = strtol (parts[1], NULL, 10);
+    if (out2 == 0 && (errno == ERANGE || errno == EINVAL)) {
+      g_string_free (out1, TRUE);
+      g_strfreev (parts);
+      return FALSE;
+    }
+  }
+
+  g_strfreev (parts);
+
+  *sgname = g_string_free (out1, FALSE);
   *inputIndex = out2;
   return TRUE;
 }
 
-static gchar * str63_to_str (const Str63 in)
+typedef struct {
+  gchar * id;
+  gchar * name;
+} video_device;
+
+static video_device *
+video_device_alloc ()
 {
-  gchar *ret;
-  unsigned char len;
-
-  len = in[0];
-  ret = g_malloc (len + 1);
-  if (!ret)
-    return NULL;
-
-  memcpy (ret, in + 1, len);
-  ret[len] = 0;
-  return ret;
+  video_device * dev;
+  dev = g_malloc (sizeof (video_device));
+  dev->id = NULL;
+  dev->name = NULL;
+  return dev;
 }
 
-static gboolean device_set_default (GstOSXVideoSrc * src)
+static void
+video_device_free (video_device * dev)
+{
+  if (!dev)
+    return;
+
+  if (dev->id)
+    g_free (dev->id);
+  if (dev->name)
+    g_free (dev->name);
+
+  g_free (dev);
+}
+
+static void
+video_device_free_func (gpointer data, gpointer user_data)
+{
+  video_device_free ((video_device *) data);
+}
+
+/* return a list of available devices.  the default device (if any) will be
+ * the first in the list.
+ */
+static GList *
+device_list (GstOSXVideoSrc * src)
 {
   SeqGrabComponent component;
   SGChannel channel;
@@ -279,81 +366,244 @@ static gboolean device_set_default (GstOSXVideoSrc * src)
   SGDeviceInputName * inputEntry;
   ComponentResult err;
   int n, i;
-  gchar * sgname;
-  int inputIndex;
-  gchar * friendly_name;
+  GList * list;
+  video_device * dev, * default_dev;
+  gchar sgname[256];
+  gchar friendly_name[256];
 
-  component = OpenDefaultComponent (SeqGrabComponentType, 0);
-  if (!component)
-    return FALSE;
+  list = NULL;
 
-  if (SGInitialize (component) != noErr) {
-    CloseComponent (component);
-    return FALSE;
+  if (!src->video_chan) {
+    component = OpenDefaultComponent (SeqGrabComponentType, 0);
+    if (!component)
+      return FALSE;
+
+    if (SGInitialize (component) != noErr) {
+      CloseComponent (component);
+      return FALSE;
+    }
+
+    if (SGSetDataRef (component, 0, 0, seqGrabDontMakeMovie) != noErr) {
+      CloseComponent (component);
+      return FALSE;
+    }
+
+    err = SGNewChannel (component, VideoMediaType, &channel);
+    if (err != noErr) {
+      CloseComponent (component);
+      return FALSE;
+    }
   }
-
-  if (SGSetDataRef (component, 0, 0, seqGrabDontMakeMovie) != noErr) {
-    CloseComponent (component);
-    return FALSE;
-  }
-
-  err = SGNewChannel (component, VideoMediaType, &channel);
-  if (err != noErr) {
-    CloseComponent (component);
-    return FALSE;
-  }
+  else
+    channel = src->video_chan;
 
   if (SGGetChannelDeviceList (channel, sgDeviceListIncludeInputs, &deviceList) != noErr) {
     CloseComponent (component);
     return FALSE;
   }
 
-  deviceEntry = &(*deviceList)->entry[(*deviceList)->selectedIndex];
-  inputList = deviceEntry->inputs;
+  for (n = 0; n < (*deviceList)->count; ++n) {
+    deviceEntry = &(*deviceList)->entry[n];
 
-  sgname = str63_to_str (deviceEntry->name);
+    if (deviceEntry->flags & sgDeviceNameFlagDeviceUnavailable)
+      continue;
 
-  if (inputList && (*inputList)->count >= 1) {
-    inputIndex = (*inputList)->selectedIndex;
-    inputEntry = &(*inputList)->entry[inputIndex];
-    friendly_name = str63_to_str (inputEntry->name);
+    p2cstrcpy (sgname, deviceEntry->name);
+    inputList = deviceEntry->inputs;
+
+    if (inputList && (*inputList)->count >= 1) {
+      for (i = 0; i < (*inputList)->count; ++i) {
+        inputEntry = &(*inputList)->entry[i];
+
+        p2cstrcpy (friendly_name, inputEntry->name);
+
+        dev = video_device_alloc ();
+        dev->id = create_device_id (sgname, i);
+        if (!dev->id) {
+          video_device_free (dev);
+          i = -1;
+          break;
+        }
+
+        dev->name = g_strdup (friendly_name);
+        list = g_list_append (list, dev);
+
+        /* if this is the default device, note it */
+        if (n == (*deviceList)->selectedIndex && i == (*inputList)->selectedIndex) {
+          default_dev = dev;
+        }
+      }
+
+      /* error */
+      if (i == -1)
+        break;
+    }
+    else {
+      /* ### can a device have no defined inputs? */
+      dev = video_device_alloc ();
+      dev->id = create_device_id (sgname, -1);
+      if (!dev->id) {
+        video_device_free (dev);
+        break;
+      }
+
+      dev->name = g_strdup (sgname);
+      list = g_list_append (list, dev);
+
+      /* if this is the default device, note it */
+      if (n == (*deviceList)->selectedIndex) {
+        default_dev = dev;
+      }
+    }
   }
-  else {
-    /* ### can a device have no defined inputs? */
-    inputIndex = 0;
-    friendly_name = g_strdup (sgname);
-  }
 
-  src->device_id = create_device_id (sgname, inputIndex);
-  if (!src->device_id) {
-    g_free (sgname);
-    g_free (friendly_name);
-    return FALSE;
-  }
-  g_free (sgname);
-  sgname = NULL;
+  /* move default device to the front */
+  list = g_list_remove (list, default_dev);
+  list = g_list_prepend (list, default_dev);
 
-  src->device_name = friendly_name;
+  if (!src->video_chan)
+    CloseComponent (component);
 
-  return TRUE;
+  return list;
 }
 
-static gboolean device_get_name (GstOSXVideoSrc * src)
+static gboolean
+device_set_default (GstOSXVideoSrc * src)
 {
-  // ### this should work for specified devices as well, not just default
+  GList * list;
+  video_device * dev;
+  gboolean ret;
+
+  /* obtain the device list */
+  list = device_list (src);
+  if (!list)
+    return FALSE;
+
+  ret = FALSE;
+
+  /* the first item is the default */
+  if (g_list_length (list) >= 1) {
+    dev = (video_device *) list->data;
+
+    /* take the strings, no need to copy */
+    src->device_id = dev->id;
+    src->device_name = dev->name;
+    dev->id = NULL;
+    dev->name = NULL;
+
+    /* null out the item */
+    video_device_free (dev);
+    list->data = NULL;
+
+    ret = TRUE;
+  }
+
+  /* clean up */
+  g_list_foreach (list, video_device_free_func, NULL);
+  g_list_free (list);
+
+  return ret;
+}
+
+static gboolean
+device_get_name (GstOSXVideoSrc * src)
+{
+  GList * l, * list;
+  video_device * dev;
+  gboolean ret;
+
+  /* if there is no device set, then attempt to set up with the default,
+   * which will also grab the name in the process.
+   */
   if (!src->device_id)
     return device_set_default (src);
 
+  /* if we already have a name, free it */
+  if (src->device_name) {
+    g_free (src->device_name);
+    src->device_name = NULL;
+  }
+
+  /* obtain the device list */
+  list = device_list (src);
+  if (!list)
+    return FALSE;
+
+  ret = FALSE;
+
+  /* look up the id */
+  for (l = list; l != NULL; l = l->next) {
+    dev = (video_device *) l->data;
+    if (g_str_equal (dev->id, src->device_id)) {
+      /* take the string, no need to copy */
+      src->device_name = dev->name;
+      dev->name = NULL;
+      ret = TRUE;
+      break;
+    }
+  }
+
+  g_list_foreach (list, video_device_free_func, NULL);
+  g_list_free (list);
+
+  return ret;
+}
+
+static gboolean
+device_select (GstOSXVideoSrc * src)
+{
+  Str63 pstr;
+  ComponentResult err;
+  gchar * sgname;
+  int inputIndex;
+
+  /* if there's no device id set, attempt to select default device */
+  if (!src->device_id && !device_set_default (src))
+    return FALSE;
+
+  if (!parse_device_id (src->device_id, &sgname, &inputIndex))
+    return FALSE;
+
+  c2pstrcpy (pstr, sgname);
+  g_free (sgname);
+
+  err = SGSetChannelDevice (src->video_chan, (StringPtr) &pstr);
+  if (err != noErr)
+    return FALSE;
+
+  err = SGSetChannelDeviceInput (src->video_chan, inputIndex);
+  if (err != noErr)
+    return FALSE;
+
   return TRUE;
 }
 
-static gboolean device_select (GstOSXVideoSrc * src)
+static gboolean
+gst_osx_video_src_iface_supported (GstImplementsInterface * iface, GType iface_type)
 {
-  // FIXME
-  //if (!src->device_id && !device_set_default (src))
-  //    return FALSE;
+  return FALSE;
+}
 
-  return TRUE;
+static void
+gst_osx_video_src_interface_init (GstImplementsInterfaceClass * klass)
+{
+  /* default virtual functions */
+  klass->supported = gst_osx_video_src_iface_supported;
+}
+
+static void
+gst_osx_video_src_init_interfaces (GType type)
+{
+  static const GInterfaceInfo implements_iface_info = {
+    (GInterfaceInitFunc) gst_osx_video_src_interface_init,
+    NULL,
+    NULL,
+  };
+
+  g_type_add_interface_static (type, GST_TYPE_IMPLEMENTS_INTERFACE,
+      &implements_iface_info);
+
+  gst_osx_video_src_type_add_device_property_probe_interface (type);
 }
 
 static void
@@ -480,8 +730,14 @@ gst_osx_video_src_set_property (GObject * object, guint prop_id,
 
   switch (prop_id) {
     case ARG_DEVICE:
-      if (src->device_id)
+      if (src->device_id) {
         g_free (src->device_id);
+        src->device_id = NULL;
+      }
+      if (src->device_name) {
+        g_free (src->device_name);
+        src->device_name = NULL;
+      }
       src->device_id = g_strdup (g_value_get_string (value));
       break;
     default:
@@ -559,9 +815,8 @@ gst_osx_video_src_start (GstBaseSrc * src)
 
   select_resolution(self, 640, 480);
 
-  //if (!device_select (self))
-    //return FALSE;
-
+  if (!device_select (self))
+    return FALSE;
 
   //if (!select_device (self, 0))
     //return FALSE;
@@ -935,4 +1190,110 @@ gboolean prepare_capture(GstOSXVideoSrc * self)
     return FALSE;
   }
   return TRUE;
+}
+
+static const GList *
+probe_get_properties (GstPropertyProbe * probe)
+{
+  GObjectClass * klass = G_OBJECT_GET_CLASS (probe);
+  static GList * list = NULL;
+
+  // ###: from gstalsadeviceprobe.c
+  /* well, not perfect, but better than no locking at all.
+   * In the worst case we leak a list node, so who cares? */
+  GST_CLASS_LOCK (GST_OBJECT_CLASS (klass));
+
+  if (!list) {
+    GParamSpec *pspec;
+
+    pspec = g_object_class_find_property (klass, "device");
+    list = g_list_append (NULL, pspec);
+  }
+
+  GST_CLASS_UNLOCK (GST_OBJECT_CLASS (klass));
+
+  return list;
+}
+
+static void
+probe_probe_property (GstPropertyProbe * probe, guint prop_id,
+    const GParamSpec * pspec)
+{
+  // ###: i think this function is supposed to prepare the gvaluearray,
+  //  but we can also just do nothing and have the array get prepared in the
+  //  get_values() call instead.
+  if (!g_str_equal (pspec->name, "device")) {
+    G_OBJECT_WARN_INVALID_PROPERTY_ID (probe, prop_id, pspec);
+  }
+}
+
+static gboolean
+probe_needs_probe (GstPropertyProbe * probe, guint prop_id,
+    const GParamSpec * pspec)
+{
+  /* don't cache probed data */
+  return TRUE;
+}
+
+static GValueArray *
+probe_get_values (GstPropertyProbe * probe, guint prop_id,
+    const GParamSpec * pspec)
+{
+  GstOSXVideoSrc * src;
+  GValueArray * array;
+  GValue value = { 0, };
+  GList * l, * list;
+  video_device * dev;
+
+  if (!g_str_equal (pspec->name, "device")) {
+    G_OBJECT_WARN_INVALID_PROPERTY_ID (probe, prop_id, pspec);
+    return NULL;
+  }
+
+  src = GST_OSX_VIDEO_SRC (probe);
+
+  list = device_list (src);
+
+  if (list == NULL) {
+    GST_LOG_OBJECT (probe, "No devices found");
+    return NULL;
+  }
+
+  array = g_value_array_new (g_list_length (list));
+  g_value_init (&value, G_TYPE_STRING);
+  for (l = list; l != NULL; l = l->next) {
+    dev = (video_device *) l->data;
+    GST_LOG_OBJECT (probe, "Found device: %s", dev->id);
+    g_value_take_string (&value, dev->id);
+    dev->id = NULL;
+    video_device_free (dev);
+    l->data = NULL;
+    g_value_array_append (array, &value);
+  }
+  g_value_unset (&value);
+  g_list_free (list);
+
+  return array;
+}
+
+static void
+gst_osx_video_src_property_probe_interface_init (GstPropertyProbeInterface * iface)
+{
+  iface->get_properties = probe_get_properties;
+  iface->probe_property = probe_probe_property;
+  iface->needs_probe = probe_needs_probe;
+  iface->get_values = probe_get_values;
+}
+
+void
+gst_osx_video_src_type_add_device_property_probe_interface (GType type)
+{
+  static const GInterfaceInfo probe_iface_info = {
+    (GInterfaceInitFunc) gst_osx_video_src_property_probe_interface_init,
+    NULL,
+    NULL,
+  };
+
+  g_type_add_interface_static (type, GST_TYPE_PROPERTY_PROBE,
+      &probe_iface_info);
 }
