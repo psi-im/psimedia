@@ -43,6 +43,7 @@
 #include <gst/interfaces/propertyprobe.h>
 #include "osxvideosrc.h"
 
+/* for now, framerate is hard-coded */
 #define FRAMERATE 30
 
 // TODO: for completeness, write an _unlock function
@@ -164,8 +165,6 @@ static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
         "width = (int) [ 1, MAX ], "
         "height = (int) [ 1, MAX ], "
         //"framerate = (fraction) 0/1")
-        //"width = (int) 640, "
-        //"height = (int) 480, "
         "framerate = (fraction) 30/1")
     );
 
@@ -1157,7 +1156,6 @@ gst_osx_video_src_create (GstPushSrc * src, GstBuffer ** buf)
       gst_clock_id_wait (clock_id, NULL);
       gst_clock_id_unref (clock_id);
     }
-
   } while (self->buffer == NULL);
   gst_object_unref (clock);
 
@@ -1275,7 +1273,7 @@ probe_get_properties (GstPropertyProbe * probe)
   GST_CLASS_LOCK (GST_OBJECT_CLASS (klass));
 
   if (!list) {
-    GParamSpec *pspec;
+    GParamSpec * pspec;
 
     pspec = g_object_class_find_property (klass, "device");
     list = g_list_append (NULL, pspec);
