@@ -64,6 +64,7 @@ struct _GstOSXVideoSrc
 struct _GstOSXVideoSrcClass
 {
   GstPushSrcClass parent_class;
+  gboolean movies_enabled;
 };
 
 GType gst_osx_video_src_get_type (void);
