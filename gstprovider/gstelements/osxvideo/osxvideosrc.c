@@ -817,8 +817,8 @@ gst_osx_video_src_get_caps (GstBaseSrc * src)
   caps = gst_caps_copy (gst_pad_template_get_caps (pad_template));
 
   structure = gst_caps_get_structure (caps, 0);
-  gst_structure_set (structure, "width", GST_TYPE_INT, width, NULL);
-  gst_structure_set (structure, "height", GST_TYPE_INT, height, NULL);
+  gst_structure_set (structure, "width", G_TYPE_INT, width, NULL);
+  gst_structure_set (structure, "height", G_TYPE_INT, height, NULL);
 
   return caps;
 }
