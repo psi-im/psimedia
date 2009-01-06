@@ -49,8 +49,8 @@ struct _GstOSXVideoSrc
 {
   GstPushSrc pushsrc;
 
-  gchar *device_id;
-  gchar *device_name;
+  gchar * device_id;
+  gchar * device_name;
   SeqGrabComponent seq_grab;
   SGChannel video_chan;
   GWorldPtr world;
