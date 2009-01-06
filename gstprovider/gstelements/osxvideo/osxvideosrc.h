@@ -24,7 +24,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstpushsrc.h>
-#include <Quicktime/Quicktime.h>
+#include <QuickTime/QuickTime.h>
 
 GST_DEBUG_CATEGORY_EXTERN (gst_debug_osx_video_src);
 
