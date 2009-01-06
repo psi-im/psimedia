@@ -40,6 +40,10 @@
 #endif
 
 #include <string.h>
+
+// for usleep
+#include <unistd.h>
+
 #include <gst/interfaces/propertyprobe.h>
 #include "osxvideosrc.h"
 
@@ -1086,6 +1090,9 @@ gst_osx_video_src_change_state (GstElement * element,
         return GST_STATE_CHANGE_FAILURE;
       }
 
+      GST_DEBUG_OBJECT (self, "actual capture resolution is %dx%d",
+          (int) (**imageDesc).width, (int) (**imageDesc).height);
+
       SetRect (&sourceRect, 0, 0, (**imageDesc).width, (**imageDesc).height);
       RectMatrix(&scaleMatrix, &sourceRect, &self->rect);
 
@@ -1136,9 +1143,25 @@ gst_osx_video_src_create (GstPushSrc * src, GstBuffer ** buf)
   GstOSXVideoSrc * self = GST_OSX_VIDEO_SRC (src);
   ComponentResult err;
   GstCaps * caps;
-  GstClock * clock;
+  //GstClock * clock;
 
-  clock = gst_system_clock_obtain ();
+  // ###: we need to sleep between calls to SGIdle.  originally, the sleeping
+  //   was done using gst_clock_id_wait(), but it turns out that approach
+  //   doesn't work well.  it has two issues:
+  //   1) every so often, gst_clock_id_wait() will block for a much longer
+  //      period of time than requested (upwards of a minute) causing video
+  //      to freeze until it finally returns.  this seems to happen once
+  //      every few minutes, which probably means something like 1 in every
+  //      several hundred calls gst_clock_id_wait() does the wrong thing.
+  //   2) even when the gst_clock approach is working properly, it uses
+  //      quite a bit of cpu in comparison to a simple usleep().  on one
+  //      test machine, using gst_clock_id_wait() caused osxvideosrc to use
+  //      nearly 100% cpu, while using usleep() brough the usage to less
+  //      than 10%.
+  //
+  // so, for now, we comment out the gst_clock stuff and use usleep.
+
+  //clock = gst_system_clock_obtain ();
   do {
     err = SGIdle (self->seq_grab);
     if (err != noErr) {
@@ -1148,16 +1171,18 @@ gst_osx_video_src_create (GstPushSrc * src, GstBuffer ** buf)
     }
 
     if (self->buffer == NULL) {
-      GstClockID clock_id;
+      /*GstClockID clock_id;
 
       clock_id = gst_clock_new_single_shot_id (clock,
           (GstClockTime) (gst_clock_get_time(clock) +
           (GST_SECOND / ((float)FRAMERATE * 2))));
       gst_clock_id_wait (clock_id, NULL);
-      gst_clock_id_unref (clock_id);
+      gst_clock_id_unref (clock_id);*/
+
+      usleep (1000000 / (FRAMERATE * 2));
     }
   } while (self->buffer == NULL);
-  gst_object_unref (clock);
+  //gst_object_unref (clock);
 
   *buf = self->buffer;
   self->buffer = NULL;
