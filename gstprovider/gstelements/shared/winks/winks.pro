@@ -3,9 +3,5 @@ CONFIG -= qt
 CONFIG += plugin gstplugin
 DESTDIR = $$PWD/../lib
 
-include(../../../gstconf.pri)
-
-DEFINES += HAVE_CONFIG_H
-INCLUDEPATH += $$PWD/..
-
+include(../shared.pri)
 include(../../winks.pri)
