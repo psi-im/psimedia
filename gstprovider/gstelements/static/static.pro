@@ -8,7 +8,7 @@ CONFIG += rtpmanager videomaxrate #speexdsp
 windows:CONFIG += directsound winks
 mac:CONFIG += osxaudio osxvideo
 
-QMAKE_CFLAGS_WARN_ON = -Wall -Wdeclaration-after-statement -Werror
+*-g++:QMAKE_CFLAGS_WARN_ON = -Wall -Wdeclaration-after-statement -Werror
 include(../../gstconf.pri)
 
 rtpmanager {
