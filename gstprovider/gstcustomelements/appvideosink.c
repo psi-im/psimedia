@@ -30,10 +30,11 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE("sink",
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"video/x-raw-rgb, "
-		"framerate = (fraction) [ 0/1, 2147483647/1 ], "
-		"width = (int) [ 1, 2147483647 ], "
-		"height = (int) [ 1, 2147483647 ]"
+#if G_BYTE_ORDER == G_LITTLE_ENDIAN
+		GST_VIDEO_CAPS_BGRx
+#else
+		GST_VIDEO_CAPS_xRGB
+#endif
 		)
 	);
 
@@ -87,9 +88,9 @@ GstFlowReturn gst_appvideosink_render(GstBaseSink *sink, GstBuffer *buffer)
 		return GST_FLOW_ERROR;
 	}
 
-	// make sure buffer size matches width * height * 24 bit rgb
+	// make sure buffer size matches width * height * 32 bit rgb
 	size = GST_BUFFER_SIZE(buffer);
-	if(width * height * 3 != size)
+	if(width * height * 4 != size)
 		return GST_FLOW_ERROR;
 
 	if(self->show_frame)

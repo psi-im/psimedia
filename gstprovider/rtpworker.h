@@ -140,8 +140,8 @@ private:
 	static void cb_fileDemux_pad_added(GstElement *element, GstPad *pad, gpointer data);
 	static void cb_fileDemux_pad_removed(GstElement *element, GstPad *pad, gpointer data);
 	static gboolean cb_bus_call(GstBus *bus, GstMessage *msg, gpointer data);
-	static void cb_show_frame_preview(int width, int height, const unsigned char *rgb24, gpointer data);
-	static void cb_show_frame_output(int width, int height, const unsigned char *rgb24, gpointer data);
+	static void cb_show_frame_preview(int width, int height, const unsigned char *rgb32, gpointer data);
+	static void cb_show_frame_output(int width, int height, const unsigned char *rgb32, gpointer data);
 	static void cb_packet_ready_rtp_audio(const unsigned char *buf, int size, gpointer data);
 	static void cb_packet_ready_rtp_video(const unsigned char *buf, int size, gpointer data);
 	static gboolean cb_fileReady(gpointer data);
@@ -153,8 +153,8 @@ private:
 	void fileDemux_pad_added(GstElement *element, GstPad *pad);
 	void fileDemux_pad_removed(GstElement *element, GstPad *pad);
 	gboolean bus_call(GstBus *bus, GstMessage *msg);
-	void show_frame_preview(int width, int height, const unsigned char *rgb24);
-	void show_frame_output(int width, int height, const unsigned char *rgb24);
+	void show_frame_preview(int width, int height, const unsigned char *rgb32);
+	void show_frame_output(int width, int height, const unsigned char *rgb32);
 	void packet_ready_rtp_audio(const unsigned char *buf, int size);
 	void packet_ready_rtp_video(const unsigned char *buf, int size);
 	gboolean fileReady();

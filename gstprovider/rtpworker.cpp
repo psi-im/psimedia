@@ -582,14 +582,14 @@ gboolean RtpWorker::cb_bus_call(GstBus *bus, GstMessage *msg, gpointer data)
 	return ((RtpWorker *)data)->bus_call(bus, msg);
 }
 
-void RtpWorker::cb_show_frame_preview(int width, int height, const unsigned char *rgb24, gpointer data)
+void RtpWorker::cb_show_frame_preview(int width, int height, const unsigned char *rgb32, gpointer data)
 {
-	((RtpWorker *)data)->show_frame_preview(width, height, rgb24);
+	((RtpWorker *)data)->show_frame_preview(width, height, rgb32);
 }
 
-void RtpWorker::cb_show_frame_output(int width, int height, const unsigned char *rgb24, gpointer data)
+void RtpWorker::cb_show_frame_output(int width, int height, const unsigned char *rgb32, gpointer data)
 {
-	((RtpWorker *)data)->show_frame_output(width, height, rgb24);
+	((RtpWorker *)data)->show_frame_output(width, height, rgb32);
 }
 
 void RtpWorker::cb_packet_ready_rtp_audio(const unsigned char *buf, int size, gpointer data)
@@ -1229,21 +1229,10 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
 	return TRUE;
 }
 
-void RtpWorker::show_frame_preview(int width, int height, const unsigned char *rgb24)
+void RtpWorker::show_frame_preview(int width, int height, const unsigned char *rgb32)
 {
 	QImage image(width, height, QImage::Format_RGB32);
-	int at = 0;
-	for(int y = 0; y < height; ++y)
-	{
-		for(int x = 0; x < width; ++x)
-		{
-			unsigned char r = rgb24[at++];
-			unsigned char g = rgb24[at++];
-			unsigned char b = rgb24[at++];
-			QRgb color = qRgb(r, g, b);
-			image.setPixel(x, y, color);
-		}
-	}
+	memcpy(image.bits(), rgb32, image.numBytes());
 
 	Frame frame;
 	frame.image = image;
@@ -1252,21 +1241,10 @@ void RtpWorker::show_frame_preview(int width, int height, const unsigned char *r
 		cb_previewFrame(frame, app);
 }
 
-void RtpWorker::show_frame_output(int width, int height, const unsigned char *rgb24)
+void RtpWorker::show_frame_output(int width, int height, const unsigned char *rgb32)
 {
 	QImage image(width, height, QImage::Format_RGB32);
-	int at = 0;
-	for(int y = 0; y < height; ++y)
-	{
-		for(int x = 0; x < width; ++x)
-		{
-			unsigned char r = rgb24[at++];
-			unsigned char g = rgb24[at++];
-			unsigned char b = rgb24[at++];
-			QRgb color = qRgb(r, g, b);
-			image.setPixel(x, y, color);
-		}
-	}
+	memcpy(image.bits(), rgb32, image.numBytes());
 
 	Frame frame;
 	frame.image = image;
