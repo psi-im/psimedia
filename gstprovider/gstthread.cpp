@@ -28,7 +28,7 @@
 #include <QWaitCondition>
 #include <gst/gst.h>
 #include "gstcustomelements/gstcustomelements.h"
-#include "gstelements/gstelements.h"
+#include "gstelements/static/gstelements.h"
 
 namespace PsiMedia {
 

@@ -20,35 +20,61 @@
 
 #include "gstelements.h"
 
-#include <QtGlobal>
-
+#ifdef HAVE_RTPMANAGER
 void gstelements_rtpmanager_register();
-void gstelements_videomaxrate_register();
-void gstelements_speexdsp_register();
+#endif
 
-#ifdef Q_OS_WIN
+#ifdef HAVE_VIDEOMAXRATE
+void gstelements_videomaxrate_register();
+#endif
+
+#ifdef HAVE_SPEEXDSP
+void gstelements_speexdsp_register();
+#endif
+
+#ifdef HAVE_DIRECTSOUND
 void gstelements_directsound_register();
+#endif
+
+#ifdef HAVE_WINKS
 void gstelements_winks_register();
 #endif
 
-#ifdef Q_OS_MAC
+#ifdef HAVE_OSXAUDIO
 void gstelements_osxaudio_register();
+#endif
+
+#ifdef HAVE_OSXVIDEO
 void gstelements_osxvideo_register();
 #endif
 
 void gstelements_register()
 {
+#ifdef HAVE_RTPMANAGER
 	gstelements_rtpmanager_register();
-	gstelements_videomaxrate_register();
-	gstelements_speexdsp_register();
+#endif
 
-#ifdef Q_OS_WIN
+#ifdef HAVE_VIDEOMAXRATE
+	gstelements_videomaxrate_register();
+#endif
+
+#ifdef HAVE_SPEEXDSP
+	gstelements_speexdsp_register();
+#endif
+
+#ifdef HAVE_DIRECTSOUND
 	gstelements_directsound_register();
+#endif
+
+#ifdef HAVE_WINKS
 	gstelements_winks_register();
 #endif
 
-#ifdef Q_OS_MAC
+#ifdef HAVE_OSXAUDIO
 	gstelements_osxaudio_register();
+#endif
+
+#ifdef HAVE_OSXVIDEO
 	gstelements_osxvideo_register();
 #endif
 }
