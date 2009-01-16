@@ -1,18 +1,18 @@
 psimedia:
-- fix assert that happens if you stop before started() is emitted
-- if you stop during a start, the transmit button stays lit?
-- support playing file from bytearray
-- support recording
-- use farsight
+  fix assert that happens if you stop before started() is emitted
+  if you stop during a start, the transmit button stays lit?
+  support playing file from bytearray
+  support recording
+  use farsight
 
 gstreamer:
-- fix warnings in gstelements
-- make osxaudiosrc work
-- make speexdsp/speexechoprobe work properly
-- enumeration in directsound
-- enumeration in ksvideosrc
-- rewrite directsound
-- rewrite osxaudio
-- rewrite osxvideo
-- frame-accurate looping (oggdemux/theoradec bug)
-- GstBus doesn't work with non-default GMainContext
+  + cleanup osxaudio, make src work (#564948, accepted)
+  + rewrite osxvideo (#153684, submitted)
+  GstBus doesn't work with non-default GMainContext (#562170, patch)
+  frame-accurate looping
+    oggdemux/theoradec doesn't play last frame (#568014, submitted)
+    theoraenc screws up when looped (#562163, unresolved)
+  enumeration in ksvideosrc (oleavr working on this)
+  make speexdsp/speexechoprobe work properly
+  enumeration in directsound
+  rewrite directsound
