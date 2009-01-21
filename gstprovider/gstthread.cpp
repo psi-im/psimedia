@@ -173,6 +173,8 @@ public:
 			<< "rtpvorbispay" << "rtpvorbisdepay"
 			<< "rtptheorapay" << "rtptheoradepay"
 			<< "filesrc"
+			<< "decodebin"
+			<< "jpegdec"
 			<< "oggmux" << "oggdemux"
 			<< "audioconvert"
 			<< "audioresample"
