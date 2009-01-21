@@ -577,6 +577,11 @@ void RtpWorker::cb_fileDemux_pad_removed(GstElement *element, GstPad *pad, gpoin
 	((RtpWorker *)data)->fileDemux_pad_removed(element, pad);
 }
 
+void RtpWorker::cb_videoDecode_pad_added(GstElement *element, GstPad *pad, gpointer data)
+{
+	((RtpWorker *)data)->videoDecode_pad_added(element, pad);
+}
+
 gboolean RtpWorker::cb_bus_call(GstBus *bus, GstMessage *msg, gpointer data)
 {
 	return ((RtpWorker *)data)->bus_call(bus, msg);
@@ -755,9 +760,24 @@ gboolean RtpWorker::doStart()
 			if(captureSize.isValid())
 			{
 				GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
-				GstCaps *caps = gst_caps_new_simple("video/x-raw-yuv",
+				GstCaps *caps = gst_caps_new_empty();
+
+				GstStructure *cs;
+				cs = gst_structure_new("video/x-raw-yuv",
 					"width", G_TYPE_INT, captureSize.width(),
 					"height", G_TYPE_INT, captureSize.height(), NULL);
+				gst_caps_append_structure(caps, cs);
+
+				cs = gst_structure_new("video/x-raw-rgb",
+					"width", G_TYPE_INT, captureSize.width(),
+					"height", G_TYPE_INT, captureSize.height(), NULL);
+				gst_caps_append_structure(caps, cs);
+
+				cs = gst_structure_new("image/jpeg",
+					"width", G_TYPE_INT, captureSize.width(),
+					"height", G_TYPE_INT, captureSize.height(), NULL);
+				gst_caps_append_structure(caps, cs);
+
 				g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 				gst_caps_unref(caps);
 
@@ -782,11 +802,19 @@ gboolean RtpWorker::doStart()
 				GstCaps *caps = gst_caps_new_empty();
 				for(int n = 0; n < widths.count(); ++n)
 				{
-					GstStructure *cs = gst_structure_new("video/x-raw-yuv",
+					GstStructure *cs;
+					cs = gst_structure_new("video/x-raw-yuv",
 						"width", GST_TYPE_INT_RANGE, 1, widths[n],
 						"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
-					gst_caps_merge_structure(caps, cs);
+					gst_caps_append_structure(caps, cs);
+
+					cs = gst_structure_new("video/x-raw-rgb",
+						"width", GST_TYPE_INT_RANGE, 1, widths[n],
+						"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
+					gst_caps_append_structure(caps, cs);
 				}
+				GstStructure *cs = gst_structure_new("image/jpeg", NULL);
+				gst_caps_append_structure(caps, cs);
 				g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 				gst_caps_unref(caps);
 
@@ -1187,6 +1215,33 @@ void RtpWorker::fileDemux_pad_removed(GstElement *element, GstPad *pad)
 	g_free(name);
 }
 
+void RtpWorker::videoDecode_pad_added(GstElement *element, GstPad *pad)
+{
+	Q_UNUSED(element);
+
+	gchar *name = gst_pad_get_name(pad);
+	printf("videoDecode pad-added: %s\n", name);
+	g_free(name);
+
+	GstCaps *caps = gst_pad_get_caps(pad);
+	gchar *gstr = gst_caps_to_string(caps);
+	QString capsString = QString::fromUtf8(gstr);
+	g_free(gstr);
+	printf("  caps: [%s]\n", qPrintable(capsString));
+
+	GstPad *sinkpad = gst_element_get_static_pad(videoDecodeTarget, "sink");
+	if(!GST_PAD_LINK_SUCCESSFUL(gst_pad_link(pad, sinkpad)))
+	{
+		printf("could not link to videoDecodeTarget\n");
+		gst_object_unref(sinkpad);
+		gst_caps_unref(caps);
+		return;
+	}
+
+	gst_object_unref(sinkpad);
+	gst_caps_unref(caps);
+}
+
 gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
 {
 	Q_UNUSED(bus);
@@ -1435,7 +1490,12 @@ bool RtpWorker::addVideoChain()
 		return false;
 
 	GstElement *queue = gst_element_factory_make("queue", NULL);
+	videoDecode = gst_element_factory_make("decodebin", NULL);
+	g_signal_connect(G_OBJECT(videoDecode),
+		"pad-added",
+		G_CALLBACK(cb_videoDecode_pad_added), this);
 	GstElement *videoconvertprep = gst_element_factory_make("ffmpegcolorspace", NULL);
+	videoDecodeTarget = videoconvertprep;
 	GstElement *videorate;
 	if(fileDemux)
 		videorate = gst_element_factory_make("videorate", NULL);
@@ -1461,6 +1521,7 @@ bool RtpWorker::addVideoChain()
 	//g_object_set(G_OBJECT(appRtpSink), "sync", TRUE, NULL);
 
 	gst_bin_add(GST_BIN(sendPipeline), queue);
+	gst_bin_add(GST_BIN(sendPipeline), videoDecode);
 	gst_bin_add(GST_BIN(sendPipeline), videoconvertprep);
 	gst_bin_add(GST_BIN(sendPipeline), videorate);
 	gst_bin_add(GST_BIN(sendPipeline), videoscale);
@@ -1474,7 +1535,7 @@ bool RtpWorker::addVideoChain()
 	gst_bin_add(GST_BIN(sendPipeline), videortppay);
 	gst_bin_add(GST_BIN(sendPipeline), videortpsink);
 
-	if(!gst_element_link(queue, videoconvertprep))
+	if(!gst_element_link(queue, videoDecode))
 		return false;
 
 	// FIXME: i don't know how to set up caps filters without knowing
@@ -1516,6 +1577,7 @@ bool RtpWorker::addVideoChain()
 	}
 
 	gst_element_set_state(queue, GST_STATE_PAUSED);
+	gst_element_set_state(videoDecode, GST_STATE_PAUSED);
 	gst_element_set_state(videoconvertprep, GST_STATE_PAUSED);
 	gst_element_set_state(videorate, GST_STATE_PAUSED);
 	gst_element_set_state(videoscale, GST_STATE_PAUSED);

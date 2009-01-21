@@ -112,6 +112,8 @@ private:
 
 	GstElement *sendPipeline, *rpipeline, *rvpipeline;
 	GstElement *fileDemux;
+	GstElement *videoDecode;
+	GstElement *videoDecodeTarget;
 	GstElement *audiosrc;
 	GstElement *videosrc;
 	GstElement *audiortpsrc;
@@ -139,6 +141,7 @@ private:
 	static void cb_fileDemux_no_more_pads(GstElement *element, gpointer data);
 	static void cb_fileDemux_pad_added(GstElement *element, GstPad *pad, gpointer data);
 	static void cb_fileDemux_pad_removed(GstElement *element, GstPad *pad, gpointer data);
+	static void cb_videoDecode_pad_added(GstElement *element, GstPad *pad, gpointer data);
 	static gboolean cb_bus_call(GstBus *bus, GstMessage *msg, gpointer data);
 	static void cb_show_frame_preview(int width, int height, const unsigned char *rgb32, gpointer data);
 	static void cb_show_frame_output(int width, int height, const unsigned char *rgb32, gpointer data);
@@ -152,6 +155,7 @@ private:
 	void fileDemux_no_more_pads(GstElement *element);
 	void fileDemux_pad_added(GstElement *element, GstPad *pad);
 	void fileDemux_pad_removed(GstElement *element, GstPad *pad);
+	void videoDecode_pad_added(GstElement *element, GstPad *pad);
 	gboolean bus_call(GstBus *bus, GstMessage *msg);
 	void show_frame_preview(int width, int height, const unsigned char *rgb32);
 	void show_frame_output(int width, int height, const unsigned char *rgb32);
