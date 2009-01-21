@@ -436,12 +436,18 @@ GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *ca
 	if(!e)
 		return 0;
 
-	gst_element_set_state(e, GST_STATE_READY);
-	int ret = gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
-	if(ret != GST_STATE_CHANGE_SUCCESS)
+	// FIXME: we don't set v4l2src to the READY state because it may break
+	//   the element in jpeg mode.  this is really a bug in gstreamer or
+	//   lower that should be fixed...
+	if(element_name != "v4l2src")
 	{
-		g_object_unref(G_OBJECT(e));
-		return 0;
+		gst_element_set_state(e, GST_STATE_READY);
+		int ret = gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
+		if(ret != GST_STATE_CHANGE_SUCCESS)
+		{
+			g_object_unref(G_OBJECT(e));
+			return 0;
+		}
 	}
 
 	if(parts.count() >= 3 && captureSize)
