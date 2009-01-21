@@ -16,3 +16,5 @@ gstreamer:
   make speexdsp/speexechoprobe work properly
   enumeration in directsound
   rewrite directsound
+  v4l2src that supports only image/jpeg fails if independently set to READY
+    before changing to PAUSED.  see devices.cpp
