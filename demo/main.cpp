@@ -41,7 +41,7 @@ static QString urlishEncode(const QString &in)
 	QString out;
 	for(int n = 0; n < in.length(); ++n)
 	{
-		if(in[n] == '%' || in[n] == ';' || in[n] == ':' || in[n] == '\n')
+		if(in[n] == '%' || in[n] == ',' ||  in[n] == ';' || in[n] == ':' || in[n] == '\n')
 		{
 			unsigned char c = (unsigned char)in[n].toLatin1();
 			out += QString().sprintf("%%%02x", c);
