@@ -769,7 +769,8 @@ public:
 		QObject(_q),
 		q(_q),
 		c(0),
-		enabled(false)
+		enabled(false),
+		readyReadListeners(0)
 	{
 	}
 
