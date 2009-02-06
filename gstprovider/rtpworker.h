@@ -133,6 +133,8 @@ private:
 
 	GSource *recordTimer;
 
+	int desired_speex_pt;
+
 	void cleanup();
 
 	static gboolean cb_doStart(gpointer data);

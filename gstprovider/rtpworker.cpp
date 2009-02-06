@@ -623,6 +623,30 @@ gboolean RtpWorker::doStart()
 	audiortppay = 0;
 	videortppay = 0;
 
+	desired_speex_pt = -1;
+	printf("remoteAudioPayloadInfo count: %d\n", remoteAudioPayloadInfo.count());
+	printf("localAudioParams count: %d\n", localAudioParams.count());
+	for(int n = 0; n < remoteAudioPayloadInfo.count(); ++n)
+	{
+		const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
+
+		printf("  remote: %d,%s,%d\n", ri.id, qPrintable(ri.name), ri.clockrate);
+		for(int i = 0; i < localAudioParams.count(); ++i)
+		{
+			const PAudioParams &lp = localAudioParams[i];
+
+			printf("  local: %s,%d\n", qPrintable(lp.codec), lp.sampleRate);
+			if(lp.codec == "speex" && ri.name == "SPEEX" && lp.sampleRate == ri.clockrate)
+			{
+				desired_speex_pt = ri.id;
+				break;
+			}
+		}
+
+		if(desired_speex_pt != -1)
+			break;
+	}
+
 	// file source
 	if(!infile.isEmpty() || !indata.isEmpty())
 	{
@@ -843,6 +867,10 @@ gboolean RtpWorker::doStart()
 		g_source_unref(source);*/
 	}
 
+	// HACK HACK HACK, this breaks send/recv in one session
+	if(sendPipeline)
+		remoteAudioPayloadInfo.clear();
+
 	if(audiosrc)
 	{
 		if(!addAudioChain())
@@ -946,8 +974,8 @@ gboolean RtpWorker::doStart()
 			GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
 			GstElement *audioout = 0;
 
-			GstElement *audiodec;
-			GstElement *audiortpdepay;
+			GstElement *audiodec = 0;
+			GstElement *audiortpdepay = 0;
 			audio_codec_get_recv_elements(acodec, &audiodec, &audiortpdepay);
 
 			if(audiortpjitterbuffer)
@@ -997,8 +1025,8 @@ gboolean RtpWorker::doStart()
 			appVideoSink->appdata = this;
 			appVideoSink->show_frame = cb_show_frame_output;
 
-			GstElement *videodec;
-			GstElement *videortpdepay;
+			GstElement *videodec = 0;
+			GstElement *videortpdepay = 0;
 			video_codec_get_recv_elements(vcodec, &videodec, &videortpdepay);
 
 			if(videortpjitterbuffer)
@@ -1424,6 +1452,12 @@ bool RtpWorker::addAudioChain()
 	audiortppay = 0;
 	if(!audio_codec_get_send_elements(codec, &audioenc, &audiortppay))
 		return false;
+
+	if(desired_speex_pt != -1)
+	{
+		printf("setting speex payloader to use id %d\n", desired_speex_pt);
+		g_object_set(G_OBJECT(audiortppay), "pt", desired_speex_pt, NULL);
+	}
 
 	GstElement *queue = gst_element_factory_make("queue", NULL);
 
