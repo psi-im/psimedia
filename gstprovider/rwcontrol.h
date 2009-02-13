@@ -139,14 +139,10 @@ class RwControlTransmit
 public:
 	bool useAudio;
 	bool useVideo;
-	int audioIndex;
-	int videoIndex;
 
 	RwControlTransmit() :
 		useAudio(false),
-		useVideo(false),
-		audioIndex(-1),
-		videoIndex(-1)
+		useVideo(false)
 	{
 	}
 };

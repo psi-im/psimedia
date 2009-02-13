@@ -744,6 +744,7 @@ public:
 		connect(&producer, SIGNAL(finished()), SLOT(producer_finished()));
 		connect(&producer, SIGNAL(error()), SLOT(producer_error()));
 		connect(&receiver, SIGNAL(started()), SLOT(receiver_started()));
+		connect(&receiver, SIGNAL(stoppedRecording()), SLOT(receiver_stoppedRecording()));
 		connect(&receiver, SIGNAL(stopped()), SLOT(receiver_stopped()));
 		connect(&receiver, SIGNAL(error()), SLOT(receiver_error()));
 
@@ -1153,7 +1154,7 @@ private slots:
 			//   in the case that a file is used as input
 			if(producer.canTransmitAudio())
 			{
-				audio = producer.audioPayloadInfo().first();
+				audio = producer.localAudioPayloadInfo().first();
 				pAudio = &audio;
 			}
 			else
@@ -1164,7 +1165,7 @@ private slots:
 			// same for video
 			if(producer.canTransmitVideo())
 			{
-				video = producer.videoPayloadInfo().first();
+				video = producer.localVideoPayloadInfo().first();
 				pVideo = &video;
 			}
 			else
@@ -1216,6 +1217,11 @@ private slots:
 	void receiver_started()
 	{
 		ui.pb_record->setEnabled(true);
+	}
+
+	void receiver_stoppedRecording()
+	{
+		cleanup_record();
 	}
 
 	void receiver_stopped()
@@ -1270,7 +1276,7 @@ private slots:
 			recording = true;
 		}
 		else
-			cleanup_record();
+			receiver.stopRecording();
 	}
 };
 

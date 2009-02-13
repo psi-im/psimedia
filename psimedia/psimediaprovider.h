@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008  Barracuda Networks, Inc.
+ * Copyright (C) 2008-2009  Barracuda Networks, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -29,6 +29,11 @@
 
 class QImage;
 class QIODevice;
+
+#ifdef QT_GUI_LIB
+class QWidget;
+class QPainter;
+#endif
 
 // since we cannot put signals/slots in Qt "interfaces", we use the following
 //   defines to hint about signals/slots that derived classes should provide
@@ -174,13 +179,21 @@ HINT_SIGNALS:
 };
 
 #ifdef QT_GUI_LIB
-class VideoWidgetContext
+class VideoWidgetContext : public QObjectInterface
 {
 public:
 	virtual ~VideoWidgetContext() {}
 
-	virtual QSize desired_size() const = 0;
-	virtual void show_frame(const QImage &img) = 0;
+	virtual QWidget *qwidget() = 0;
+
+	// this function causes VideoWidget::videoSizeChanged() to be emitted
+	virtual void setVideoSize(const QSize &size) = 0;
+
+HINT_SIGNALS:
+	HINT_METHOD(resized(const QSize &newSize))
+
+	// listener must use a direct connection and paint during the signal
+	HINT_METHOD(paintEvent(QPainter *p))
 };
 #endif
 
@@ -209,11 +222,12 @@ public:
 #endif
 
 	virtual void setRecorder(QIODevice *recordDevice) = 0;
+	virtual void stopRecording() = 0;
 
 	virtual void setLocalAudioPreferences(const QList<PAudioParams> &params) = 0;
-	virtual void setLocalAudioPreferences(const QList<PPayloadInfo> &info) = 0;
 	virtual void setLocalVideoPreferences(const QList<PVideoParams> &params) = 0;
-	virtual void setLocalVideoPreferences(const QList<PPayloadInfo> &info) = 0;
+
+	virtual void setMaximumSendingBitrate(int bps) = 0;
 
 	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info) = 0;
 	virtual void setRemoteVideoPreferences(const QList<PPayloadInfo> &info) = 0;
@@ -221,16 +235,18 @@ public:
 	virtual void start() = 0;
 	virtual void updatePreferences() = 0;
 
-	// if -1 is passed for paramsIndex, pick the best one to transmit
-	virtual void transmitAudio(int index) = 0;
-	virtual void transmitVideo(int index) = 0;
+	virtual void transmitAudio() = 0;
+	virtual void transmitVideo() = 0;
 
 	virtual void pauseAudio() = 0;
 	virtual void pauseVideo() = 0;
 	virtual void stop() = 0;
 
-	virtual QList<PPayloadInfo> audioPayloadInfo() const = 0;
-	virtual QList<PPayloadInfo> videoPayloadInfo() const = 0;
+	virtual QList<PPayloadInfo> localAudioPayloadInfo() const = 0;
+	virtual QList<PPayloadInfo> localVideoPayloadInfo() const = 0;
+	virtual QList<PPayloadInfo> remoteAudioPayloadInfo() const = 0;
+	virtual QList<PPayloadInfo> remoteVideoPayloadInfo() const = 0;
+
 	virtual QList<PAudioParams> audioParams() const = 0;
 	virtual QList<PVideoParams> videoParams() const = 0;
 
@@ -251,7 +267,9 @@ public:
 HINT_SIGNALS:
 	HINT_METHOD(started())
 	HINT_METHOD(preferencesUpdated())
+	HINT_METHOD(audioOutputIntensityChanged(int intensity))
 	HINT_METHOD(audioInputIntensityChanged(int intensity))
+	HINT_METHOD(stoppedRecording())
 	HINT_METHOD(stopped())
 	HINT_METHOD(finished()) // for file playback only
 	HINT_METHOD(error())

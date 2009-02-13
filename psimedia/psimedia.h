@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008  Barracuda Networks, Inc.
+ * Copyright (C) 2008-2009  Barracuda Networks, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -89,6 +89,11 @@ public:
 
 protected:
 	virtual void paintEvent(QPaintEvent *event);
+	virtual void resizeEvent(QResizeEvent *event);
+
+signals:
+	// check the size hint after receiving this signal
+	void videoSizeChanged();
 
 private:
 	Q_DISABLE_COPY(VideoWidget);
@@ -318,34 +323,35 @@ public:
 	void setVideoPreviewWidget(VideoWidget *widget);
 #endif
 
-	// pass a QIODevice to record to.  pass 0 to stop recording.  if a
-	//   device is set before starting the session, then recording will
-	//   wait until it starts.
+	// pass a QIODevice to record to.  if a device is set before starting
+	//   the session, then recording will wait until it starts.
 	// records in ogg theora+vorbis format
 	void setRecordingQIODevice(QIODevice *dev);
 
-	// set local preferences.  this can be fuzzy *params structures
-	//   or payloadinfo.  *params structures end up expanding to a
-	//   bunch of payloadinfo structures.
-	void setLocalAudioPreferences(const QList<AudioParams> &params);
-	void setLocalAudioPreferences(const QList<PayloadInfo> &info);
-	void setLocalVideoPreferences(const QList<VideoParams> &params);
-	void setLocalVideoPreferences(const QList<PayloadInfo> &info);
+	// stop recording operation.  wait for stoppedRecording signal before
+	//   QIODevice is released.
+	void stopRecording();
 
-	// set remote preferences.  this is always as payloadinfo.
+	// set local preferences, using fuzzy *params structures.
+	void setLocalAudioPreferences(const QList<AudioParams> &params);
+	void setLocalVideoPreferences(const QList<VideoParams> &params);
+
+	void setMaximumSendingBitrate(int bps);
+
+	// set remote preferences, using payloadinfo.
 	void setRemoteAudioPreferences(const QList<PayloadInfo> &info);
 	void setRemoteVideoPreferences(const QList<PayloadInfo> &info);
 
 	// usage strategy:
-	//   - initiator sets local prefs as params
+	//   - initiator sets local prefs / bitrate
 	//   - initiator starts(), waits for started()
 	//   - initiator obtains the corresponding payloadinfos and sends to
 	//     target.
 	//   - target receives payloadinfos
-	//   - target sets local prefs as params, and remote prefs
+	//   - target sets local prefs / bitrate, and remote prefs
 	//   - target starts(), waits for started()
-	//   - target obtains the corresponding payloadinfos, which is an
-	//     intersection of initiator/target preferences, and sends to
+	//   - target obtains the corresponding payloadinfos, which is mostly
+	//     an intersection of initiator/target preferences, and sends to
 	//     initiator
 	//   - target is ready for use
 	//   - initiator receives payloadinfos, sets remote prefs, calls
@@ -353,17 +359,22 @@ public:
 	//   - initiator ready for use
 	//
 	// after starting, params getter functions will return a number
-	//   of objects matching that of the payloadinfo getters.  note
+	//   of objects matching that of the local payloadinfo getters.  note
 	//   that these objects may not match the original local prefs
 	//   params (if any).
 	//
-	// it is also possible to set local prefs as payloadinfo instead
-	//   of params, but this is more for testing purposes than
-	//   something you'd want to do in the real world.
+	// you must set at least one local pref for each media type you want
+	//   to support.  any fields in params may be left unset, even all of
+	//   them.  if multiple params structs are specified for a media type,
+	//   then this means configurations "in between" what is specified are
+	//   allowed.
 	//
-	// note: target must set at least two params (upper/lower bound)
-	//   if it wants any flexibility in what payloadinfo is picked.
-	//   for additional flexibility, fields in params may be left unset.
+	// note: targets should leave room in the prefs for flexibility in
+	//   choosing among the initiator payloadinfos.  if a target
+	//   specifies exactly one params struct, and leaves no fields empty,
+	//   then this will result in very strict choosing.  for a given media
+	//   type, targets should leave some fields blank or set at least two
+	//   params.
 	//
 	// adding audio/video to existing session lacking it:
 	//   - set new local prefs as params
@@ -379,7 +390,6 @@ public:
 	//
 	// modifying params of existing media types:
 	//   - set new local prefs as params
-	//   - if any prefs were added, then remote prefs are cleared
 	//   - save original payloadinfos
 	//   - call updatePreferences(), wait for preferencesUpdated()
 	//   - obtain corresponding payloadinfos, and compare to original to
@@ -396,23 +406,43 @@ public:
 	//   - if accept is received, add the 'adds' to the original remote
 	//     prefs and set them
 	//   - call updatePreferences(), wait for preferencesUpdated()
+	//
+	// during modification, if a payloadinfo is being removed, then it
+	//   is removed from both local/remote payloadinfo.  if the peer
+	//   transmits with the removed payload type, then it will be
+	//   ignored.  the local app won't transmit with a removed type.
+	//
+	// during modification, if a payloadinfo is being added, then it
+	//   is added only to the local payloadinfo.  the app must explicitly
+	//   set remote prefs to update the remote payloadinfo (it would
+	//   do this after receiving a peer ack).  the app won't transmit
+	//   using the added payloadinfo until the remote list is updated
+	//   as appropriate (more generally, the app won't transmit using a
+	//   payloadinfo that is not in the remote list).
 	void start();
 
 	// if prefs are changed after starting, this function needs to be
 	//   called for them to take effect
 	void updatePreferences();
 
-	void transmitAudio(int index = -1);
-	void transmitVideo(int index = -1);
+	void transmitAudio();
+	void transmitVideo();
 	void pauseAudio();
 	void pauseVideo();
 	void stop();
 
-	QList<PayloadInfo> audioPayloadInfo() const;
-	QList<PayloadInfo> videoPayloadInfo() const;
+	// in a correctly negotiated session, there will be an equal amount of
+	//   local/remote values for each media type (during negotiation there
+	//   may be a mismatch).  however, the payloadinfo for each won't
+	//   necessarily match exactly.  for example, both sides could be
+	//   using theora, but they'll almost certainly have different
+	//   parameters.
+	QList<PayloadInfo> localAudioPayloadInfo() const;
+	QList<PayloadInfo> localVideoPayloadInfo() const;
+	QList<PayloadInfo> remoteAudioPayloadInfo() const;
+	QList<PayloadInfo> remoteVideoPayloadInfo() const;
 
-	// maps to above payloadinfo.  may not necessarily match local prefs
-	//   set as params.
+	// maps to local payloadinfo
 	QList<AudioParams> audioParams() const;
 	QList<VideoParams> videoParams() const;
 
@@ -445,7 +475,9 @@ public:
 signals:
 	void started();
 	void preferencesUpdated();
+	void audioOutputIntensityChanged(int intensity); // 0-100, -1 for no signal
 	void audioInputIntensityChanged(int intensity); // 0-100
+	void stoppedRecording();
 	void stopped();
 	void finished(); // for file playback only
 	void error();

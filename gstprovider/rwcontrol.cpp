@@ -521,12 +521,12 @@ bool RwControlRemote::processMessage(RwControlMessage *msg)
 		RwControlTransmitMessage *tmsg = (RwControlTransmitMessage *)msg;
 
 		if(tmsg->transmit.useAudio)
-			worker->transmitAudio(tmsg->transmit.audioIndex);
+			worker->transmitAudio();
 		else
 			worker->pauseAudio();
 
 		if(tmsg->transmit.useVideo)
-			worker->transmitVideo(tmsg->transmit.videoIndex);
+			worker->transmitVideo();
 		else
 			worker->pauseVideo();
 	}

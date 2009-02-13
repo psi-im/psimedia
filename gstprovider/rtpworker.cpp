@@ -462,18 +462,14 @@ void RtpWorker::update()
 	g_source_attach(timer, mainContext_);
 }
 
-void RtpWorker::transmitAudio(int index)
+void RtpWorker::transmitAudio()
 {
-	// FIXME
-	Q_UNUSED(index);
 	QMutexLocker locker(&rtpaudioout_mutex);
 	rtpaudioout = true;
 }
 
-void RtpWorker::transmitVideo(int index)
+void RtpWorker::transmitVideo()
 {
-	// FIXME
-	Q_UNUSED(index);
 	QMutexLocker locker(&rtpvideoout_mutex);
 	rtpvideoout = true;
 }

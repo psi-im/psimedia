@@ -32,6 +32,13 @@
 #include "gstthread.h"
 #include "rwcontrol.h"
 
+#ifdef QT_GUI_LIB
+#include <QWidget>
+#include <QPainter>
+#endif
+
+// TODO audioOutputIntensityChanged and stoppedRecording signals
+
 namespace PsiMedia {
 
 static PDevice gstDeviceToPDevice(const GstDevice &dev, PDevice::Type type)
@@ -42,6 +49,68 @@ static PDevice gstDeviceToPDevice(const GstDevice &dev, PDevice::Type type)
 	out.id = dev.id;
 	return out;
 }
+
+//----------------------------------------------------------------------------
+// GstVideoWidget
+//----------------------------------------------------------------------------
+class GstVideoWidget : public QObject
+{
+	Q_OBJECT
+
+public:
+	VideoWidgetContext *context;
+	QImage curImage;
+
+	GstVideoWidget(VideoWidgetContext *_context, QObject *parent = 0) :
+		QObject(parent),
+		context(_context)
+	{
+		connect(context->qobject(), SIGNAL(resized(const QSize &)), SLOT(context_resized(const QSize &)));
+		connect(context->qobject(), SIGNAL(paintEvent(QPainter *)), SLOT(context_paintEvent(QPainter *)));
+	}
+
+	void show_frame(const QImage &image)
+	{
+		curImage = image;
+		context->qwidget()->update();
+	}
+
+private slots:
+	void context_resized(const QSize &newSize)
+	{
+		Q_UNUSED(newSize);
+	}
+
+	void context_paintEvent(QPainter *p)
+	{
+		if(curImage.isNull())
+			return;
+
+		QSize size = context->qwidget()->size();
+		QSize newSize = curImage.size();
+		newSize.scale(size, Qt::KeepAspectRatio);
+		int xoff = 0;
+		int yoff = 0;
+		if(newSize.width() < size.width())
+			xoff = (size.width() - newSize.width()) / 2;
+		else if(newSize.height() < size.height())
+			yoff = (size.height() - newSize.height()) / 2;
+
+		// ideally, the backend will follow desired_size() and give
+		//   us images that generally don't need resizing
+		QImage i;
+		if(curImage.size() != newSize)
+		{
+			// the IgnoreAspectRatio is okay here, since we
+			//   used KeepAspectRatio earlier
+			i = curImage.scaled(newSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+		}
+		else
+			i = curImage;
+
+		p->drawImage(xoff, yoff, i);
+	}
+};
 
 //----------------------------------------------------------------------------
 // GstRtpChannel
@@ -318,7 +387,7 @@ public:
 	bool pending_status;
 
 #ifdef QT_GUI_LIB
-	VideoWidgetContext *outputWidget, *previewWidget;
+	GstVideoWidget *outputWidget, *previewWidget;
 #endif
 
 	GstRecorder recorder;
@@ -366,6 +435,11 @@ public:
 
 	void cleanup()
 	{
+		delete outputWidget;
+		outputWidget = 0;
+		delete previewWidget;
+		previewWidget = 0;
+
 		isStarted = false;
 		isStopping = false;
 		pending_status = false;
@@ -426,7 +500,11 @@ public:
 #ifdef QT_GUI_LIB
         virtual void setVideoOutputWidget(VideoWidgetContext *widget)
 	{
-		outputWidget = widget;
+		if(outputWidget && outputWidget->context == widget)
+			return;
+
+		delete outputWidget;
+		outputWidget = new GstVideoWidget(widget, this);
 		devices.useVideoOut = widget ? true : false;
 		if(control)
 			control->updateDevices(devices);
@@ -434,7 +512,11 @@ public:
 
 	virtual void setVideoPreviewWidget(VideoWidgetContext *widget)
 	{
-		previewWidget = widget;
+		if(previewWidget && previewWidget->context == widget)
+			return;
+
+		delete previewWidget;
+		previewWidget = new GstVideoWidget(widget, this);
 		devices.useVideoPreview = widget ? true : false;
 		if(control)
 			control->updateDevices(devices);
@@ -449,6 +531,11 @@ public:
 		recorder.setDevice(recordDevice);
 	}
 
+	virtual void stopRecording()
+	{
+		// TODO
+	}
+
 	virtual void setLocalAudioPreferences(const QList<PAudioParams> &params)
 	{
 		codecs.useLocalAudioParams = true;
@@ -459,7 +546,7 @@ public:
 		codecs.localAudioPayloadInfo.clear();
 	}
 
-	virtual void setLocalAudioPreferences(const QList<PPayloadInfo> &info)
+	/*virtual void setLocalAudioPreferences(const QList<PPayloadInfo> &info)
 	{
 		codecs.useLocalAudioPayloadInfo = true;
 		codecs.localAudioPayloadInfo = info;
@@ -467,7 +554,7 @@ public:
 		// disable the other
 		codecs.useLocalAudioParams = false;
 		codecs.localAudioParams.clear();
-	}
+	}*/
 
 	virtual void setLocalVideoPreferences(const QList<PVideoParams> &params)
 	{
@@ -479,7 +566,7 @@ public:
 		codecs.localVideoPayloadInfo.clear();
 	}
 
-	virtual void setLocalVideoPreferences(const QList<PPayloadInfo> &info)
+	/*virtual void setLocalVideoPreferences(const QList<PPayloadInfo> &info)
 	{
 		codecs.useLocalVideoPayloadInfo = true;
 		codecs.localVideoPayloadInfo = info;
@@ -487,6 +574,12 @@ public:
 		// disable the other
 		codecs.useLocalVideoParams = false;
 		codecs.localVideoParams.clear();
+	}*/
+
+	virtual void setMaximumSendingBitrate(int bps)
+	{
+		// TODO
+		Q_UNUSED(bps);
 	}
 
 	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info)
@@ -537,17 +630,15 @@ public:
 		control->updateCodecs(codecs);
 	}
 
-	virtual void transmitAudio(int index)
+	virtual void transmitAudio()
 	{
 		transmit.useAudio = true;
-		transmit.audioIndex = index;
 		control->setTransmit(transmit);
 	}
 
-	virtual void transmitVideo(int index)
+	virtual void transmitVideo()
 	{
 		transmit.useVideo = true;
-		transmit.videoIndex = index;
 		control->setTransmit(transmit);
 	}
 
@@ -572,14 +663,26 @@ public:
 		control->stop();
 	}
 
-	virtual QList<PPayloadInfo> audioPayloadInfo() const
+	virtual QList<PPayloadInfo> localAudioPayloadInfo() const
 	{
 		return lastStatus.localAudioPayloadInfo;
 	}
 
-	virtual QList<PPayloadInfo> videoPayloadInfo() const
+	virtual QList<PPayloadInfo> localVideoPayloadInfo() const
 	{
 		return lastStatus.localVideoPayloadInfo;
+	}
+
+	virtual QList<PPayloadInfo> remoteAudioPayloadInfo() const
+	{
+		// TODO
+		return QList<PPayloadInfo>();
+	}
+
+	virtual QList<PPayloadInfo> remoteVideoPayloadInfo() const
+	{
+		// TODO
+		return QList<PPayloadInfo>();
 	}
 
 	virtual QList<PAudioParams> audioParams() const
@@ -657,7 +760,9 @@ public:
 signals:
 	void started();
 	void preferencesUpdated();
+	void audioOutputIntensityChanged(int intensity); // TODO: use
 	void audioInputIntensityChanged(int intensity);
+	void stoppedRecording(); // TODO: use
 	void stopped();
 	void finished();
 	void error();

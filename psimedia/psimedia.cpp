@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008  Barracuda Networks, Inc.
+ * Copyright (C) 2008-2009  Barracuda Networks, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,7 +26,6 @@
 
 #ifdef QT_GUI_LIB
 #include <QPainter>
-#include <QImage>
 #endif
 
 #include "psimediaprovider.h"
@@ -327,8 +326,10 @@ class VideoWidgetPrivate : public QObject, public VideoWidgetContext
 	Q_OBJECT
 
 public:
+	friend class VideoWidget;
+
 	VideoWidget *q;
-	QImage curImage;
+	QSize videoSize;
 
 	VideoWidgetPrivate(VideoWidget *_q) :
 		QObject(_q),
@@ -336,16 +337,25 @@ public:
 	{
 	}
 
-	virtual QSize desired_size() const
+	virtual QObject *qobject()
 	{
-		return q->size();
+		return this;
 	}
 
-	virtual void show_frame(const QImage &image)
+	virtual QWidget *qwidget()
 	{
-		curImage = image;
-		q->update();
+		return q;
 	}
+
+	virtual void setVideoSize(const QSize &size)
+	{
+		videoSize = size;
+		emit q->videoSizeChanged();
+	}
+
+signals:
+	void resized(const QSize &newSize);
+	void paintEvent(QPainter *p);
 };
 
 VideoWidget::VideoWidget(QWidget *parent) :
@@ -367,41 +377,20 @@ VideoWidget::~VideoWidget()
 
 QSize VideoWidget::sizeHint() const
 {
-	if(!d->curImage.isNull())
-		return d->curImage.size();
-	else
-		return QSize();
+	return d->videoSize;
 }
 
 void VideoWidget::paintEvent(QPaintEvent *event)
 {
 	Q_UNUSED(event);
 	QPainter p(this);
-	if(!d->curImage.isNull())
-	{
-		QSize newSize = d->curImage.size();
-		newSize.scale(size(), Qt::KeepAspectRatio);
-		int xoff = 0;
-		int yoff = 0;
-		if(newSize.width() < width())
-			xoff = (width() - newSize.width()) / 2;
-		else if(newSize.height() < height())
-			yoff = (height() - newSize.height()) / 2;
+	emit d->paintEvent(&p);
+}
 
-		// ideally, the backend will follow desired_size() and give
-		//   us images that generally don't need resizing
-		QImage i;
-		if(d->curImage.size() != newSize)
-		{
-			// the IgnoreAspectRatio is okay here, since we
-			//   used KeepAspectRatio earlier
-			i = d->curImage.scaled(newSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-		}
-		else
-			i = d->curImage;
-
-		p.drawImage(xoff, yoff, i);
-	}
+void VideoWidget::resizeEvent(QResizeEvent *event)
+{
+	Q_UNUSED(event);
+	emit d->resized(size());
 }
 #endif
 
@@ -892,38 +881,6 @@ void RtpChannel::disconnectNotify(const char *signal)
 	}
 }
 
-#if 0
-//----------------------------------------------------------------------------
-// Recorder
-//----------------------------------------------------------------------------
-class Recorder::Private
-{
-public:
-	QIODevice *device;
-};
-
-Recorder::Recorder(QObject *parent) :
-	QObject(parent)
-{
-	d = new Private;
-}
-
-Recorder::~Recorder()
-{
-	delete d;
-}
-
-QIODevice *Recorder::device() const
-{
-	return d->device;
-}
-
-void Recorder::setDevice(QIODevice *dev)
-{
-	d->device = dev;
-}
-#endif
-
 //----------------------------------------------------------------------------
 // PayloadInfo
 //----------------------------------------------------------------------------
@@ -1113,7 +1070,9 @@ public:
 		c->qobject()->setParent(this);
 		connect(c->qobject(), SIGNAL(started()), SLOT(c_started()));
 		connect(c->qobject(), SIGNAL(preferencesUpdated()), SLOT(c_preferencesUpdated()));
+		connect(c->qobject(), SIGNAL(audioOutputIntensityChanged(int)), SLOT(c_audioOutputIntensityChanged(int)));
 		connect(c->qobject(), SIGNAL(audioInputIntensityChanged(int)), SLOT(c_audioInputIntensityChanged(int)));
+		connect(c->qobject(), SIGNAL(stoppedRecording()), SLOT(c_stoppedRecording()));
 		connect(c->qobject(), SIGNAL(stopped()), SLOT(c_stopped()));
 		connect(c->qobject(), SIGNAL(finished()), SLOT(c_finished()));
 		connect(c->qobject(), SIGNAL(error()), SLOT(c_error()));
@@ -1137,9 +1096,19 @@ private slots:
 		emit q->preferencesUpdated();
 	}
 
+	void c_audioOutputIntensityChanged(int intensity)
+	{
+		emit q->audioOutputIntensityChanged(intensity);
+	}
+
 	void c_audioInputIntensityChanged(int intensity)
 	{
 		emit q->audioInputIntensityChanged(intensity);
+	}
+
+	void c_stoppedRecording()
+	{
+		emit q->stoppedRecording();
 	}
 
 	void c_stopped()
@@ -1224,19 +1193,16 @@ void RtpSession::setRecordingQIODevice(QIODevice *dev)
 	d->c->setRecorder(dev);
 }
 
+void RtpSession::stopRecording()
+{
+	d->c->stopRecording();
+}
+
 void RtpSession::setLocalAudioPreferences(const QList<AudioParams> &params)
 {
 	QList<PAudioParams> list;
 	foreach(const AudioParams &p, params)
 		list += exportAudioParams(p);
-	d->c->setLocalAudioPreferences(list);
-}
-
-void RtpSession::setLocalAudioPreferences(const QList<PayloadInfo> &info)
-{
-	QList<PPayloadInfo> list;
-	foreach(const PayloadInfo &p, info)
-		list += exportPayloadInfo(p);
 	d->c->setLocalAudioPreferences(list);
 }
 
@@ -1248,12 +1214,9 @@ void RtpSession::setLocalVideoPreferences(const QList<VideoParams> &params)
 	d->c->setLocalVideoPreferences(list);
 }
 
-void RtpSession::setLocalVideoPreferences(const QList<PayloadInfo> &info)
+void RtpSession::setMaximumSendingBitrate(int bps)
 {
-	QList<PPayloadInfo> list;
-	foreach(const PayloadInfo &p, info)
-		list += exportPayloadInfo(p);
-	d->c->setLocalVideoPreferences(list);
+	d->c->setMaximumSendingBitrate(bps);
 }
 
 void RtpSession::setRemoteAudioPreferences(const QList<PayloadInfo> &info)
@@ -1282,14 +1245,14 @@ void RtpSession::updatePreferences()
 	d->c->updatePreferences();
 }
 
-void RtpSession::transmitAudio(int index)
+void RtpSession::transmitAudio()
 {
-	d->c->transmitAudio(index);
+	d->c->transmitAudio();
 }
 
-void RtpSession::transmitVideo(int index)
+void RtpSession::transmitVideo()
 {
-	d->c->transmitVideo(index);
+	d->c->transmitVideo();
 }
 
 void RtpSession::pauseAudio()
@@ -1307,18 +1270,34 @@ void RtpSession::stop()
 	d->c->stop();
 }
 
-QList<PayloadInfo> RtpSession::audioPayloadInfo() const
+QList<PayloadInfo> RtpSession::localAudioPayloadInfo() const
 {
 	QList<PayloadInfo> out;
-	foreach(const PPayloadInfo &pp, d->c->audioPayloadInfo())
+	foreach(const PPayloadInfo &pp, d->c->localAudioPayloadInfo())
 		out += importPayloadInfo(pp);
 	return out;
 }
 
-QList<PayloadInfo> RtpSession::videoPayloadInfo() const
+QList<PayloadInfo> RtpSession::localVideoPayloadInfo() const
 {
 	QList<PayloadInfo> out;
-	foreach(const PPayloadInfo &pp, d->c->videoPayloadInfo())
+	foreach(const PPayloadInfo &pp, d->c->localVideoPayloadInfo())
+		out += importPayloadInfo(pp);
+	return out;
+}
+
+QList<PayloadInfo> RtpSession::remoteAudioPayloadInfo() const
+{
+	QList<PayloadInfo> out;
+	foreach(const PPayloadInfo &pp, d->c->remoteAudioPayloadInfo())
+		out += importPayloadInfo(pp);
+	return out;
+}
+
+QList<PayloadInfo> RtpSession::remoteVideoPayloadInfo() const
+{
+	QList<PayloadInfo> out;
+	foreach(const PPayloadInfo &pp, d->c->remoteVideoPayloadInfo())
 		out += importPayloadInfo(pp);
 	return out;
 }

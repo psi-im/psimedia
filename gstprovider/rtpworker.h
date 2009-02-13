@@ -70,8 +70,8 @@ public:
 
 	void start();
 	void update();
-	void transmitAudio(int index);
-	void transmitVideo(int index);
+	void transmitAudio();
+	void transmitVideo();
 	void pauseAudio();
 	void pauseVideo();
 	void stop();
