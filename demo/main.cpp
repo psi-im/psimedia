@@ -777,6 +777,9 @@ public:
 
 	~MainWin()
 	{
+		producer.reset();
+		receiver.reset();
+
 		cleanup_send_rtp();
 		cleanup_receive_rtp();
 		cleanup_record();
@@ -854,7 +857,6 @@ public:
 	{
 		if(recording)
 		{
-			receiver.setRecordingQIODevice(0);
 			delete recordFile;
 			recordFile = 0;
 			recording = false;

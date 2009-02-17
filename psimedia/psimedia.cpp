@@ -1144,6 +1144,12 @@ RtpSession::~RtpSession()
 	delete d;
 }
 
+void RtpSession::reset()
+{
+	delete d;
+	d = new RtpSessionPrivate(this);
+}
+
 void RtpSession::setAudioOutputDevice(const QString &deviceId)
 {
 	d->c->setAudioOutputDevice(deviceId);

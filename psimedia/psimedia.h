@@ -309,6 +309,8 @@ public:
 	RtpSession(QObject *parent = 0);
 	~RtpSession();
 
+	void reset();
+
 	void setAudioOutputDevice(const QString &deviceId);
 #ifdef QT_GUI_LIB
 	void setVideoOutputWidget(VideoWidget *widget);
