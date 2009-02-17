@@ -37,8 +37,6 @@
 #include <QPainter>
 #endif
 
-// TODO audioOutputIntensityChanged and stoppedRecording signals
-
 namespace PsiMedia {
 
 static PDevice gstDeviceToPDevice(const GstDevice &dev, PDevice::Type type)
@@ -139,7 +137,7 @@ public:
 	GstRtpSessionContext *session;
 	QList<PRtpPacket> in;
 
-	QTime wake_time;
+	//QTime wake_time;
 	bool wake_pending;
 	QList<PRtpPacket> pending_in;
 
@@ -266,41 +264,42 @@ public:
 
 	void setDevice(QIODevice *dev)
 	{
-		if(recordDevice)
+		Q_ASSERT(!recordDevice);
+		Q_ASSERT(!nextRecordDevice);
+
+		if(control)
 		{
-			// if we were already recording and haven't cancelled,
-			//   then cancel it
-			if(!record_cancel)
-			{
-				record_cancel = true;
+			recordDevice = dev;
 
-				RwControlRecord record;
-				record.enabled = false;
-				control->setRecord(record);
-			}
-
-			// queue up the device for later
-			if(dev)
-				nextRecordDevice = dev;
+			RwControlRecord record;
+			record.enabled = true;
+			control->setRecord(record);
 		}
 		else
 		{
-			if(control)
-			{
-				if(dev)
-				{
-					recordDevice = dev;
+			// queue up the device for later
+			nextRecordDevice = dev;
+		}
+	}
 
-					RwControlRecord record;
-					record.enabled = true;
-					control->setRecord(record);
-				}
-			}
-			else
-			{
-				// queue up the device for later
-				nextRecordDevice = dev;
-			}
+	void stop()
+	{
+		Q_ASSERT(recordDevice || nextRecordDevice);
+		Q_ASSERT(!record_cancel);
+
+		if(nextRecordDevice)
+		{
+			// if there was only a queued device, then there's
+			//   nothing to do but dequeue it
+			nextRecordDevice = 0;
+		}
+		else
+		{
+			record_cancel = true;
+
+			RwControlRecord record;
+			record.enabled = false;
+			control->setRecord(record);
 		}
 	}
 
@@ -329,6 +328,9 @@ public:
 		}
 	}
 
+signals:
+	void stopped();
+
 private slots:
 	void processIn()
 	{
@@ -337,6 +339,8 @@ private slots:
 		QList<QByteArray> in = pending_in;
 		pending_in.clear();
 		m.unlock();
+
+		QPointer<QObject> self = this;
 
 		while(!in.isEmpty())
 		{
@@ -350,16 +354,15 @@ private slots:
 			{
 				recordDevice->close();
 				recordDevice = 0;
+
+				bool wasCancelled = record_cancel;
 				record_cancel = false;
 
-				if(control && nextRecordDevice)
+				if(wasCancelled)
 				{
-					recordDevice = nextRecordDevice;
-					nextRecordDevice = 0;
-
-					RwControlRecord record;
-					record.enabled = true;
-					control->setRecord(record);
+					emit stopped();
+					if(!self)
+						return;
 				}
 			}
 		}
@@ -421,6 +424,8 @@ public:
 
 		audioRtp.session = this;
 		videoRtp.session = this;
+
+		connect(&recorder, SIGNAL(stopped()), SLOT(recorder_stopped()));
 	}
 
 	~GstRtpSessionContext()
@@ -533,53 +538,24 @@ public:
 
 	virtual void stopRecording()
 	{
-		// TODO
+		recorder.stop();
 	}
 
 	virtual void setLocalAudioPreferences(const QList<PAudioParams> &params)
 	{
 		codecs.useLocalAudioParams = true;
 		codecs.localAudioParams = params;
-
-		// disable the other
-		codecs.useLocalAudioPayloadInfo = false;
-		codecs.localAudioPayloadInfo.clear();
 	}
-
-	/*virtual void setLocalAudioPreferences(const QList<PPayloadInfo> &info)
-	{
-		codecs.useLocalAudioPayloadInfo = true;
-		codecs.localAudioPayloadInfo = info;
-
-		// disable the other
-		codecs.useLocalAudioParams = false;
-		codecs.localAudioParams.clear();
-	}*/
 
 	virtual void setLocalVideoPreferences(const QList<PVideoParams> &params)
 	{
 		codecs.useLocalVideoParams = true;
 		codecs.localVideoParams = params;
-
-		// disable the other
-		codecs.useLocalVideoPayloadInfo = false;
-		codecs.localVideoPayloadInfo.clear();
 	}
-
-	/*virtual void setLocalVideoPreferences(const QList<PPayloadInfo> &info)
-	{
-		codecs.useLocalVideoPayloadInfo = true;
-		codecs.localVideoPayloadInfo = info;
-
-		// disable the other
-		codecs.useLocalVideoParams = false;
-		codecs.localVideoParams.clear();
-	}*/
 
 	virtual void setMaximumSendingBitrate(int bps)
 	{
-		// TODO
-		Q_UNUSED(bps);
+		codecs.maximumSendingBitrate = bps;
 	}
 
 	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info)
@@ -604,7 +580,8 @@ public:
 		connect(control, SIGNAL(statusReady(const RwControlStatus &)), SLOT(control_statusReady(const RwControlStatus &)));
 		connect(control, SIGNAL(previewFrame(const QImage &)), SLOT(control_previewFrame(const QImage &)));
 		connect(control, SIGNAL(outputFrame(const QImage &)), SLOT(control_outputFrame(const QImage &)));
-		connect(control, SIGNAL(audioIntensityChanged(int)), SLOT(control_audioIntensityChanged(int)));
+		connect(control, SIGNAL(audioOutputIntensityChanged(int)), SLOT(control_audioOutputIntensityChanged(int)));
+		connect(control, SIGNAL(audioInputIntensityChanged(int)), SLOT(control_audioInputIntensityChanged(int)));
 
 		control->app = this;
 		control->cb_rtpAudioOut = cb_control_rtpAudioOut;
@@ -656,7 +633,11 @@ public:
 
 	virtual void stop()
 	{
-		Q_ASSERT(control && !pending_status && !isStopping);
+		Q_ASSERT(control && !isStopping);
+
+		// note: it's possible to stop even if pending_status is
+		//   already true.  this is so we can stop a session that
+		//   is in the middle of starting.
 
 		isStopping = true;
 		pending_status = true;
@@ -675,14 +656,12 @@ public:
 
 	virtual QList<PPayloadInfo> remoteAudioPayloadInfo() const
 	{
-		// TODO
-		return QList<PPayloadInfo>();
+		return lastStatus.remoteAudioPayloadInfo;
 	}
 
 	virtual QList<PPayloadInfo> remoteVideoPayloadInfo() const
 	{
-		// TODO
-		return QList<PPayloadInfo>();
+		return lastStatus.remoteVideoPayloadInfo;
 	}
 
 	virtual QList<PAudioParams> audioParams() const
@@ -760,9 +739,9 @@ public:
 signals:
 	void started();
 	void preferencesUpdated();
-	void audioOutputIntensityChanged(int intensity); // TODO: use
+	void audioOutputIntensityChanged(int intensity);
 	void audioInputIntensityChanged(int intensity);
-	void stoppedRecording(); // TODO: use
+	void stoppedRecording();
 	void stopped();
 	void finished();
 	void error();
@@ -785,14 +764,24 @@ private slots:
 		}
 		else if(pending_status)
 		{
-			pending_status = false;
-
 			if(status.stopped)
 			{
+				pending_status = false;
+
 				cleanup();
 				emit stopped();
+				return;
 			}
-			else if(!isStarted)
+
+			// if we're currently stopping, ignore all other
+			//   pending status events except for stopped
+			//   (handled above)
+			if(isStopping)
+				return;
+
+			pending_status = false;
+
+			if(!isStarted)
 			{
 				isStarted = true;
 
@@ -818,9 +807,19 @@ private slots:
 			outputWidget->show_frame(img);
 	}
 
-	void control_audioIntensityChanged(int intensity)
+	void control_audioOutputIntensityChanged(int intensity)
+	{
+		emit audioOutputIntensityChanged(intensity);
+	}
+
+	void control_audioInputIntensityChanged(int intensity)
 	{
 		emit audioInputIntensityChanged(intensity);
+	}
+
+	void recorder_stopped()
+	{
+		emit stoppedRecording();
 	}
 
 private:

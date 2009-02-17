@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008  Barracuda Networks, Inc.
+ * Copyright (C) 2008-2009  Barracuda Networks, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -70,13 +70,13 @@ static RwControlFrameMessage *getLatestFrameAndRemoveOthers(QList<RwControlMessa
 	return fmsg;
 }
 
-static RwControlAudioIntensityMessage *getLatestAudioIntensityAndRemoveOthers(QList<RwControlMessage*> *list)
+static RwControlAudioIntensityMessage *getLatestAudioIntensityAndRemoveOthers(QList<RwControlMessage*> *list, RwControlAudioIntensity::Type type)
 {
 	RwControlAudioIntensityMessage *amsg = 0;
 	for(int n = 0; n < list->count(); ++n)
 	{
 		RwControlMessage *msg = list->at(n);
-		if(msg->type == RwControlMessage::AudioIntensity)
+		if(msg->type == RwControlMessage::AudioIntensity && ((RwControlAudioIntensityMessage *)msg)->intensity.type == type)
 		{
 			// if we already had a msg, discard it and take the next
 			if(amsg)
@@ -88,6 +88,27 @@ static RwControlAudioIntensityMessage *getLatestAudioIntensityAndRemoveOthers(QL
 		}
 	}
 	return amsg;
+}
+
+static void simplifyQueue(QList<RwControlMessage*> *list)
+{
+	// is there a stop message?
+	int at = -1;
+	for(int n = 0; n < list->count(); ++n)
+	{
+		if(list->at(n)->type == RwControlMessage::Stop)
+		{
+			at = n;
+			break;
+		}
+	}
+
+	// if there is, remove all messages after it
+	if(at != -1)
+	{
+		for(int n = at + 1; n < list->count();)
+			list->removeAt(n);
+	}
 }
 
 static RwControlStatusMessage *statusFromWorker(RtpWorker *worker)
@@ -120,10 +141,6 @@ static void applyCodecsToWorker(RtpWorker *worker, const RwControlConfigCodecs &
 		worker->localAudioParams = codecs.localAudioParams;
 	if(codecs.useLocalVideoParams)
 		worker->localVideoParams = codecs.localVideoParams;
-	if(codecs.useLocalAudioPayloadInfo)
-		worker->localAudioPayloadInfo = codecs.localAudioPayloadInfo;
-	if(codecs.useLocalVideoPayloadInfo)
-		worker->localVideoPayloadInfo = codecs.localVideoPayloadInfo;
 	if(codecs.useRemoteAudioPayloadInfo)
 		worker->remoteAudioPayloadInfo = codecs.remoteAudioPayloadInfo;
 	if(codecs.useRemoteVideoPayloadInfo)
@@ -288,13 +305,27 @@ void RwControlLocal::processMessages()
 		}
 	}
 
-	// we only care about the latest audio intensity
-	RwControlAudioIntensityMessage *amsg = getLatestAudioIntensityAndRemoveOthers(&list);
+	// we only care about the latest audio output intensity
+	RwControlAudioIntensityMessage *amsg = getLatestAudioIntensityAndRemoveOthers(&list, RwControlAudioIntensity::Output);
 	if(amsg)
 	{
 		int i = amsg->intensity.value;
 		delete amsg;
-		emit audioIntensityChanged(i);
+		emit audioOutputIntensityChanged(i);
+		if(!self)
+		{
+			qDeleteAll(list);
+			return;
+		}
+	}
+
+	// we only care about the latest audio input intensity
+	amsg = getLatestAudioIntensityAndRemoveOthers(&list, RwControlAudioIntensity::Input);
+	if(amsg)
+	{
+		int i = amsg->intensity.value;
+		delete amsg;
+		emit audioInputIntensityChanged(i);
 		if(!self)
 		{
 			qDeleteAll(list);
@@ -351,6 +382,7 @@ void RwControlLocal::postMessage(RwControlMessage *msg)
 //----------------------------------------------------------------------------
 RwControlRemote::RwControlRemote(GMainContext *mainContext, RwControlLocal *local) :
 	timer(0),
+	start_requested(false),
 	blocking(false),
 	pending_status(false)
 {
@@ -363,7 +395,8 @@ RwControlRemote::RwControlRemote(GMainContext *mainContext, RwControlLocal *loca
 	worker->cb_stopped = cb_worker_stopped;
 	worker->cb_finished = cb_worker_finished;
 	worker->cb_error = cb_worker_error;
-	worker->cb_audioIntensity = cb_worker_audioIntensity;
+	worker->cb_audioOutputIntensity = cb_worker_audioOutputIntensity;
+	worker->cb_audioInputIntensity = cb_worker_audioInputIntensity;
 	worker->cb_previewFrame = cb_worker_previewFrame;
 	worker->cb_outputFrame = cb_worker_outputFrame;
 	worker->cb_rtpAudioOut = cb_worker_rtpAudioOut;
@@ -408,9 +441,14 @@ void RwControlRemote::cb_worker_error(void *app)
 	((RwControlRemote *)app)->worker_error();
 }
 
-void RwControlRemote::cb_worker_audioIntensity(int value, void *app)
+void RwControlRemote::cb_worker_audioOutputIntensity(int value, void *app)
 {
-	((RwControlRemote *)app)->worker_audioIntensity(value);
+	((RwControlRemote *)app)->worker_audioOutputIntensity(value);
+}
+
+void RwControlRemote::cb_worker_audioInputIntensity(int value, void *app)
+{
+	((RwControlRemote *)app)->worker_audioInputIntensity(value);
 }
 
 void RwControlRemote::cb_worker_previewFrame(const RtpWorker::Frame &frame, void *app)
@@ -452,6 +490,11 @@ gboolean RwControlRemote::processMessages()
 			m.unlock();
 			break;
 		}
+
+		// if there is a stop message in the queue, remove all others
+		//   because they are unnecessary
+		simplifyQueue(&in);
+
 		RwControlMessage *msg = in.takeFirst();
 		m.unlock();
 
@@ -484,6 +527,7 @@ bool RwControlRemote::processMessage(RwControlMessage *msg)
 		applyDevicesToWorker(worker, smsg->devices);
 		applyCodecsToWorker(worker, smsg->codecs);
 
+		start_requested = true;
 		pending_status = true;
 		worker->start();
 		return false;
@@ -493,8 +537,21 @@ bool RwControlRemote::processMessage(RwControlMessage *msg)
 		RwControlStopMessage *smsg = (RwControlStopMessage *)msg;
 		Q_UNUSED(smsg);
 
-		pending_status = true;
-		worker->stop();
+		if(start_requested)
+		{
+			pending_status = true;
+			worker->stop();
+		}
+		else
+		{
+			// this can happen if we stop before we even start.
+			//   just send back a stopped status and don't muck
+			//   with the worker.
+			RwControlStatusMessage *msg = new RwControlStatusMessage;
+			msg->status.stopped = true;
+			local_->postMessage(msg);
+		}
+
 		return false;
 	}
 	else if(msg->type == RwControlMessage::UpdateDevices)
@@ -553,6 +610,7 @@ void RwControlRemote::worker_started()
 
 void RwControlRemote::worker_updated()
 {
+	// only reply with status message if we were asking for one
 	if(pending_status)
 	{
 		pending_status = false;
@@ -586,9 +644,18 @@ void RwControlRemote::worker_error()
 	local_->postMessage(msg);
 }
 
-void RwControlRemote::worker_audioIntensity(int value)
+void RwControlRemote::worker_audioOutputIntensity(int value)
 {
 	RwControlAudioIntensityMessage *msg = new RwControlAudioIntensityMessage;
+	msg->intensity.type = RwControlAudioIntensity::Output;
+	msg->intensity.value = value;
+	local_->postMessage(msg);
+}
+
+void RwControlRemote::worker_audioInputIntensity(int value)
+{
+	RwControlAudioIntensityMessage *msg = new RwControlAudioIntensityMessage;
+	msg->intensity.type = RwControlAudioIntensity::Input;
 	msg->intensity.value = value;
 	local_->postMessage(msg);
 }
@@ -646,7 +713,17 @@ void RwControlRemote::resumeMessages()
 void RwControlRemote::postMessage(RwControlMessage *msg)
 {
 	QMutexLocker locker(&m);
+
+	// if a stop message is sent, unblock so that it can get processed.
+	//   this is so we can stop a session that is in the middle of
+	//   starting.  note: care must be taken in the message handler, as
+	//   this will cause processing to resume before resumeMessages() has
+	//   been called.
+	if(msg->type == RwControlMessage::Stop)
+		blocking = false;
+
 	in += msg;
+
 	if(!blocking && !timer)
 	{
 		timer = g_timeout_source_new(0);

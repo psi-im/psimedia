@@ -68,13 +68,13 @@ public:
 	RtpWorker(GMainContext *mainContext);
 	~RtpWorker();
 
-	void start();
-	void update();
+	void start(); // must wait until cb_updated before calling update
+	void update(); // must wait until cb_updated before calling update
 	void transmitAudio();
 	void transmitVideo();
 	void pauseAudio();
 	void pauseVideo();
-	void stop();
+	void stop(); // can be called at any time after calling start
 
 	// the rtp input functions are safe to call from any thread
 	void rtpAudioIn(const PRtpPacket &packet);
@@ -93,7 +93,8 @@ public:
 	void (*cb_stopped)(void *app);
 	void (*cb_finished)(void *app);
 	void (*cb_error)(void *app);
-	void (*cb_audioIntensity)(int value, void *app);
+	void (*cb_audioOutputIntensity)(int value, void *app);
+	void (*cb_audioInputIntensity)(int value, void *app);
 
 	// callbacks - from alternate thread, be safe!
 	//   also, it is not safe to assign callbacks except before starting

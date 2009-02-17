@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008  Barracuda Networks, Inc.
+ * Copyright (C) 2008-2009  Barracuda Networks, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -111,25 +111,22 @@ class RwControlConfigCodecs
 public:
 	bool useLocalAudioParams;
 	bool useLocalVideoParams;
-	bool useLocalAudioPayloadInfo;
-	bool useLocalVideoPayloadInfo;
 	bool useRemoteAudioPayloadInfo;
 	bool useRemoteVideoPayloadInfo;
 
 	QList<PAudioParams> localAudioParams;
 	QList<PVideoParams> localVideoParams;
-	QList<PPayloadInfo> localAudioPayloadInfo;
-	QList<PPayloadInfo> localVideoPayloadInfo;
 	QList<PPayloadInfo> remoteAudioPayloadInfo;
 	QList<PPayloadInfo> remoteVideoPayloadInfo;
+
+	int maximumSendingBitrate;
 
 	RwControlConfigCodecs() :
 		useLocalAudioParams(false),
 		useLocalVideoParams(false),
-		useLocalAudioPayloadInfo(false),
-		useLocalVideoPayloadInfo(false),
 		useRemoteAudioPayloadInfo(false),
-		useRemoteVideoPayloadInfo(false)
+		useRemoteVideoPayloadInfo(false),
+		maximumSendingBitrate(-1)
 	{
 	}
 };
@@ -167,6 +164,8 @@ public:
 	QList<PVideoParams> localVideoParams;
 	QList<PPayloadInfo> localAudioPayloadInfo;
 	QList<PPayloadInfo> localVideoPayloadInfo;
+	QList<PPayloadInfo> remoteAudioPayloadInfo;
+	QList<PPayloadInfo> remoteVideoPayloadInfo;
 	bool canTransmitAudio;
 	bool canTransmitVideo;
 
@@ -189,9 +188,17 @@ public:
 class RwControlAudioIntensity
 {
 public:
+	enum Type
+	{
+		Output,
+		Input
+	};
+
+	Type type;
 	int value;
 
 	RwControlAudioIntensity() :
+		type((Type)-1),
 		value(-1)
 	{
 	}
@@ -347,7 +354,7 @@ public:
 	~RwControlLocal();
 
 	void start(const RwControlConfigDevices &devices, const RwControlConfigCodecs &codecs);
-	void stop();
+	void stop(); // if called, may still receive many status messages before stopped
 	void updateDevices(const RwControlConfigDevices &devices);
 	void updateCodecs(const RwControlConfigCodecs &codecs);
 	void setTransmit(const RwControlTransmit &transmit);
@@ -372,7 +379,8 @@ signals:
 
 	void previewFrame(const QImage &img);
 	void outputFrame(const QImage &img);
-	void audioIntensityChanged(int intensity);
+	void audioOutputIntensityChanged(int intensity);
+	void audioInputIntensityChanged(int intensity);
 
 private slots:
 	void processMessages();
@@ -409,6 +417,7 @@ private:
 	GMainContext *mainContext_;
 	QMutex m;
 	RwControlLocal *local_;
+	bool start_requested;
 	bool blocking;
 	bool pending_status;
 
@@ -421,7 +430,8 @@ private:
 	static void cb_worker_stopped(void *app);
 	static void cb_worker_finished(void *app);
 	static void cb_worker_error(void *app);
-	static void cb_worker_audioIntensity(int value, void *app);
+	static void cb_worker_audioOutputIntensity(int value, void *app);
+	static void cb_worker_audioInputIntensity(int value, void *app);
 	static void cb_worker_previewFrame(const RtpWorker::Frame &frame, void *app);
 	static void cb_worker_outputFrame(const RtpWorker::Frame &frame, void *app);
 	static void cb_worker_rtpAudioOut(const PRtpPacket &packet, void *app);
@@ -434,7 +444,8 @@ private:
 	void worker_stopped();
 	void worker_finished();
 	void worker_error();
-	void worker_audioIntensity(int value);
+	void worker_audioOutputIntensity(int value);
+	void worker_audioInputIntensity(int value);
 	void worker_previewFrame(const RtpWorker::Frame &frame);
 	void worker_outputFrame(const RtpWorker::Frame &frame);
 	void worker_rtpAudioOut(const PRtpPacket &packet);

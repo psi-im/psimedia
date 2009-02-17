@@ -352,7 +352,8 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
 	cb_stopped(0),
 	cb_finished(0),
 	cb_error(0),
-	cb_audioIntensity(0),
+	cb_audioOutputIntensity(0),
+	cb_audioInputIntensity(0),
 	cb_previewFrame(0),
 	cb_outputFrame(0),
 	cb_rtpAudioOut(0),
@@ -488,6 +489,7 @@ void RtpWorker::pauseVideo()
 
 void RtpWorker::stop()
 {
+	// FIXME: make it possible to stop while starting/updating
 	Q_ASSERT(!timer);
 	timer = g_timeout_source_new(0);
 	g_source_set_callback(timer, cb_doStop, this, NULL);
