@@ -186,15 +186,18 @@ public:
 			<< "videoscale"
 			<< "gstrtpjitterbuffer";
 
-#if defined(Q_OS_LINUX)
+#if defined(Q_OS_MAC)
+			reqelem
+			<< "osxaudiosrc" << "osxaudiosink"
+			<< "osxvideosrc";
+#elif defined(Q_OS_LINUX)
 			reqelem
 			<< "alsasrc" << "alsasink"
 			<< "v4lsrc"
 			<< "v4l2src";
-#elif defined(Q_OS_MAC)
+#elif defined(Q_OS_UNIX)
 			reqelem
-			<< "osxaudiosrc" << "osxaudiosink"
-			<< "osxvideosrc";
+			<< "osssrc" << "osssink";
 #elif defined(Q_OS_WIN)
 			reqelem
 			<< "directsoundsrc" << "directsoundsink"

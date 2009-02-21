@@ -88,6 +88,8 @@ static bool element_should_use_probe(const QString &element_name)
 	// these should use DeviceEnum
 	if(element_name == "alsasrc" ||
 		element_name == "alsasink" ||
+		element_name == "osssrc" ||
+		element_name == "osssink" ||
 		element_name == "v4lsrc" ||
 		element_name == "v4l2src" ||
 		element_name == "osxaudiosrc" ||
@@ -204,6 +206,13 @@ static QString element_name_for_driver(const QString &driver, PDevice::Type type
 			element_name = "alsasink";
 		else if(type == PDevice::AudioIn)
 			element_name = "alsasrc";
+	}
+	else if(driver == "oss")
+	{
+		if(type == PDevice::AudioOut)
+			element_name = "osssink";
+		else if(type == PDevice::AudioIn)
+			element_name = "osssrc";
 	}
 	else if(driver == "osxaudio")
 	{
@@ -397,15 +406,25 @@ QList<GstDevice> devices_list(PDevice::Type type)
 	if(type == PDevice::AudioOut)
 	{
 		drivers
-		<< "alsa"
+#if defined(Q_OS_MAC)
 		<< "osxaudio"
+#elif defined(Q_OS_LINUX)
+		<< "alsa"
+#else
+		<< "oss"
+#endif
 		<< "directsound";
 	}
 	else if(type == PDevice::AudioIn)
 	{
 		drivers
-		<< "alsa"
+#if defined(Q_OS_MAC)
 		<< "osxaudio"
+#elif defined(Q_OS_LINUX)
+		<< "alsa"
+#else
+		<< "oss"
+#endif
 		<< "directsound";
 	}
 	else // PDevice::VideoIn
