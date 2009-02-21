@@ -1,6 +1,7 @@
-psimedia:
-  fix assert that happens if you stop before started() is emitted
-  if you stop during a start, the transmit button stays lit?
+api:
+  multi-user jingle (mingle) stuff
+
+backend:
   support playing file from bytearray
   support recording
   use farsight
