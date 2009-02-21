@@ -9,6 +9,7 @@ HEADERS += \
 	$$PWD/devices.h \
 	$$PWD/modes.h \
 	$$PWD/payloadinfo.h \
+	$$PWD/pipeline.h \
 	$$PWD/rtpworker.h \
 	$$PWD/gstthread.h \
 	$$PWD/rwcontrol.h
@@ -17,6 +18,7 @@ SOURCES += \
 	$$PWD/devices.cpp \
 	$$PWD/modes.cpp \
 	$$PWD/payloadinfo.cpp \
+	$$PWD/pipeline.cpp \
 	$$PWD/rtpworker.cpp \
 	$$PWD/gstthread.cpp \
 	$$PWD/rwcontrol.cpp \
