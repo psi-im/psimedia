@@ -28,6 +28,10 @@ void gstelements_rtpmanager_register();
 void gstelements_videomaxrate_register();
 #endif
 
+#ifdef HAVE_LIVEADDER
+void gstelements_liveadder_register();
+#endif
+
 #ifdef HAVE_SPEEXDSP
 void gstelements_speexdsp_register();
 #endif
@@ -56,6 +60,10 @@ void gstelements_register()
 
 #ifdef HAVE_VIDEOMAXRATE
 	gstelements_videomaxrate_register();
+#endif
+
+#ifdef HAVE_LIVEADDER
+	gstelements_liveadder_register();
 #endif
 
 #ifdef HAVE_SPEEXDSP
