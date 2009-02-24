@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2009  Barracuda Networks, Inc.
+ * Copyright (C) 2009  Barracuda Networks, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -30,8 +30,21 @@ namespace PsiMedia {
 GstElement *pipeline_global_ref();
 void pipeline_global_unref();
 
-GstElement *pipeline_device_ref(const QString &id, PDevice::Type type);
-void pipeline_device_unref(const QString &id, PDevice::Type type, GstElement *dev_elem);
+class PipelineDeviceOptions
+{
+public:
+	QSize videoSize;
+	int fps;
+
+	PipelineDeviceOptions() :
+		fps(-1)
+	{
+	}
+};
+
+GstElement *pipeline_device_ref(const QString &id, PDevice::Type type, const PipelineDeviceOptions &opts = PipelineDeviceOptions());
+void pipeline_device_set_opts(GstElement *dev_elem, const PipelineDeviceOptions &opts);
+void pipeline_device_unref(GstElement *dev_elem);
 
 }
 
