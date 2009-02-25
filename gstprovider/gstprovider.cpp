@@ -111,6 +111,110 @@ private slots:
 };
 
 //----------------------------------------------------------------------------
+// GstFeaturesContext
+//----------------------------------------------------------------------------
+static QList<PDevice> get_audioOutputDevices()
+{
+	QList<PDevice> list;
+	foreach(const GstDevice &i, devices_list(PDevice::AudioOut))
+		list += gstDeviceToPDevice(i, PDevice::AudioOut);
+	return list;
+}
+
+static QList<PDevice> get_audioInputDevices()
+{
+	QList<PDevice> list;
+	foreach(const GstDevice &i, devices_list(PDevice::AudioIn))
+		list += gstDeviceToPDevice(i, PDevice::AudioIn);
+	return list;
+}
+
+static QList<PDevice> get_videoInputDevices()
+{
+	QList<PDevice> list;
+	foreach(const GstDevice &i, devices_list(PDevice::VideoIn))
+		list += gstDeviceToPDevice(i, PDevice::VideoIn);
+	return list;
+}
+
+static PFeatures lookup_all()
+{
+	PFeatures out;
+	out.audioOutputDevices = get_audioOutputDevices();
+	out.audioInputDevices = get_audioInputDevices();
+	out.videoInputDevices = get_videoInputDevices();
+	out.supportedAudioModes = modes_supportedAudio();
+	out.supportedVideoModes = modes_supportedVideo();
+	return out;
+}
+
+class FeaturesThread : public QThread
+{
+        Q_OBJECT
+
+public:
+	PFeatures results;
+
+	FeaturesThread(QObject *parent = 0) :
+		QThread(parent)
+	{
+	}
+
+	virtual void run()
+	{
+		results = lookup_all();
+	}
+};
+
+class GstFeaturesContext : public QObject, public FeaturesContext
+{
+	Q_OBJECT
+	Q_INTERFACES(PsiMedia::FeaturesContext)
+
+public:
+	GstThread *gstThread;
+	FeaturesThread *thread;
+
+	GstFeaturesContext(GstThread *_gstThread, QObject *parent = 0) :
+		QObject(parent),
+		gstThread(_gstThread)
+	{
+		thread = new FeaturesThread(this);
+		connect(thread, SIGNAL(finished()), SIGNAL(finished()));
+	}
+
+	~GstFeaturesContext()
+	{
+		thread->wait();
+		delete thread;
+	}
+
+	virtual QObject *qobject()
+	{
+		return this;
+	}
+
+	virtual void lookup(int types)
+	{
+		if(types > 0)
+			thread->start();
+	}
+
+	virtual bool waitForFinished(int msecs)
+	{
+		return thread->wait(msecs < 0 ? ULONG_MAX : msecs);
+	}
+
+	virtual PFeatures results() const
+	{
+		return thread->results;
+	}
+
+signals:
+	void finished();
+};
+
+//----------------------------------------------------------------------------
 // GstRtpChannel
 //----------------------------------------------------------------------------
 // for a live transmission we really shouldn't have excessive queuing (or
@@ -239,6 +343,9 @@ private:
 	void receiver_push_packet_for_write(const PRtpPacket &rtp);
 };
 
+//----------------------------------------------------------------------------
+// GstRecorder
+//----------------------------------------------------------------------------
 class GstRecorder : public QObject
 {
 	Q_OBJECT
@@ -919,38 +1026,9 @@ public:
 		return str;
 	}
 
-	virtual QList<PAudioParams> supportedAudioModes()
+	virtual FeaturesContext *createFeatures()
 	{
-		return modes_supportedAudio();
-	}
-
-	virtual QList<PVideoParams> supportedVideoModes()
-	{
-		return modes_supportedVideo();
-	}
-
-	virtual QList<PDevice> audioOutputDevices()
-	{
-		QList<PDevice> list;
-		foreach(const GstDevice &i, devices_list(PDevice::AudioOut))
-			list += gstDeviceToPDevice(i, PDevice::AudioOut);
-		return list;
-	}
-
-	virtual QList<PDevice> audioInputDevices()
-	{
-		QList<PDevice> list;
-		foreach(const GstDevice &i, devices_list(PDevice::AudioIn))
-			list += gstDeviceToPDevice(i, PDevice::AudioIn);
-		return list;
-	}
-
-	virtual QList<PDevice> videoInputDevices()
-	{
-		QList<PDevice> list;
-		foreach(const GstDevice &i, devices_list(PDevice::VideoIn))
-			list += gstDeviceToPDevice(i, PDevice::VideoIn);
-		return list;
+		return new GstFeaturesContext(thread);
 	}
 
 	virtual RtpSessionContext *createRtpSession()
