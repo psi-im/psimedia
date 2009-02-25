@@ -44,6 +44,7 @@ class QPainter;
 namespace PsiMedia {
 
 class Provider;
+class FeaturesContext;
 class RtpSessionContext;
 
 class Plugin
@@ -66,8 +67,8 @@ class PDevice
 public:
 	enum Type
 	{
-		AudioIn,
 		AudioOut,
+		AudioIn,
 		VideoIn
 	};
 
@@ -103,6 +104,16 @@ public:
 		fps(0)
 	{
 	}
+};
+
+class PFeatures
+{
+public:
+	QList<PDevice> audioOutputDevices;
+	QList<PDevice> audioInputDevices;
+	QList<PDevice> videoInputDevices;
+	QList<PAudioParams> supportedAudioModes;
+	QList<PVideoParams> supportedVideoModes;
 };
 
 class PPayloadInfo
@@ -148,25 +159,37 @@ public:
 class Provider : public QObjectInterface
 {
 public:
-	virtual ~Provider() {}
-
 	virtual bool init(const QString &resourcePath) = 0;
 	virtual QString creditName() = 0;
 	virtual QString creditText() = 0;
 
-	virtual QList<PAudioParams> supportedAudioModes() = 0;
-	virtual QList<PVideoParams> supportedVideoModes() = 0;
-	virtual QList<PDevice> audioOutputDevices() = 0;
-	virtual QList<PDevice> audioInputDevices() = 0;
-	virtual QList<PDevice> videoInputDevices() = 0;
+	virtual FeaturesContext *createFeatures() = 0;
 	virtual RtpSessionContext *createRtpSession() = 0;
+};
+
+class FeaturesContext : public QObjectInterface
+{
+public:
+	enum Type
+	{
+		AudioOut   = 0x01,
+		AudioIn    = 0x02,
+		VideoIn    = 0x04,
+		AudioModes = 0x08,
+		VideoModes = 0x10
+	};
+
+	virtual void lookup(int types) = 0;
+	virtual bool waitForFinished(int msecs) = 0; // -1 = no timeout
+	virtual PFeatures results() const = 0;
+
+HINT_SIGNALS:
+	HINT_METHOD(finished())
 };
 
 class RtpChannelContext : public QObjectInterface
 {
 public:
-	virtual ~RtpChannelContext() {}
-
 	virtual void setEnabled(bool b) = 0;
 
 	virtual int packetsAvailable() const = 0;
@@ -182,8 +205,6 @@ HINT_SIGNALS:
 class VideoWidgetContext : public QObjectInterface
 {
 public:
-	virtual ~VideoWidgetContext() {}
-
 	virtual QWidget *qwidget() = 0;
 
 	// this function causes VideoWidget::videoSizeChanged() to be emitted
@@ -206,8 +227,6 @@ public:
 		ErrorSystem,
 		ErrorCodec
 	};
-
-	virtual ~RtpSessionContext() {}
 
 	virtual void setAudioOutputDevice(const QString &deviceId) = 0;
 	virtual void setAudioInputDevice(const QString &deviceId) = 0;
@@ -279,6 +298,7 @@ HINT_SIGNALS:
 
 Q_DECLARE_INTERFACE(PsiMedia::Plugin, "org.psi-im.psimedia.Plugin/1.0")
 Q_DECLARE_INTERFACE(PsiMedia::Provider, "org.psi-im.psimedia.Provider/1.0")
+Q_DECLARE_INTERFACE(PsiMedia::FeaturesContext, "org.psi-im.psimedia.FeaturesContext/1.0")
 Q_DECLARE_INTERFACE(PsiMedia::RtpChannelContext, "org.psi-im.psimedia.RtpChannelContext/1.0")
 Q_DECLARE_INTERFACE(PsiMedia::RtpSessionContext, "org.psi-im.psimedia.RtpSessionContext/1.0")
 

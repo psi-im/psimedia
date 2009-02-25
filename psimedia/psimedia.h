@@ -55,8 +55,8 @@ class Device
 public:
 	enum Type
 	{
-		AudioIn,  // microphone
 		AudioOut, // speaker
+		AudioIn,  // microphone
 		VideoIn   // camera
 	};
 
@@ -167,10 +167,20 @@ class Features : public QObject
 	Q_OBJECT
 
 public:
+	enum Type
+	{
+		AudioOut   = 0x01,
+		AudioIn    = 0x02,
+		VideoIn    = 0x04,
+		AudioModes = 0x08,
+		VideoModes = 0x10,
+		All        = 0xff
+	};
+
 	Features(QObject *parent = 0);
 	~Features();
 
-	void lookup();
+	void lookup(int types = All);
 	bool waitForFinished(int msecs = -1);
 
 	QList<Device> audioOutputDevices();

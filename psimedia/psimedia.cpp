@@ -22,7 +22,6 @@
 
 #include <QCoreApplication>
 #include <QPluginLoader>
-#include <QThread>
 
 #ifdef QT_GUI_LIB
 #include <QPainter>
@@ -569,52 +568,37 @@ bool VideoParams::operator==(const VideoParams &other) const
 //----------------------------------------------------------------------------
 // Features
 //----------------------------------------------------------------------------
-static QList<Device> get_audioOutputDevices()
+static QList<Device> importDevices(const QList<PDevice> &in)
 {
 	QList<Device> out;
-	foreach(const PDevice &pd, provider()->audioOutputDevices())
+	foreach(const PDevice &pd, in)
 		out += Global::importDevice(pd);
 	return out;
 }
 
-static QList<Device> get_audioInputDevices()
-{
-	QList<Device> out;
-	foreach(const PDevice &pd, provider()->audioInputDevices())
-		out += Global::importDevice(pd);
-	return out;
-}
-
-static QList<Device> get_videoInputDevices()
-{
-	QList<Device> out;
-	foreach(const PDevice &pd, provider()->videoInputDevices())
-		out += Global::importDevice(pd);
-	return out;
-}
-
-static QList<AudioParams> get_supportedAudioModes()
+static QList<AudioParams> importAudioModes(const QList<PAudioParams> &in)
 {
 	QList<AudioParams> out;
-	foreach(const PAudioParams &pp, provider()->supportedAudioModes())
+	foreach(const PAudioParams &pp, in)
 		out += importAudioParams(pp);
 	return out;
 }
 
-static QList<VideoParams> get_supportedVideoModes()
+static QList<VideoParams> importVideoModes(const QList<PVideoParams> &in)
 {
 	QList<VideoParams> out;
-	foreach(const PVideoParams &pp, provider()->supportedVideoModes())
+	foreach(const PVideoParams &pp, in)
 		out += importVideoParams(pp);
 	return out;
 }
 
-class Features::Private : public QThread
+class Features::Private : public QObject
 {
 	Q_OBJECT
 
 public:
 	Features *q;
+	FeaturesContext *c;
 
 	QList<Device> audioOutputDevices;
 	QList<Device> audioInputDevices;
@@ -623,18 +607,42 @@ public:
 	QList<VideoParams> supportedVideoModes;
 
 	Private(Features *_q) :
-		QThread(_q),
+		QObject(_q),
 		q(_q)
 	{
+		c = provider()->createFeatures();
+		c->qobject()->setParent(this);
+		connect(c->qobject(), SIGNAL(finished()), SLOT(c_finished()));
 	}
 
-	virtual void run()
+	~Private()
 	{
-		audioOutputDevices = get_audioOutputDevices();
-		audioInputDevices = get_audioInputDevices();
-		videoInputDevices = get_videoInputDevices();
-		supportedAudioModes = get_supportedAudioModes();
-		supportedVideoModes = get_supportedVideoModes();
+		delete c;
+	}
+
+	void clearResults()
+	{
+		audioOutputDevices.clear();
+		audioInputDevices.clear();
+		videoInputDevices.clear();
+		supportedAudioModes.clear();
+		supportedVideoModes.clear();
+	}
+
+	void importResults(const PFeatures &in)
+	{
+		audioOutputDevices = importDevices(in.audioOutputDevices);
+		audioInputDevices = importDevices(in.audioInputDevices);
+		videoInputDevices = importDevices(in.videoInputDevices);
+		supportedAudioModes = importAudioModes(in.supportedAudioModes);
+		supportedVideoModes = importVideoModes(in.supportedVideoModes);
+	}
+
+private slots:
+	void c_finished()
+	{
+		importResults(c->results());
+		emit q->finished();
 	}
 };
 
@@ -642,7 +650,6 @@ Features::Features(QObject *parent) :
 	QObject(parent)
 {
 	d = new Private(this);
-	connect(d, SIGNAL(finished()), SIGNAL(finished()));
 }
 
 Features::~Features()
@@ -650,14 +657,30 @@ Features::~Features()
 	delete d;
 }
 
-void Features::lookup()
+void Features::lookup(int types)
 {
-	d->start();
+	int ptypes = 0;
+	if(types & AudioOut)
+		ptypes |= FeaturesContext::AudioOut;
+	if(types & AudioIn)
+		ptypes |= FeaturesContext::AudioIn;
+	if(types & VideoIn)
+		ptypes |= FeaturesContext::VideoIn;
+	if(types & AudioModes)
+		ptypes |= FeaturesContext::AudioModes;
+	if(types & VideoModes)
+		ptypes |= FeaturesContext::VideoModes;
+
+	d->clearResults();
+	d->c->lookup(ptypes);
 }
 
 bool Features::waitForFinished(int msecs)
 {
-	return d->wait(msecs < 0 ? ULONG_MAX : msecs);
+	bool ok = d->c->waitForFinished(msecs);
+	if(ok)
+		d->importResults(d->c->results());
+	return ok;
 }
 
 QList<Device> Features::audioOutputDevices()
@@ -1057,7 +1080,6 @@ class RtpSessionPrivate : public QObject
 
 public:
 	RtpSession *q;
-
 	RtpSessionContext *c;
 	RtpChannel audioRtpChannel;
 	RtpChannel videoRtpChannel;
