@@ -96,7 +96,7 @@ QList<PAudioParams> modes_supportedAudio()
 		PAudioParams p;
 		p.codec = "vorbis";
 		p.sampleRate = 44100;
-		p.sampleSize = 16;
+		p.sampleSize = 32;
 		p.channels = 2;
 		list += p;
 	}
