@@ -387,7 +387,7 @@ static QList<GstDevice> devices_for_drivers(const QStringList &drivers, PDevice:
 				QStringList parts;
 				parts += i.driver;
 				parts += i.id;
-				if(!i.explicitCaptureSize.isNull())
+				if(i.explicitCaptureSize.isValid())
 					parts += resolution_to_string(i.explicitCaptureSize);
 				dev.id = encode_id(parts);
 
