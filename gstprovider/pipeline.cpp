@@ -27,20 +27,33 @@
 
 namespace PsiMedia {
 
+static const char *type_to_str(PDevice::Type type)
+{
+	switch(type)
+	{
+		case PDevice::AudioIn:  return "AudioIn";
+		case PDevice::AudioOut: return "AudioOut";
+		case PDevice::VideoIn:  return "VideoIn";
+		default:
+			Q_ASSERT(0);
+			return 0;
+	}
+}
+
 static void videosrcbin_pad_added(GstElement *element, GstPad *pad, gpointer data)
 {
 	Q_UNUSED(element);
 	GstPad *gpad = (GstPad *)data;
 
 	gchar *name = gst_pad_get_name(pad);
-	printf("videosrcbin pad-added: %s\n", name);
+	//printf("videosrcbin pad-added: %s\n", name);
 	g_free(name);
 
 	GstCaps *caps = gst_pad_get_caps(pad);
 	gchar *gstr = gst_caps_to_string(caps);
 	QString capsString = QString::fromUtf8(gstr);
 	g_free(gstr);
-	printf("  caps: [%s]\n", qPrintable(capsString));
+	//printf("  caps: [%s]\n", qPrintable(capsString));
 
 	gst_ghost_pad_set_target(GST_GHOST_PAD(gpad), pad);
 
@@ -199,7 +212,7 @@ public:
 	{
 		gst_element_set_state(pipeline, GST_STATE_NULL);
 		gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-		gst_object_unref(GST_OBJECT(pipeline));
+		g_object_unref(G_OBJECT(pipeline));
 	}
 };
 
@@ -334,6 +347,13 @@ GstElement *pipeline_device_ref(const QString &id, PDevice::Type type, const Pip
 		if(dev->tee)
 			gst_element_set_state(dev->tee, GST_STATE_PLAYING);
 
+		// srcs will change state immediately
+		if(dev->type == PDevice::AudioIn || dev->type == PDevice::VideoIn)
+		{
+			gst_element_get_state(dev->bin, NULL, NULL, GST_CLOCK_TIME_NONE);
+			gst_element_get_state(dev->tee, NULL, NULL, GST_CLOCK_TIME_NONE);
+		}
+
 		g_devices->append(dev);
 		at = g_devices->count() - 1;
 	}
@@ -341,6 +361,7 @@ GstElement *pipeline_device_ref(const QString &id, PDevice::Type type, const Pip
 		++((*g_devices)[at]->refs);
 
 	PipelineDevice *dev = (*g_devices)[at];
+	printf("Readying %s:[%s], refs=%d\n", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
 
 	if(dev->type == PDevice::AudioIn || dev->type == PDevice::VideoIn)
 	{
@@ -350,6 +371,7 @@ GstElement *pipeline_device_ref(const QString &id, PDevice::Type type, const Pip
 		dev->queues += queue;
 		gst_bin_add(GST_BIN(dev->pipeline), queue);
 		gst_element_set_state(queue, GST_STATE_PLAYING);
+		gst_element_get_state(queue, NULL, NULL, GST_CLOCK_TIME_NONE);
 		gst_element_link(dev->tee, queue);
 		return queue;
 	}
@@ -415,6 +437,7 @@ void pipeline_device_unref(GstElement *dev_elem)
 	}
 
 	--dev->refs;
+	printf("Releasing %s:[%s], refs=%d\n", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
 	if(dev->refs == 0)
 	{
 		g_devices->removeAt(at);
