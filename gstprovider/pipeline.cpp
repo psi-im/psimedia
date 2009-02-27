@@ -45,14 +45,14 @@ static void videosrcbin_pad_added(GstElement *element, GstPad *pad, gpointer dat
 	Q_UNUSED(element);
 	GstPad *gpad = (GstPad *)data;
 
-	gchar *name = gst_pad_get_name(pad);
+	//gchar *name = gst_pad_get_name(pad);
 	//printf("videosrcbin pad-added: %s\n", name);
-	g_free(name);
+	//g_free(name);
 
 	GstCaps *caps = gst_pad_get_caps(pad);
-	gchar *gstr = gst_caps_to_string(caps);
-	QString capsString = QString::fromUtf8(gstr);
-	g_free(gstr);
+	//gchar *gstr = gst_caps_to_string(caps);
+	//QString capsString = QString::fromUtf8(gstr);
+	//g_free(gstr);
 	//printf("  caps: [%s]\n", qPrintable(capsString));
 
 	gst_ghost_pad_set_target(GST_GHOST_PAD(gpad), pad);
@@ -194,51 +194,21 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 	return bin;
 }
 
-class Pipeline
+//----------------------------------------------------------------------------
+// PipelineContext
+//----------------------------------------------------------------------------
+class PipelineDevice;
+
+class PipelineDeviceContextPrivate
 {
 public:
-	int refs;
-	GstElement *pipeline;
+	PipelineContext *pipeline;
+	PipelineDevice *device;
+	PipelineDeviceOptions opts;
 
-	Pipeline() :
-		refs(1)
-	{
-		pipeline = gst_pipeline_new(NULL);
-		gst_element_set_state(pipeline, GST_STATE_PLAYING);
-		gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-	}
-
-	~Pipeline()
-	{
-		gst_element_set_state(pipeline, GST_STATE_NULL);
-		gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
-		g_object_unref(G_OBJECT(pipeline));
-	}
+	// queue for srcs, adder for sinks
+	GstElement *element;
 };
-
-static Pipeline *g_pipeline = 0;
-
-GstElement *pipeline_global_ref()
-{
-	if(!g_pipeline)
-		g_pipeline = new Pipeline;
-	else
-		++(g_pipeline->refs);
-
-	return g_pipeline->pipeline;
-}
-
-void pipeline_global_unref()
-{
-	Q_ASSERT(g_pipeline);
-
-	--(g_pipeline->refs);
-	if(g_pipeline->refs == 0)
-	{
-		delete g_pipeline;
-		g_pipeline = 0;
-	}
-}
 
 class PipelineDevice
 {
@@ -249,24 +219,62 @@ public:
 	GstElement *pipeline;
 	GstElement *bin;
 
+	QSet<PipelineDeviceContextPrivate*> contexts;
+
 	// for srcs (audio or video)
 	GstElement *tee;
-	QSet<GstElement*> queues;
 
 	// for sinks (audio only, video sinks are always unshared)
 	GstElement *adder;
 
-	PipelineDevice() :
-		refs(1),
+	PipelineDevice(const QString &_id, PDevice::Type _type, PipelineDeviceContextPrivate *context) :
+		refs(0),
+		id(_id),
+		type(_type),
 		tee(0),
 		adder(0)
 	{
-		pipeline = pipeline_global_ref();
+		pipeline = context->pipeline->pipelineElement();
+
+		// TODO: use context->opts.fps?
+
+		bin = make_devicebin(id, type, context->opts.videoSize);
+		gst_bin_add(GST_BIN(pipeline), bin);
+
+		if(type == PDevice::AudioIn || type == PDevice::VideoIn)
+		{
+			tee = gst_element_factory_make("tee", NULL);
+			gst_bin_add(GST_BIN(pipeline), tee);
+			gst_element_link(bin, tee);
+		}
+		else // AudioOut
+		{
+			adder = gst_element_factory_make("liveadder", NULL);
+			gst_bin_add(GST_BIN(pipeline), adder);
+			gst_element_link(adder, bin);
+		}
+
+		if(adder)
+			gst_element_set_state(adder, GST_STATE_PLAYING);
+
+		gst_element_set_state(bin, GST_STATE_PLAYING);
+
+		if(tee)
+			gst_element_set_state(tee, GST_STATE_PLAYING);
+
+		if(type == PDevice::AudioIn || type == PDevice::VideoIn)
+		{
+			// srcs will change state immediately
+			gst_element_get_state(bin, NULL, NULL, GST_CLOCK_TIME_NONE);
+			gst_element_get_state(tee, NULL, NULL, GST_CLOCK_TIME_NONE);
+		}
+
+		addRef(context);
 	}
 
 	~PipelineDevice()
 	{
-		Q_ASSERT(queues.isEmpty());
+		Q_ASSERT(contexts.isEmpty());
 
 		if(adder)
 			gst_element_set_state(adder, GST_STATE_NULL);
@@ -290,159 +298,163 @@ public:
 			gst_element_get_state(tee, NULL, NULL, GST_CLOCK_TIME_NONE);
 			gst_bin_remove(GST_BIN(pipeline), tee);
 		}
+	}
 
-		pipeline_global_unref();
+	void addRef(PipelineDeviceContextPrivate *context)
+	{
+		Q_ASSERT(!contexts.contains(context));
+
+		// TODO: consider context->opts for refs after first
+
+		if(type == PDevice::AudioIn || type == PDevice::VideoIn)
+		{
+			// create a queue from the tee, and hand it off.  app
+			//   uses this queue element as if it were the actual
+			//   device
+			GstElement *queue = gst_element_factory_make("queue", NULL);
+			context->element = queue;
+			gst_bin_add(GST_BIN(pipeline), queue);
+			gst_element_set_state(queue, GST_STATE_PLAYING);
+			gst_element_get_state(queue, NULL, NULL, GST_CLOCK_TIME_NONE);
+			gst_element_link(tee, queue);
+		}
+		else // AudioOut
+		{
+			context->element = adder;
+		}
+
+		contexts += context;
+		++refs;
+	}
+
+	void removeRef(PipelineDeviceContextPrivate *context)
+	{
+		Q_ASSERT(contexts.contains(context));
+
+		// TODO: recalc video properties
+
+		if(type == PDevice::AudioIn || type == PDevice::VideoIn)
+		{
+			GstElement *queue = context->element;
+
+			// get tee and prepare srcpad
+			GstPad *sinkpad = gst_element_get_pad(queue, "sink");
+			GstPad *srcpad = gst_pad_get_peer(sinkpad);
+			gst_object_unref(GST_OBJECT(sinkpad));
+			gst_element_release_request_pad(tee, srcpad);
+			gst_object_unref(GST_OBJECT(srcpad));
+
+			// safely remove queue
+			gst_element_set_state(queue, GST_STATE_NULL);
+			gst_element_get_state(queue, NULL, NULL, GST_CLOCK_TIME_NONE);
+			gst_bin_remove(GST_BIN(pipeline), queue);
+		}
+
+		contexts.remove(context);
+		--refs;
+	}
+
+	void update()
+	{
+		// TODO: change video properties based on options
 	}
 };
 
-static QList<PipelineDevice*> *g_devices = 0;
-
-GstElement *pipeline_device_ref(const QString &id, PDevice::Type type, const PipelineDeviceOptions &opts)
+class PipelineContext::Private
 {
-	// TODO: use opts.fps?
+public:
+	GstElement *pipeline;
+	QSet<PipelineDevice*> devices;
 
-	if(!g_devices)
-		g_devices = new QList<PipelineDevice*>();
+	Private()
+	{
+		pipeline = gst_pipeline_new(NULL);
+		gst_element_set_state(pipeline, GST_STATE_PLAYING);
+		gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+	}
+
+	~Private()
+	{
+		Q_ASSERT(devices.isEmpty());
+
+		gst_element_set_state(pipeline, GST_STATE_NULL);
+		gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+		g_object_unref(G_OBJECT(pipeline));
+	}
+};
+
+PipelineContext::PipelineContext()
+{
+	d = new Private;
+}
+
+PipelineContext::~PipelineContext()
+{
+	delete d;
+}
+
+GstElement *PipelineContext::pipelineElement()
+{
+	return d->pipeline;
+}
+
+//----------------------------------------------------------------------------
+// PipelineDeviceContext
+//----------------------------------------------------------------------------
+PipelineDeviceContext::PipelineDeviceContext(PipelineContext *pipeline, const QString &id, PDevice::Type type, const PipelineDeviceOptions &opts)
+{
+	d = new PipelineDeviceContextPrivate;
+	d->pipeline = pipeline;
+	d->opts = opts;
 
 	// see if we're already using this device, so we can attempt to share
-	int at = -1;
-	for(int n = 0; n < g_devices->count(); ++n)
+	PipelineDevice *dev = 0;
+	foreach(PipelineDevice *i, pipeline->d->devices)
 	{
-		PipelineDevice *dev = (*g_devices)[n];
-		if(dev->id == id && dev->type == type)
+		if(i->id == id && i->type == type)
 		{
-			at = n;
+			dev = i;
 			break;
 		}
 	}
 
-	// device is not in use, set it up
-	if(at == -1)
+	if(!dev)
 	{
-		PipelineDevice *dev = new PipelineDevice;
-		dev->id = id;
-		dev->type = type;
-
-		dev->bin = make_devicebin(id, type, opts.videoSize);
-		gst_bin_add(GST_BIN(dev->pipeline), dev->bin);
-
-		if(dev->type == PDevice::AudioIn || dev->type == PDevice::VideoIn)
-		{
-			dev->tee = gst_element_factory_make("tee", NULL);
-			gst_bin_add(GST_BIN(dev->pipeline), dev->tee);
-			gst_element_link(dev->bin, dev->tee);
-		}
-		else // AudioOut
-		{
-			dev->adder = gst_element_factory_make("liveadder", NULL);
-			gst_bin_add(GST_BIN(dev->pipeline), dev->adder);
-			gst_element_link(dev->adder, dev->bin);
-		}
-
-		if(dev->adder)
-			gst_element_set_state(dev->adder, GST_STATE_PLAYING);
-
-		gst_element_set_state(dev->bin, GST_STATE_PLAYING);
-
-		if(dev->tee)
-			gst_element_set_state(dev->tee, GST_STATE_PLAYING);
-
-		// srcs will change state immediately
-		if(dev->type == PDevice::AudioIn || dev->type == PDevice::VideoIn)
-		{
-			gst_element_get_state(dev->bin, NULL, NULL, GST_CLOCK_TIME_NONE);
-			gst_element_get_state(dev->tee, NULL, NULL, GST_CLOCK_TIME_NONE);
-		}
-
-		g_devices->append(dev);
-		at = g_devices->count() - 1;
+		dev = new PipelineDevice(id, type, d);
+		pipeline->d->devices += dev;
 	}
 	else
-		++((*g_devices)[at]->refs);
+		dev->addRef(d);
 
-	PipelineDevice *dev = (*g_devices)[at];
+	d->device = dev;
+
 	printf("Readying %s:[%s], refs=%d\n", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
-
-	if(dev->type == PDevice::AudioIn || dev->type == PDevice::VideoIn)
-	{
-		// create a queue from the tee, and hand it off.  app uses this queue
-		//   element as if it were the actual device.
-		GstElement *queue = gst_element_factory_make("queue", NULL);
-		dev->queues += queue;
-		gst_bin_add(GST_BIN(dev->pipeline), queue);
-		gst_element_set_state(queue, GST_STATE_PLAYING);
-		gst_element_get_state(queue, NULL, NULL, GST_CLOCK_TIME_NONE);
-		gst_element_link(dev->tee, queue);
-		return queue;
-	}
-	else // AudioOut
-	{
-		return dev->adder;
-	}
 }
 
-void pipeline_device_set_opts(GstElement *dev_elem, const PipelineDeviceOptions &opts)
+PipelineDeviceContext::~PipelineDeviceContext()
 {
-	// TODO
-	Q_UNUSED(dev_elem);
-	Q_UNUSED(opts);
-}
+	PipelineDevice *dev = d->device;
 
-void pipeline_device_unref(GstElement *dev_elem)
-{
-	Q_ASSERT(g_devices);
-
-	int at = -1;
-	for(int n = 0; n < g_devices->count(); ++n)
-	{
-		PipelineDevice *dev = (*g_devices)[n];
-		if(dev->type == PDevice::AudioIn || dev->type == PDevice::VideoIn)
-		{
-			if(dev->queues.contains(dev_elem))
-			{
-				at = n;
-				break;
-			}
-		}
-		else // AudioOut
-		{
-			if(dev_elem == dev->adder)
-			{
-				at = n;
-				break;
-			}
-		}
-	}
-
-	Q_ASSERT(at != -1);
-
-	PipelineDevice *dev = (*g_devices)[at];
-
-	if(dev->type == PDevice::AudioIn || dev->type == PDevice::VideoIn)
-	{
-		GstElement *queue = dev_elem;
-
-		// get tee and prepare srcpad
-		GstPad *sinkpad = gst_element_get_pad(queue, "sink");
-		GstPad *srcpad = gst_pad_get_peer(sinkpad);
-		gst_object_unref(GST_OBJECT(sinkpad));
-		gst_element_release_request_pad(dev->tee, srcpad);
-		gst_object_unref(GST_OBJECT(srcpad));
-
-		// safely remove queue
-		gst_element_set_state(queue, GST_STATE_NULL);
-		gst_element_get_state(queue, NULL, NULL, GST_CLOCK_TIME_NONE);
-		gst_bin_remove(GST_BIN(dev->pipeline), queue);
-		dev->queues.remove(queue);
-	}
-
-	--dev->refs;
 	printf("Releasing %s:[%s], refs=%d\n", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
+	dev->removeRef(d);
 	if(dev->refs == 0)
 	{
-		g_devices->removeAt(at);
+		d->pipeline->d->devices.remove(dev);
 		delete dev;
 	}
+
+	delete d;
+}
+
+GstElement *PipelineDeviceContext::deviceElement()
+{
+	return d->element;
+}
+
+void PipelineDeviceContext::setOptions(const PipelineDeviceOptions &opts)
+{
+	d->opts = opts;
+	d->device->update();
 }
 
 }

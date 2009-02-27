@@ -27,8 +27,24 @@
 
 namespace PsiMedia {
 
-GstElement *pipeline_global_ref();
-void pipeline_global_unref();
+class PipelineDeviceContext;
+class PipelineDeviceContextPrivate;
+
+class PipelineContext
+{
+public:
+	PipelineContext();
+	~PipelineContext();
+
+	GstElement *pipelineElement();
+
+private:
+	friend class PipelineDeviceContext;
+	friend class PipelineDeviceContextPrivate;
+
+	class Private;
+	Private *d;
+};
 
 // this is for hinting video input properties.  the actual video quality may
 //   end up being something else, but in general it will try to be the closest
@@ -48,9 +64,19 @@ public:
 	}
 };
 
-GstElement *pipeline_device_ref(const QString &id, PDevice::Type type, const PipelineDeviceOptions &opts = PipelineDeviceOptions());
-void pipeline_device_set_opts(GstElement *dev_elem, const PipelineDeviceOptions &opts);
-void pipeline_device_unref(GstElement *dev_elem);
+class PipelineDeviceContext
+{
+public:
+	PipelineDeviceContext(PipelineContext *pipeline, const QString &id, PDevice::Type type, const PipelineDeviceOptions &opts = PipelineDeviceOptions());
+	~PipelineDeviceContext();
+
+	GstElement *deviceElement();
+
+	void setOptions(const PipelineDeviceOptions &opts);
+
+private:
+	PipelineDeviceContextPrivate *d;
+};
 
 }
 
