@@ -111,14 +111,14 @@ QList<PVideoParams> modes_supportedVideo()
 		PVideoParams p;
 		p.codec = "h263p";
 		p.size = QSize(160, 120);
-		p.fps = 15;
+		p.fps = 30;
 		list += p;
 	}
 	{
 		PVideoParams p;
 		p.codec = "theora";
 		p.size = QSize(160, 120);
-		p.fps = 15;
+		p.fps = 30;
 		list += p;
 	}
 	{
