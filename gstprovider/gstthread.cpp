@@ -123,6 +123,26 @@ static void loadPlugins(const QString &pluginPath, bool print = false)
 		printf("\n");
 }
 
+static int compare_gst_version(int a1, int a2, int a3, int b1, int b2, int b3)
+{
+	if(a1 > b1)
+		return 1;
+	else if(a1 < b1)
+		return -1;
+
+	if(a2 > b2)
+		return 1;
+	else if(a2 < b2)
+		return -1;
+
+	if(a3 > b3)
+		return 1;
+	else if(a3 < b3)
+		return -1;
+
+	return 0;
+}
+
 class GstSession
 {
 public:
@@ -157,6 +177,16 @@ public:
 
 		version.sprintf("%d.%d.%d%s", major, minor, micro,
 			!nano_str.isEmpty() ? qPrintable(nano_str) : "");
+
+		int need_maj = 0;
+		int need_min = 10;
+		int need_mic = 22;
+		if(compare_gst_version(major, minor, micro, need_maj, need_min, need_mic) < 0)
+		{
+			printf("Need GStreamer version %d.%d.%d\n", need_maj, need_min, need_mic);
+			success = false;
+			return;
+		}
 
 		// manually load plugins?
 		if(!pluginPath.isEmpty())
