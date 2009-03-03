@@ -63,6 +63,11 @@ public:
 		QObject(parent),
 		context(_context)
 	{
+		QPalette palette;
+		palette.setColor(context->qwidget()->backgroundRole(), Qt::black);
+		context->qwidget()->setPalette(palette);
+		context->qwidget()->setAutoFillBackground(true);
+
 		connect(context->qobject(), SIGNAL(resized(const QSize &)), SLOT(context_resized(const QSize &)));
 		connect(context->qobject(), SIGNAL(paintEvent(QPainter *)), SLOT(context_paintEvent(QPainter *)));
 	}
@@ -547,10 +552,10 @@ public:
 
 	void cleanup()
 	{
-		delete outputWidget;
-		outputWidget = 0;
-		delete previewWidget;
-		previewWidget = 0;
+		if(outputWidget)
+			outputWidget->show_frame(QImage());
+		if(previewWidget)
+			previewWidget->show_frame(QImage());
 
 		isStarted = false;
 		isStopping = false;

@@ -361,12 +361,6 @@ VideoWidget::VideoWidget(QWidget *parent) :
 	QWidget(parent)
 {
 	d = new VideoWidgetPrivate(this);
-
-	QPalette palette;
-	palette.setColor(backgroundRole(), Qt::black);
-	setPalette(palette);
-
-	setAutoFillBackground(true);
 }
 
 VideoWidget::~VideoWidget()
