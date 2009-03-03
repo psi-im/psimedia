@@ -316,6 +316,9 @@ GstElement *bins_audioenc_create(const QString &codec, int id, int rate, int siz
 	if(id != -1)
 		g_object_set(G_OBJECT(audiortppay), "pt", id, NULL);
 
+	GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
+	GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
+
 	GstStructure *cs;
 	GstCaps *caps = gst_caps_new_empty();
 	if(codec == "vorbis")
@@ -333,17 +336,19 @@ GstElement *bins_audioenc_create(const QString &codec, int id, int rate, int siz
 			"width", G_TYPE_INT, size,
 			"channels", G_TYPE_INT, channels, NULL);
 		gst_caps_append_structure(caps, cs);
+		printf("rate=%d,width=%d,channels=%d\n", rate, size, channels);
 	}
-
-	GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-	GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
+	GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
+	g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
+	gst_caps_unref(caps);
 
 	gst_bin_add(GST_BIN(bin), audioconvert);
 	gst_bin_add(GST_BIN(bin), audioresample);
+	gst_bin_add(GST_BIN(bin), capsfilter);
 	gst_bin_add(GST_BIN(bin), audioenc);
 	gst_bin_add(GST_BIN(bin), audiortppay);
 
-	gst_element_link_many(audioconvert, audioresample, audioenc, audiortppay, NULL);
+	gst_element_link_many(audioconvert, audioresample, capsfilter, audioenc, audiortppay, NULL);
 
 	GstPad *pad;
 
