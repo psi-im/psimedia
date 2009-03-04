@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008  Barracuda Networks, Inc.
+ * Copyright (C) 2008-2009  Barracuda Networks, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -31,6 +31,10 @@
 
 namespace PsiMedia {
 
+class PipelineDeviceContext;
+
+class Stats;
+
 // Note: do not destruct this class during one of its callbacks
 class RtpWorker
 {
@@ -57,6 +61,7 @@ public:
 	QList<PPayloadInfo> localVideoPayloadInfo;
 	QList<PPayloadInfo> remoteAudioPayloadInfo;
 	QList<PPayloadInfo> remoteVideoPayloadInfo;
+	int maxbitrate;
 
 	// read-only
 	bool canTransmitAudio;
@@ -111,10 +116,11 @@ private:
 	GMainContext *mainContext_;
 	GSource *timer;
 
-	GstElement *sendPipeline, *rpipeline, *rvpipeline;
+	GstElement *spipeline, *rpipeline;
+	PipelineDeviceContext *pd_audiosrc, *pd_videosrc, *pd_audiosink;
+	GstElement *sendbin, *recvbin;
+
 	GstElement *fileDemux;
-	GstElement *videoDecode;
-	GstElement *videoDecodeTarget;
 	GstElement *audiosrc;
 	GstElement *videosrc;
 	GstElement *audiortpsrc;
@@ -132,9 +138,15 @@ private:
 	QMutex rtpaudioout_mutex;
 	QMutex rtpvideoout_mutex;
 
-	GSource *recordTimer;
+	//GSource *recordTimer;
 
-	int desired_speex_pt;
+	QList<PPayloadInfo> actual_localAudioPayloadInfo;
+	QList<PPayloadInfo> actual_localVideoPayloadInfo;
+	QList<PPayloadInfo> actual_remoteAudioPayloadInfo;
+	QList<PPayloadInfo> actual_remoteVideoPayloadInfo;
+
+	Stats *audioStats;
+	Stats *videoStats;
 
 	void cleanup();
 
@@ -144,7 +156,6 @@ private:
 	static void cb_fileDemux_no_more_pads(GstElement *element, gpointer data);
 	static void cb_fileDemux_pad_added(GstElement *element, GstPad *pad, gpointer data);
 	static void cb_fileDemux_pad_removed(GstElement *element, GstPad *pad, gpointer data);
-	static void cb_videoDecode_pad_added(GstElement *element, GstPad *pad, gpointer data);
 	static gboolean cb_bus_call(GstBus *bus, GstMessage *msg, gpointer data);
 	static void cb_show_frame_preview(int width, int height, const unsigned char *rgb32, gpointer data);
 	static void cb_show_frame_output(int width, int height, const unsigned char *rgb32, gpointer data);
@@ -158,7 +169,6 @@ private:
 	void fileDemux_no_more_pads(GstElement *element);
 	void fileDemux_pad_added(GstElement *element, GstPad *pad);
 	void fileDemux_pad_removed(GstElement *element, GstPad *pad);
-	void videoDecode_pad_added(GstElement *element, GstPad *pad);
 	gboolean bus_call(GstBus *bus, GstMessage *msg);
 	void show_frame_preview(int width, int height, const unsigned char *rgb32);
 	void show_frame_output(int width, int height, const unsigned char *rgb32);
@@ -166,6 +176,9 @@ private:
 	void packet_ready_rtp_video(const unsigned char *buf, int size);
 	gboolean fileReady();
 
+	bool setupSendRecv();
+	bool startSend();
+	bool startRecv();
 	bool addAudioChain();
 	bool addVideoChain();
 	bool getCaps();
