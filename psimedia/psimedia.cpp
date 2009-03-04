@@ -1236,9 +1236,9 @@ void RtpSession::setLocalVideoPreferences(const QList<VideoParams> &params)
 	d->c->setLocalVideoPreferences(list);
 }
 
-void RtpSession::setMaximumSendingBitrate(int bps)
+void RtpSession::setMaximumSendingBitrate(int kbps)
 {
-	d->c->setMaximumSendingBitrate(bps);
+	d->c->setMaximumSendingBitrate(kbps);
 }
 
 void RtpSession::setRemoteAudioPreferences(const QList<PayloadInfo> &info)

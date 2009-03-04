@@ -348,7 +348,7 @@ public:
 	void setLocalAudioPreferences(const QList<AudioParams> &params);
 	void setLocalVideoPreferences(const QList<VideoParams> &params);
 
-	void setMaximumSendingBitrate(int bps);
+	void setMaximumSendingBitrate(int kbps);
 
 	// set remote preferences, using payloadinfo.
 	void setRemoteAudioPreferences(const QList<PayloadInfo> &info);

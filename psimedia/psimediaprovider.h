@@ -246,7 +246,7 @@ public:
 	virtual void setLocalAudioPreferences(const QList<PAudioParams> &params) = 0;
 	virtual void setLocalVideoPreferences(const QList<PVideoParams> &params) = 0;
 
-	virtual void setMaximumSendingBitrate(int bps) = 0;
+	virtual void setMaximumSendingBitrate(int kbps) = 0;
 
 	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info) = 0;
 	virtual void setRemoteVideoPreferences(const QList<PPayloadInfo> &info) = 0;
