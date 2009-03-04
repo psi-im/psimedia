@@ -176,6 +176,8 @@ static void dump_pipeline(GstElement *in, int indent = 0)
 static int worker_refs = 0;
 static PipelineContext *send_pipelineContext = 0;
 static PipelineContext *recv_pipelineContext = 0;
+static bool send_in_use = false;
+static bool recv_in_use = false;
 
 RtpWorker::RtpWorker(GMainContext *mainContext) :
 	loopFile(false),
@@ -306,6 +308,7 @@ void RtpWorker::cleanup()
 		//gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
 		gst_bin_remove(GST_BIN(spipeline), sendbin);
 		sendbin = 0;
+		send_in_use = false;
 	}
 
 	if(recvbin)
@@ -315,6 +318,7 @@ void RtpWorker::cleanup()
 		//gst_element_get_state(recvbin, NULL, NULL, GST_CLOCK_TIME_NONE);
 		gst_bin_remove(GST_BIN(rpipeline), recvbin);
 		recvbin = 0;
+		recv_in_use = false;
 	}
 
 	if(pd_audiosrc)
@@ -893,6 +897,9 @@ bool RtpWorker::startSend()
 	// file source
 	if(!infile.isEmpty() || !indata.isEmpty())
 	{
+		if(send_in_use)
+			return false;
+
 		sendbin = gst_bin_new("sendbin");
 
 		GstElement *fileSource = gst_element_factory_make("filesrc", NULL);
@@ -916,6 +923,9 @@ bool RtpWorker::startSend()
 	// device source
 	else if(!ain.isEmpty() || !vin.isEmpty())
 	{
+		if(send_in_use)
+			return false;
+
 		sendbin = gst_bin_new("sendbin");
 
 		if(!ain.isEmpty() && !localAudioParams.isEmpty())
@@ -955,6 +965,8 @@ bool RtpWorker::startSend()
 	// no desire to send
 	if(!sendbin)
 		return true;
+
+	send_in_use = true;
 
 	if(audiosrc)
 	{
@@ -1091,6 +1103,9 @@ bool RtpWorker::startRecv()
 			return false;
 		}
 
+		if(recv_in_use)
+			return false;
+
 		if(!recvbin)
 			recvbin = gst_bin_new("recvbin");
 
@@ -1126,6 +1141,9 @@ bool RtpWorker::startRecv()
 			return false;
 		}
 
+		if(recv_in_use)
+			return false;
+
 		if(!recvbin)
 			recvbin = gst_bin_new("recvbin");
 
@@ -1151,6 +1169,8 @@ bool RtpWorker::startRecv()
 	// no desire to receive
 	if(!recvbin)
 		return true;
+
+	recv_in_use = true;
 
 	if(audiortpsrc)
 	{
@@ -1272,6 +1292,8 @@ fail1:
 
 	delete pd_audiosink;
 	pd_audiosink = 0;
+
+	recv_in_use = false;
 
 	return false;
 }
