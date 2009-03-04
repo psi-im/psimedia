@@ -26,7 +26,7 @@ namespace PsiMedia {
 
 // FIXME: any better way besides hardcoding?
 
-static bool have_element(const QString &name)
+/*static bool have_element(const QString &name)
 {
 	GstElement *e = gst_element_factory_make(name.toLatin1().data(), NULL);
 	if(!e)
@@ -52,14 +52,14 @@ static bool have_pcmu()
 static bool have_h263p()
 {
 	return have_codec("ffenc_h263p", "ffdec_h263", "rtph263ppay", "rtph263pdepay");
-}
+}*/
 
 // speex, theora, and vorbis are guaranteed to exist
 
 QList<PAudioParams> modes_supportedAudio()
 {
 	QList<PAudioParams> list;
-	if(have_pcmu())
+	/*if(have_pcmu())
 	{
 		PAudioParams p;
 		p.codec = "pcmu";
@@ -75,7 +75,7 @@ QList<PAudioParams> modes_supportedAudio()
 		p.sampleSize = 16;
 		p.channels = 1;
 		list += p;
-	}
+	}*/
 	{
 		PAudioParams p;
 		p.codec = "speex";
@@ -84,7 +84,7 @@ QList<PAudioParams> modes_supportedAudio()
 		p.channels = 1;
 		list += p;
 	}
-	{
+	/*{
 		PAudioParams p;
 		p.codec = "speex";
 		p.sampleRate = 32000;
@@ -99,14 +99,14 @@ QList<PAudioParams> modes_supportedAudio()
 		p.sampleSize = 32;
 		p.channels = 2;
 		list += p;
-	}
+	}*/
 	return list;
 }
 
 QList<PVideoParams> modes_supportedVideo()
 {
 	QList<PVideoParams> list;
-	if(have_h263p())
+	/*if(have_h263p())
 	{
 		PVideoParams p;
 		p.codec = "h263p";
@@ -127,7 +127,7 @@ QList<PVideoParams> modes_supportedVideo()
 		p.size = QSize(320, 240);
 		p.fps = 15;
 		list += p;
-	}
+	}*/
 	{
 		PVideoParams p;
 		p.codec = "theora";
@@ -135,7 +135,7 @@ QList<PVideoParams> modes_supportedVideo()
 		p.fps = 30;
 		list += p;
 	}
-	{
+	/*{
 		PVideoParams p;
 		p.codec = "theora";
 		p.size = QSize(640, 480);
@@ -148,7 +148,7 @@ QList<PVideoParams> modes_supportedVideo()
 		p.size = QSize(640, 480);
 		p.fps = 30;
 		list += p;
-	}
+	}*/
 	return list;
 }
 
