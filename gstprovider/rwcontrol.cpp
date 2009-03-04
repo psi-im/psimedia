@@ -146,7 +146,7 @@ static void applyCodecsToWorker(RtpWorker *worker, const RwControlConfigCodecs &
 	if(codecs.useRemoteVideoPayloadInfo)
 		worker->remoteVideoPayloadInfo = codecs.remoteVideoPayloadInfo;
 
-	worker->maxbps = codecs.maximumSendingBitrate;
+	worker->maxbitrate = codecs.maximumSendingBitrate;
 }
 
 //----------------------------------------------------------------------------

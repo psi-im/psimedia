@@ -673,9 +673,9 @@ public:
 		codecs.localVideoParams = params;
 	}
 
-	virtual void setMaximumSendingBitrate(int bps)
+	virtual void setMaximumSendingBitrate(int kbps)
 	{
-		codecs.maximumSendingBitrate = bps;
+		codecs.maximumSendingBitrate = kbps;
 	}
 
 	virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info)
