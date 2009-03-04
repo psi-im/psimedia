@@ -580,6 +580,8 @@ public:
 	virtual void setAudioInputDevice(const QString &deviceId)
 	{
 		devices.audioInId = deviceId;
+		devices.fileNameIn.clear();
+		devices.fileDataIn.clear();
 		if(control)
 			control->updateDevices(devices);
 	}
@@ -587,6 +589,8 @@ public:
 	virtual void setVideoInputDevice(const QString &deviceId)
 	{
 		devices.videoInId = deviceId;
+		devices.fileNameIn.clear();
+		devices.fileDataIn.clear();
 		if(control)
 			control->updateDevices(devices);
 	}
@@ -594,6 +598,8 @@ public:
 	virtual void setFileInput(const QString &fileName)
 	{
 		devices.fileNameIn = fileName;
+		devices.audioInId.clear();
+		devices.videoInId.clear();
 		devices.fileDataIn.clear();
 		if(control)
 			control->updateDevices(devices);
@@ -602,6 +608,8 @@ public:
 	virtual void setFileDataInput(const QByteArray &fileData)
 	{
 		devices.fileDataIn = fileData;
+		devices.audioInId.clear();
+		devices.videoInId.clear();
 		devices.fileNameIn.clear();
 		if(control)
 			control->updateDevices(devices);
