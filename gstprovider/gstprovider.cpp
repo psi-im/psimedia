@@ -557,6 +557,8 @@ public:
 		if(previewWidget)
 			previewWidget->show_frame(QImage());
 
+		codecs = RwControlConfigCodecs();
+
 		isStarted = false;
 		isStopping = false;
 		pending_status = false;
