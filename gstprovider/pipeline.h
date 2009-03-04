@@ -36,7 +36,13 @@ public:
 	PipelineContext();
 	~PipelineContext();
 
-	GstElement *pipelineElement();
+	// set the pipeline to playing (activate) or to null (deactivate)
+	// FIXME: when we make dynamic pipelines work, we can remove these
+	//   functions.
+	void activate();
+	void deactivate();
+
+	GstElement *element();
 
 private:
 	friend class PipelineDeviceContext;
@@ -67,14 +73,33 @@ public:
 class PipelineDeviceContext
 {
 public:
-	PipelineDeviceContext(PipelineContext *pipeline, const QString &id, PDevice::Type type, const PipelineDeviceOptions &opts = PipelineDeviceOptions());
+	static PipelineDeviceContext *create(PipelineContext *pipeline, const QString &id, PDevice::Type type, const PipelineDeviceOptions &opts = PipelineDeviceOptions());
 	~PipelineDeviceContext();
 
-	GstElement *deviceElement();
+	// after creation, the device element is in the NULL state, and
+	//   potentially not linked to dependent internal elements.  call
+	//   activate() to cause internals to be finalized and set to
+	//   PLAYING.  the purpose of the activate() call is to give you time
+	//   to get your own elements into the pipeline, linked, and perhaps
+	//   set to PLAYING before the device starts working.
+	//
+	// note: this only applies to input (src) elements.  output (sink)
+	//   elements start out activated.
+	// FIXME: this function currently does nothing
+	void activate();
 
+	// call this in order to stop the device element.  it will be safely
+	//   set to the NULL state, so that you may then unlink your own
+	//   elements from it.
+	// FIXME: this function currently does nothing
+	void deactivate();
+
+	GstElement *element();
 	void setOptions(const PipelineDeviceOptions &opts);
 
 private:
+	PipelineDeviceContext();
+
 	PipelineDeviceContextPrivate *d;
 };
 
