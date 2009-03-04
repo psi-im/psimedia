@@ -363,7 +363,7 @@ GstElement *bins_audioenc_create(const QString &codec, int id, int rate, int siz
 	return bin;
 }
 
-GstElement *bins_videoenc_create(const QString &codec, int id)
+GstElement *bins_videoenc_create(const QString &codec, int id, int maxkbps)
 {
 	GstElement *bin = gst_bin_new("videoencbin");
 
@@ -374,6 +374,9 @@ GstElement *bins_videoenc_create(const QString &codec, int id)
 
 	if(id != -1)
 		g_object_set(G_OBJECT(videortppay), "pt", id, NULL);
+
+	if(codec == "theora")
+		g_object_set(G_OBJECT(videoenc), "bitrate", maxkbps, NULL);
 
 	GstElement *videoconvert = gst_element_factory_make("ffmpegcolorspace", NULL);
 
