@@ -854,7 +854,8 @@ bool RtpWorker::setupSendRecv()
 	//   - once sending or receiving is started, media types cannot
 	//     be added or removed (doing so will throw an error)
 	//   - once sending or receiving is started, codecs can't be changed
-	//     (changes will be rejected)
+	//     (changes will be rejected).  one exception: remote theora
+	//     config can be updated.
 	//   - once sending or receiving is started, devices can't be changed
 	//     (changes will be ignored)
 
@@ -887,6 +888,9 @@ bool RtpWorker::setupSendRecv()
 	else
 	{
 		// TODO: support adding/removing audio/video to existing session
+
+		// see if theora was updated in the remote config
+		updateTheoraConfig();
 	}
 
 	return true;
@@ -1221,6 +1225,8 @@ bool RtpWorker::startRecv()
 		gst_element_link_many(audiortpsrc, audiodec, volumeout, audioconvert, audioresample, NULL);
 		if(!asrc)
 			gst_element_link(audioresample, audioout);
+
+		actual_remoteAudioPayloadInfo = remoteAudioPayloadInfo;
 	}
 
 	if(videortpsrc)
@@ -1241,6 +1247,8 @@ bool RtpWorker::startRecv()
 		gst_bin_add(GST_BIN(recvbin), videosink);
 
 		gst_element_link_many(videortpsrc, videodec, videoconvert, videosink, NULL);
+
+		actual_remoteVideoPayloadInfo = remoteVideoPayloadInfo;
 	}
 
 	//gst_element_set_locked_state(recvbin, TRUE);
@@ -1564,6 +1572,54 @@ bool RtpWorker::getCaps()
 	}
 
 	return true;
+}
+
+bool RtpWorker::updateTheoraConfig()
+{
+	// first, are we using theora currently?
+	int theora_at = -1;
+	for(int n = 0; n < actual_remoteVideoPayloadInfo.count(); ++n)
+	{
+		const PPayloadInfo &ri = actual_remoteVideoPayloadInfo[n];
+		if(ri.name == "THEORA" && ri.clockrate == 90000)
+		{
+			theora_at = n;
+			break;
+		}
+	}
+	if(theora_at == -1)
+		return false;
+
+	// if so, update the videortpsrc caps
+	for(int n = 0; n < remoteAudioPayloadInfo.count(); ++n)
+	{
+		const PPayloadInfo &ri = remoteVideoPayloadInfo[n];
+		if(ri.name == "THEORA" && ri.clockrate == 90000 && ri.id == actual_remoteVideoPayloadInfo[theora_at].id)
+		{
+			GstStructure *cs = payloadInfoToStructure(remoteVideoPayloadInfo[n], "video");
+			if(!cs)
+			{
+#ifdef RTPWORKER_DEBUG
+				printf("cannot parse payload info\n");
+#endif
+				continue;
+			}
+
+			QMutexLocker locker(&videortpsrc_mutex);
+			if(!videortpsrc)
+				continue;
+
+			GstCaps *caps = gst_caps_new_empty();
+			gst_caps_append_structure(caps, cs);
+			g_object_set(G_OBJECT(videortpsrc), "caps", caps, NULL);
+			gst_caps_unref(caps);
+
+			actual_remoteAudioPayloadInfo[theora_at] = ri;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 }

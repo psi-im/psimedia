@@ -182,6 +182,7 @@ private:
 	bool addAudioChain();
 	bool addVideoChain();
 	bool getCaps();
+	bool updateTheoraConfig();
 };
 
 }
