@@ -1174,7 +1174,7 @@ void RtpSession::setAudioOutputDevice(const QString &deviceId)
 #ifdef QT_GUI_LIB
 void RtpSession::setVideoOutputWidget(VideoWidget *widget)
 {
-	d->c->setVideoOutputWidget(widget->d);
+	d->c->setVideoOutputWidget(widget ? widget->d : 0);
 }
 #endif
 
@@ -1206,7 +1206,7 @@ void RtpSession::setFileLoopEnabled(bool enabled)
 #ifdef QT_GUI_LIB
 void RtpSession::setVideoPreviewWidget(VideoWidget *widget)
 {
-	d->c->setVideoPreviewWidget(widget->d);
+	d->c->setVideoPreviewWidget(widget ? widget->d : 0);
 }
 #endif
 

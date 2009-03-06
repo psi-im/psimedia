@@ -627,11 +627,18 @@ public:
 #ifdef QT_GUI_LIB
         virtual void setVideoOutputWidget(VideoWidgetContext *widget)
 	{
+		// no change?
+		if(!outputWidget && !widget)
+			return;
 		if(outputWidget && outputWidget->context == widget)
 			return;
 
 		delete outputWidget;
-		outputWidget = new GstVideoWidget(widget, this);
+		outputWidget = 0;
+
+		if(widget)
+			outputWidget = new GstVideoWidget(widget, this);
+
 		devices.useVideoOut = widget ? true : false;
 		if(control)
 			control->updateDevices(devices);
@@ -639,11 +646,18 @@ public:
 
 	virtual void setVideoPreviewWidget(VideoWidgetContext *widget)
 	{
+		// no change?
+		if(!previewWidget && !widget)
+			return;
 		if(previewWidget && previewWidget->context == widget)
 			return;
 
 		delete previewWidget;
-		previewWidget = new GstVideoWidget(widget, this);
+		previewWidget = 0;
+
+		if(widget)
+			previewWidget = new GstVideoWidget(widget, this);
+
 		devices.useVideoPreview = widget ? true : false;
 		if(control)
 			control->updateDevices(devices);
