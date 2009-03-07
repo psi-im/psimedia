@@ -893,6 +893,13 @@ bool RtpWorker::setupSendRecv()
 		updateTheoraConfig();
 	}
 
+	// apply actual settings back to these variables, so the user can
+	//   read them
+	localAudioPayloadInfo = actual_localAudioPayloadInfo;
+	localVideoPayloadInfo = actual_localVideoPayloadInfo;
+	remoteAudioPayloadInfo = actual_remoteAudioPayloadInfo;
+	remoteVideoPayloadInfo = actual_remoteVideoPayloadInfo;
+
 	return true;
 }
 
