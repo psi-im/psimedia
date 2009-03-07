@@ -18,4 +18,7 @@
  <dep type='pkg' name='GStreamer Base' pkgname='gstreamer-base-0.10' version='>=0.10.22'>
   <required/>
  </dep>
+ <dep type='pkg' name='Speex DSP' pkgname='speexdsp' version='>=1.2rc1'>
+  <required/>
+ </dep>
 </qconf>
