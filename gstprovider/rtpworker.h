@@ -116,7 +116,6 @@ private:
 	GMainContext *mainContext_;
 	GSource *timer;
 
-	GstElement *spipeline, *rpipeline;
 	PipelineDeviceContext *pd_audiosrc, *pd_videosrc, *pd_audiosink;
 	GstElement *sendbin, *recvbin;
 

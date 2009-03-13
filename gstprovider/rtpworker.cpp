@@ -176,8 +176,12 @@ static void dump_pipeline(GstElement *in, int indent = 0)
 static int worker_refs = 0;
 static PipelineContext *send_pipelineContext = 0;
 static PipelineContext *recv_pipelineContext = 0;
+static GstElement *spipeline = 0;
+static GstElement *rpipeline = 0;
 static bool send_in_use = false;
 static bool recv_in_use = false;
+static GstClock *send_clock = 0;
+static GstClock *recv_clock = 0;
 
 RtpWorker::RtpWorker(GMainContext *mainContext) :
 	loopFile(false),
@@ -199,8 +203,6 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
 	cb_rtpVideoOut(0),
 	mainContext_(mainContext),
 	timer(0),
-	spipeline(0),
-	rpipeline(0),
 	pd_audiosrc(0),
 	pd_videosrc(0),
 	pd_audiosink(0),
@@ -309,6 +311,15 @@ void RtpWorker::cleanup()
 		gst_bin_remove(GST_BIN(spipeline), sendbin);
 		sendbin = 0;
 		send_in_use = false;
+
+		if(send_clock)
+		{
+			if(recvbin)
+				gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
+
+			gst_object_unref(send_clock);
+			send_clock = 0;
+		}
 	}
 
 	if(recvbin)
@@ -319,6 +330,15 @@ void RtpWorker::cleanup()
 		gst_bin_remove(GST_BIN(rpipeline), recvbin);
 		recvbin = 0;
 		recv_in_use = false;
+
+		if(recv_clock)
+		{
+			if(sendbin)
+				gst_pipeline_auto_clock(GST_PIPELINE(spipeline));
+
+			gst_object_unref(recv_clock);
+			recv_clock = 0;
+		}
 	}
 
 	if(pd_audiosrc)
@@ -1042,11 +1062,21 @@ bool RtpWorker::startSend()
 			gst_element_link(videosrc, sendbin);
 			//pd_videosrc->activate();
 		}
+
+		if(recv_clock)
+			gst_pipeline_use_clock(GST_PIPELINE(spipeline), recv_clock);
+
 		//gst_element_set_state(pipeline, GST_STATE_PLAYING);
 		//gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 		send_pipelineContext->activate();
 		gst_element_get_state(spipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 		//gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+		if(!recv_clock)
+		{
+			send_clock = gst_pipeline_get_clock(GST_PIPELINE(spipeline));
+			gst_pipeline_use_clock(GST_PIPELINE(spipeline), send_clock);
+		}
 
 #ifdef RTPWORKER_DEBUG
 		printf("state changed\n");
@@ -1271,12 +1301,26 @@ bool RtpWorker::startRecv()
 		gst_element_link(recvbin, audioout);
 	}
 
+	if(send_clock)
+		gst_pipeline_use_clock(GST_PIPELINE(rpipeline), send_clock);
+
 	//gst_element_set_locked_state(recvbin, FALSE);
 	//gst_element_set_state(recvbin, GST_STATE_PLAYING);
 #ifdef RTPWORKER_DEBUG
 	printf("activating\n");
 #endif
+
+	gst_element_set_state(rpipeline, GST_STATE_READY);
+	gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
 	recv_pipelineContext->activate();
+
+	if(!send_clock)
+	{
+		recv_clock = gst_pipeline_get_clock(GST_PIPELINE(rpipeline));
+		gst_pipeline_use_clock(GST_PIPELINE(rpipeline), recv_clock);
+	}
+
 #ifdef RTPWORKER_DEBUG
 	printf("receive pipeline started\n");
 #endif
