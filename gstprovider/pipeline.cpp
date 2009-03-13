@@ -161,7 +161,8 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 		GstCaps *caps = gst_caps_new_empty();
 		GstStructure *cs = gst_structure_new("audio/x-raw-int",
 			"rate", G_TYPE_INT, 22050,
-			"width", G_TYPE_INT, 16, NULL);
+			"width", G_TYPE_INT, 16,
+			"channels", G_TYPE_INT, 1, NULL);
 		gst_caps_append_structure(caps, cs);
 		g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 		gst_caps_unref(caps);
@@ -327,7 +328,8 @@ public:
 			GstCaps *caps = gst_caps_new_empty();
 			GstStructure *cs = gst_structure_new("audio/x-raw-int",
 				"rate", G_TYPE_INT, 22050,
-				"width", G_TYPE_INT, 16, NULL);
+				"width", G_TYPE_INT, 16,
+				"channels", G_TYPE_INT, 1, NULL);
 			gst_caps_append_structure(caps, cs);
 			g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 			gst_caps_unref(caps);
