@@ -4,6 +4,8 @@
  *  Copyright 2008 Collabora Ltd
  *  Copyright 2008 Nokia Corporation
  *   @author: Olivier Crete <olivier.crete@collabora.co.uk>
+ *  Copyright 2009 Barracuda Networks, Inc
+ *   @author: Justin Karneges <justin@affinix.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -22,8 +24,6 @@
  *
  */
 
-
-
 #ifndef __GST_SPEEX_ECHO_PROBE_H__
 #define __GST_SPEEX_ECHO_PROBE_H__
 
@@ -31,48 +31,50 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_SPEEX_ECHO_PROBE            (gst_speex_echo_probe_get_type())
-#define GST_SPEEX_ECHO_PROBE(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_SPEEX_ECHO_PROBE,GstSpeexEchoProbe))
-#define GST_IS_SPEEX_ECHO_PROBE(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_SPEEX_ECHO_PROBE))
-#define GST_SPEEX_ECHO_PROBE_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass) ,GST_TYPE_SPEEX_ECHO_PROBE,GstSpeexEchoProbeClass))
-#define GST_IS_SPEEX_ECHO_PROBE_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass) ,GST_TYPE_SPEEX_ECHO_PROBE))
-#define GST_SPEEX_ECHO_PROBE_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS((obj) ,GST_TYPE_SPEEX_ECHO_PROBE,GstSpeexEchoProbeClass))
+#define GST_TYPE_SPEEX_ECHO_PROBE \
+  (gst_speex_echo_probe_get_type())
+#define GST_SPEEX_ECHO_PROBE(obj) \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_SPEEX_ECHO_PROBE,GstSpeexEchoProbe))
+#define GST_IS_SPEEX_ECHO_PROBE(obj) \
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_SPEEX_ECHO_PROBE))
+#define GST_SPEEX_ECHO_PROBE_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_CAST((klass) ,GST_TYPE_SPEEX_ECHO_PROBE,GstSpeexEchoProbeClass))
+#define GST_IS_SPEEX_ECHO_PROBE_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_TYPE((klass) ,GST_TYPE_SPEEX_ECHO_PROBE))
+#define GST_SPEEX_ECHO_PROBE_GET_CLASS(obj) \
+  (G_TYPE_INSTANCE_GET_CLASS((obj) ,GST_TYPE_SPEEX_ECHO_PROBE,GstSpeexEchoProbeClass))
 
-typedef struct _GstSpeexEchoProbe             GstSpeexEchoProbe;
-typedef struct _GstSpeexEchoProbeClass        GstSpeexEchoProbeClass;
+typedef struct _GstSpeexEchoProbe GstSpeexEchoProbe;
+typedef struct _GstSpeexEchoProbeClass GstSpeexEchoProbeClass;
 
-/**
- * GstSpeexEchoProbe:
- *
- * The adder object structure.
- */
-struct _GstSpeexEchoProbe {
-  GstElement    element;
+struct _GstSpeexEchoProbe
+{
+  GstElement element;
 
-  GstPad        *srcpad;
-  GstPad        *sinkpad;
+  GstPad * srcpad;
+  GstPad * sinkpad;
+  GstSegment segment;
+  gint latency;
 
-  /* Protected by the object lock */
-  gint          rate;
-  gint          channels;
-  gboolean      channels_locked;
+  gboolean capturing;
+  gint rate, channels;
+  gint latency_tune;
 
-  /* Protected by the object lock */
-  gint          latency;
-
-  GstSegment    segment;
-
-  /* Newer buffers at the head, protected by obj lock */
-  GQueue        *buffers;
+  /* protected by object lock */
+  GQueue * buffers;
 };
 
-struct _GstSpeexEchoProbeClass {
+struct _GstSpeexEchoProbeClass
+{
   GstElementClass parent_class;
 };
 
-GType    gst_speex_echo_probe_get_type (void);
+GType gst_speex_echo_probe_get_type (void);
+
+void gst_speex_echo_probe_set_auto_attach (GstSpeexEchoProbe * self, gboolean enabled);
+void gst_speex_echo_probe_capture_start (GstSpeexEchoProbe * self);
+void gst_speex_echo_probe_capture_stop (GstSpeexEchoProbe * self);
 
 G_END_DECLS
-
 
 #endif /* __GST_SPEEX_ECHO_PROBE_H__ */

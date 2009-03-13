@@ -4,6 +4,8 @@
  *  Copyright 2008 Collabora Ltd
  *  Copyright 2008 Nokia Corporation
  *   @author: Olivier Crete <olivier.crete@collabora.co.uk>
+ *  Copyright 2009 Barracuda Networks, Inc
+ *   @author: Justin Karneges <justin@affinix.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,14 +29,17 @@
 
 #include "speexdsp.h"
 
+#include <string.h>
 #include <gst/audio/audio.h>
 
-#include <string.h>
+extern GStaticMutex global_mutex;
+extern GObject * global_dsp;
+extern GObject * global_probe;
 
 GST_DEBUG_CATEGORY (speex_dsp_debug);
 #define GST_CAT_DEFAULT (speex_dsp_debug)
 
-
+#define DEFAULT_LATENCY_TUNE            (0)
 #define DEFAULT_AGC                     (FALSE)
 #define DEFAULT_AGC_INCREMENT           (12)
 #define DEFAULT_AGC_DECREMENT           (-40)
@@ -45,14 +50,12 @@ GST_DEBUG_CATEGORY (speex_dsp_debug);
 #define DEFAULT_ECHO_SUPPRESS_ACTIVE    (-15)
 #define DEFAULT_NOISE_SUPPRESS          (-15)
 
-/* elementfactory information */
 static const GstElementDetails gst_speex_dsp_details =
-GST_ELEMENT_DETAILS (
-  "Voice processor",
-  "Generic/Audio",
-  "Preprepocesses voice with libspeexdsp",
-  "Olivier Crete <olivier.crete@collabora.co.uk>");
-
+    GST_ELEMENT_DETAILS (
+        "Voice processor",
+        "Generic/Audio",
+        "Preprepocesses voice with libspeexdsp",
+        "Olivier Crete <olivier.crete@collabora.co.uk>");
 
 static GstStaticPadTemplate gst_speex_dsp_rec_sink_template =
     GST_STATIC_PAD_TEMPLATE ("sink",
@@ -86,6 +89,7 @@ enum
 {
   PROP_0,
   PROP_PROBE,
+  PROP_LATENCY_TUNE,
   PROP_AGC,
   PROP_AGC_INCREMENT,
   PROP_AGC_DECREMENT,
@@ -99,19 +103,18 @@ enum
 
 GST_BOILERPLATE(GstSpeexDSP, gst_speex_dsp, GstElement, GST_TYPE_ELEMENT);
 
-
 static void
 gst_speex_dsp_finalize (GObject * object);
 static void
-gst_speex_dsp_set_property (GObject *object,
+gst_speex_dsp_set_property (GObject * object,
     guint prop_id,
-    const GValue *value,
-    GParamSpec *pspec);
+    const GValue * value,
+    GParamSpec * pspec);
 static void
-gst_speex_dsp_get_property (GObject *object,
+gst_speex_dsp_get_property (GObject * object,
     guint prop_id,
-    GValue *value,
-    GParamSpec *pspec);
+    GValue * value,
+    GParamSpec * pspec);
 
 static GstStateChangeReturn
 gst_speex_dsp_change_state (GstElement * element, GstStateChange transition);
@@ -122,13 +125,15 @@ static GstCaps *
 gst_speex_dsp_getcaps (GstPad * pad);
 
 static GstFlowReturn
-gst_speex_dsp_rec_chain (GstPad *pad, GstBuffer *buffer);
+gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer);
 static gboolean
-gst_speex_dsp_rec_event (GstPad *pad, GstEvent *event);
-
+gst_speex_dsp_rec_event (GstPad * pad, GstEvent * event);
 
 static void
-gst_speex_dsp_reset_locked (GstSpeexDSP *self);
+gst_speex_dsp_reset_locked (GstSpeexDSP * self);
+
+static void
+try_auto_attach ();
 
 static void
 gst_speex_dsp_base_init (gpointer klass)
@@ -140,8 +145,8 @@ gst_speex_dsp_base_init (gpointer klass)
 static void
 gst_speex_dsp_class_init (GstSpeexDSPClass * klass)
 {
-  GObjectClass *gobject_class;
-  GstElementClass *gstelement_class;
+  GObjectClass * gobject_class;
+  GstElementClass * gstelement_class;
 
   gobject_class = (GObjectClass *) klass;
 
@@ -157,19 +162,27 @@ gst_speex_dsp_class_init (GstSpeexDSPClass * klass)
       gst_static_pad_template_get (&gst_speex_dsp_rec_sink_template));
   gst_element_class_set_details (gstelement_class, &gst_speex_dsp_details);
 
-
   gstelement_class->change_state = gst_speex_dsp_change_state;
 
   parent_class = g_type_class_peek_parent (klass);
 
   g_object_class_install_property (gobject_class,
-    PROP_PROBE,
-    g_param_spec_object ("probe",
-        "A probe that gathers the buffers to do echo cancellation on",
-        "This is a link to the probe that gets buffers to cancel the echo"
-        " against",
-        GST_TYPE_SPEEX_ECHO_PROBE,
-        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+      PROP_PROBE,
+      g_param_spec_object ("probe",
+          "A probe that gathers the buffers to do echo cancellation on",
+          "This is a link to the probe that gets buffers to cancel the echo"
+          " against",
+          GST_TYPE_SPEEX_ECHO_PROBE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class,
+      PROP_LATENCY_TUNE,
+      g_param_spec_int ("latency-tune",
+          "Add/remove latency",
+          "Use this to tune the latency value, in milliseconds, in case it is"
+          " detected incorrectly",
+          G_MININT, G_MAXINT, DEFAULT_LATENCY_TUNE,
+          G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (gobject_class,
       PROP_AGC,
@@ -249,7 +262,7 @@ gst_speex_dsp_class_init (GstSpeexDSPClass * klass)
 static void
 gst_speex_dsp_init (GstSpeexDSP * self, GstSpeexDSPClass *klass)
 {
-  GstPadTemplate *template;
+  GstPadTemplate * template;
 
   template = gst_static_pad_template_get (&gst_speex_dsp_rec_src_template);
   self->rec_srcpad = gst_pad_new_from_template (template, "src");
@@ -276,12 +289,14 @@ gst_speex_dsp_init (GstSpeexDSP * self, GstSpeexDSPClass *klass)
   self->channels = 1;
 
   self->frame_size_ms = 20;
-  self->filter_length_ms = 500;
+  self->filter_length_ms = 200;
 
   self->rec_adapter = gst_adapter_new ();
   self->rec_time = GST_CLOCK_TIME_NONE;
   self->rec_offset = GST_BUFFER_OFFSET_NONE;
 
+  self->probe = NULL;
+  self->latency_tune = DEFAULT_LATENCY_TUNE;
   self->agc = DEFAULT_AGC;
   self->agc_increment = DEFAULT_AGC_INCREMENT;
   self->agc_decrement = DEFAULT_AGC_DECREMENT;
@@ -291,12 +306,33 @@ gst_speex_dsp_init (GstSpeexDSP * self, GstSpeexDSPClass *klass)
   self->echo_suppress = DEFAULT_ECHO_SUPPRESS;
   self->echo_suppress_active = DEFAULT_ECHO_SUPPRESS_ACTIVE;
   self->noise_suppress = DEFAULT_NOISE_SUPPRESS;
+
+  g_static_mutex_lock (&global_mutex);
+  if (!global_dsp) {
+    global_dsp = G_OBJECT (self);
+    try_auto_attach ();
+  }
+  g_static_mutex_unlock (&global_mutex);
 }
 
 static void
 gst_speex_dsp_finalize (GObject * object)
 {
-  GstSpeexDSP *self = GST_SPEEX_DSP (object);
+  GstSpeexDSP * self = GST_SPEEX_DSP (object);
+
+  if (self->probe) {
+    gst_speex_echo_probe_capture_stop (self->probe);
+
+    g_static_mutex_lock (&global_mutex);
+    if (global_dsp && global_dsp == G_OBJECT (self) && global_probe && G_OBJECT (self->probe) == global_probe) {
+      GST_DEBUG_OBJECT (self, "speexdsp detaching from globally discovered speexechoprobe");
+      global_dsp = NULL;
+    }
+    g_static_mutex_unlock (&global_mutex);
+
+    g_object_unref (self->probe);
+    self->probe = NULL;
+  }
 
   if (self->preprocstate)
     speex_preprocess_state_destroy (self->preprocstate);
@@ -309,24 +345,28 @@ gst_speex_dsp_finalize (GObject * object)
 }
 
 static void
-gst_speex_dsp_set_property (GObject *object,
+gst_speex_dsp_set_property (GObject * object,
     guint prop_id,
-    const GValue *value,
-    GParamSpec *pspec)
+    const GValue * value,
+    GParamSpec * pspec)
 {
-  GstSpeexDSP *self = GST_SPEEX_DSP (object);
+  GstSpeexDSP * self = GST_SPEEX_DSP (object);
 
+  GST_OBJECT_LOCK (self);
   switch (prop_id)
   {
     case PROP_PROBE:
-      GST_OBJECT_LOCK (self);
       if (G_LIKELY (g_value_get_object (value) != self->probe))
       {
         if (self->probe)
-          g_object_unref (self->probe);
-        self->probe = g_value_dup_object (value);
+          gst_speex_dsp_detach (self);
+
+        if (g_value_get_object (value))
+          gst_speex_dsp_attach (self, g_value_get_object (value));
       }
-      GST_OBJECT_UNLOCK (self);
+      break;
+    case PROP_LATENCY_TUNE:
+      self->latency_tune = g_value_get_int (value);
       break;
     case PROP_AGC:
       self->agc = g_value_get_boolean (value);
@@ -395,15 +435,16 @@ gst_speex_dsp_set_property (GObject *object,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
+  GST_OBJECT_UNLOCK (self);
 }
 
 static void
-gst_speex_dsp_get_property (GObject *object,
+gst_speex_dsp_get_property (GObject * object,
     guint prop_id,
-    GValue *value,
-    GParamSpec *pspec)
+    GValue * value,
+    GParamSpec * pspec)
 {
-  GstSpeexDSP *self = GST_SPEEX_DSP (object);
+  GstSpeexDSP * self = GST_SPEEX_DSP (object);
 
   GST_OBJECT_LOCK (self);
   switch (prop_id)
@@ -411,7 +452,9 @@ gst_speex_dsp_get_property (GObject *object,
     case PROP_PROBE:
       g_value_set_object (value, self->probe);
       break;
-
+    case PROP_LATENCY_TUNE:
+      g_value_set_int (value, self->latency_tune);
+      break;
     case PROP_AGC:
       if (self->preprocstate)
         speex_preprocess_ctl (self->preprocstate,
@@ -483,13 +526,12 @@ gst_speex_dsp_get_property (GObject *object,
   GST_OBJECT_UNLOCK (self);
 }
 
-
 /* we can only accept caps that we and downstream can handle. */
 static GstCaps *
 gst_speex_dsp_getcaps (GstPad * pad)
 {
-  GstSpeexDSP *self;
-  GstCaps *result, *peercaps, *tmpcaps;
+  GstSpeexDSP * self;
+  GstCaps * result, * peercaps, * tmpcaps;
 
   self = GST_SPEEX_DSP (gst_pad_get_parent (pad));
 
@@ -535,20 +577,16 @@ gst_speex_dsp_getcaps (GstPad * pad)
     }
   }
 
- out:
+out:
   gst_object_unref (self);
-
   return result;
 }
 
-/* the first caps we receive on any of the sinkpads will define the caps for all
- * the other sinkpads because we can only mix streams with the same caps.
- * */
 static gboolean
 gst_speex_dsp_setcaps (GstPad * pad, GstCaps * caps)
 {
-  GstSpeexDSP *self;
-  GstStructure *structure;
+  GstSpeexDSP * self;
+  GstStructure * structure;
   gint rate;
   gint channels = 1;
   gboolean ret = TRUE;
@@ -605,22 +643,31 @@ gst_speex_dsp_setcaps (GstPad * pad, GstCaps * caps)
 
   if (self->probe) {
     guint probe_channels = 1;
+    guint frame_size, filter_length;
+
+    frame_size = rate * self->frame_size_ms / 1000;
+    filter_length = rate * self->filter_length_ms / 1000;
 
     GST_OBJECT_LOCK (self->probe);
-    self->probe->channels_locked = TRUE;
     probe_channels = self->probe->channels;
     GST_OBJECT_UNLOCK (self->probe);
 
-    if (self->channels == 1 && probe_channels == 1)
-      self->echostate = speex_echo_state_init (
-          rate * self->frame_size_ms / 1000,
-          rate * self->filter_length_ms / 1000);
-    else
-      speex_echo_state_init_mc (
-          rate * self->frame_size_ms / 1000,
-          rate * self->filter_length_ms / 1000,
-          self->channels,
-          probe_channels);
+    // FIXME: if this is -1, then probe caps aren't set yet.  there should
+    //   be a better solution besides forcing this to 1
+    if (probe_channels == -1)
+      probe_channels = 1;
+
+    if (self->channels == 1 && probe_channels == 1) {
+      GST_DEBUG_OBJECT (self, "speex_echo_state_init (%d, %d)",
+          frame_size, filter_length);
+      self->echostate = speex_echo_state_init (frame_size, filter_length);
+    }
+    else {
+      GST_DEBUG_OBJECT (self, "speex_echo_state_init_mc (%d, %d, %d, %d)",
+          frame_size, filter_length, self->channels, probe_channels);
+      self->echostate = speex_echo_state_init_mc (frame_size, filter_length,
+          self->channels, probe_channels);
+    }
   }
 
   self->preprocstate = speex_preprocess_state_init (
@@ -665,19 +712,16 @@ gst_speex_dsp_setcaps (GstPad * pad, GstCaps * caps)
       SPEEX_PREPROCESS_SET_NOISE_SUPPRESS,
       &self->noise_suppress);
 
- done:
-
+done:
   GST_OBJECT_UNLOCK (self);
   gst_object_unref (self);
-
   return ret;
 }
 
-
 static gboolean
-gst_speex_dsp_rec_event (GstPad *pad, GstEvent *event)
+gst_speex_dsp_rec_event (GstPad * pad, GstEvent * event)
 {
-  GstSpeexDSP *self = GST_SPEEX_DSP (gst_pad_get_parent (pad));
+  GstSpeexDSP * self = GST_SPEEX_DSP (gst_pad_get_parent (pad));
   gboolean res = FALSE;
 
   switch (GST_EVENT_TYPE (event)) {
@@ -725,26 +769,27 @@ gst_speex_dsp_rec_event (GstPad *pad, GstEvent *event)
   else
     res = gst_pad_push_event (self->rec_sinkpad, event);
 
- out:
-
+out:
   gst_object_unref (self);
-
   return res;
 }
 
-
+// TODO
 static GstFlowReturn
-gst_speex_dsp_rec_chain (GstPad *pad, GstBuffer *buffer)
+gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer)
 {
-  GstSpeexDSP *self = GST_SPEEX_DSP (gst_pad_get_parent (pad));
+  GstSpeexDSP * self = GST_SPEEX_DSP (gst_pad_get_parent (pad));
   GstFlowReturn res = GST_FLOW_OK;
-  GstBuffer *recbuffer = NULL;
-  GstBuffer *play_buffer = NULL;
+  GstBuffer * recbuffer = NULL;
+  GstBuffer * play_buffer = NULL;
   gint bufsize;
-  gchar *buf = NULL;
+  gchar * buf = NULL;
   GstClockTime duration;
-  GstSpeexEchoProbe *probe = NULL;
+  GstSpeexEchoProbe * probe = NULL;
   gint rate = 0;
+  GstClockTime base_time;
+
+  base_time = gst_element_get_base_time (GST_ELEMENT_CAST (self));
 
   GST_OBJECT_LOCK (self);
   if (self->probe)
@@ -767,12 +812,13 @@ gst_speex_dsp_rec_chain (GstPad *pad, GstBuffer *buffer)
   if (self->rec_offset == GST_BUFFER_OFFSET_NONE)
     self->rec_offset = GST_BUFFER_OFFSET (buffer);
 
+  // TODO: handle gaps
   gst_adapter_push (self->rec_adapter, buffer);
 
-  while ((recbuffer = gst_adapter_take_buffer (self->rec_adapter, bufsize)) !=
-      NULL)
+  while ((recbuffer = gst_adapter_take_buffer (self->rec_adapter,
+      bufsize)) != NULL)
   {
-    GstBuffer *outbuffer = NULL;
+    GstBuffer * outbuffer = NULL;
     GstClockTime play_rt = 0, rec_rt = 0, rec_end = 0;
     gint play_latency = 0;
     gint rec_offset;
@@ -781,11 +827,14 @@ gst_speex_dsp_rec_chain (GstPad *pad, GstBuffer *buffer)
     GST_BUFFER_OFFSET (recbuffer) = self->rec_offset;
     GST_BUFFER_DURATION (recbuffer) = duration;
 
+    //play_latency = 200 * 1000000;
     rec_rt = gst_segment_to_running_time (&self->rec_segment, GST_FORMAT_TIME,
         self->rec_time) - play_latency;
+    //rec_rt += 200 * 1000000;
 
     if (!self->echostate)
     {
+      //printf("no echostate\n");
       outbuffer = gst_buffer_make_writable (recbuffer);
       gst_buffer_set_caps (outbuffer, GST_PAD_CAPS (self->rec_sinkpad));
 
@@ -799,7 +848,7 @@ gst_speex_dsp_rec_chain (GstPad *pad, GstBuffer *buffer)
 
       play_buffer = g_queue_peek_tail (probe->buffers);
       if (play_buffer)
-        play_rt = GST_BUFFER_TIMESTAMP (play_buffer);
+        play_rt = GST_BUFFER_TIMESTAMP (play_buffer) - base_time; // FIXME
       GST_OBJECT_UNLOCK (probe);
     } else {
       GST_LOG_OBJECT (self, "No probe, not doing echo cancellation");
@@ -874,7 +923,7 @@ gst_speex_dsp_rec_chain (GstPad *pad, GstBuffer *buffer)
         break;
       }
 
-      play_rt = GST_BUFFER_TIMESTAMP (play_buffer);
+      play_rt = GST_BUFFER_TIMESTAMP (play_buffer) - base_time; // FIXME
 
       if (rec_end < play_rt) {
         GST_LOG_OBJECT (self, "End of recorded buffer (at %"GST_TIME_FORMAT")"
@@ -918,7 +967,6 @@ gst_speex_dsp_rec_chain (GstPad *pad, GstBuffer *buffer)
         play_offset = 0;
         GST_LOG_OBJECT (self, "rec<=play off: %llu", time_diff);
       }
-
 
       play_offset = MIN (play_offset, GST_BUFFER_SIZE (play_buffer));
 
@@ -965,8 +1013,7 @@ gst_speex_dsp_rec_chain (GstPad *pad, GstBuffer *buffer)
 
     gst_buffer_unref (recbuffer);
 
-  no_echo:
-
+ no_echo:
     GST_OBJECT_LOCK (self);
     speex_preprocess_run (self->preprocstate,
         (spx_int16_t *) GST_BUFFER_DATA (outbuffer));
@@ -982,17 +1029,15 @@ gst_speex_dsp_rec_chain (GstPad *pad, GstBuffer *buffer)
 
   g_free (buf);
 
- out:
-
+out:
   if (probe)
     gst_object_unref (probe);
   gst_object_unref (self);
-
   return res;
 }
 
 static void
-gst_speex_dsp_reset_locked (GstSpeexDSP *self)
+gst_speex_dsp_reset_locked (GstSpeexDSP * self)
 {
   if (self->preprocstate)
     speex_preprocess_state_destroy (self->preprocstate);
@@ -1001,17 +1046,12 @@ gst_speex_dsp_reset_locked (GstSpeexDSP *self)
     speex_echo_state_destroy (self->echostate);
   self->echostate = NULL;
   self->rate = 0;
-  if (self->probe) {
-    GST_OBJECT_LOCK (self->probe);
-    self->probe->channels_locked = FALSE;
-    GST_OBJECT_UNLOCK (self->probe);
-  }
 }
 
 static GstStateChangeReturn
 gst_speex_dsp_change_state (GstElement * element, GstStateChange transition)
 {
-  GstSpeexDSP *self;
+  GstSpeexDSP * self;
   GstStateChangeReturn ret;
 
   self = GST_SPEEX_DSP (element);
@@ -1028,28 +1068,52 @@ gst_speex_dsp_change_state (GstElement * element, GstStateChange transition)
   }
 
   ret = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
-
   return ret;
 }
 
-
-static gboolean
-plugin_init (GstPlugin * plugin)
+/* lock global_mutex during this call */
+static void
+try_auto_attach ()
 {
-  if (!gst_element_register (plugin, "speexdsp", GST_RANK_NONE,
-          GST_TYPE_SPEEX_DSP)) {
-    return FALSE;
+  if (global_probe) {
+    gst_speex_dsp_attach (GST_SPEEX_DSP (global_dsp), GST_SPEEX_ECHO_PROBE (global_probe));
+    GST_DEBUG_OBJECT (global_dsp, "speexdsp attaching to globally discovered speexechoprobe");
   }
-  if (!gst_element_register (plugin, "speexechoprobe", GST_RANK_NONE,
-          GST_TYPE_SPEEX_ECHO_PROBE)) {
-    return FALSE;
-  }
-
-  return TRUE;
 }
 
-GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
-    GST_VERSION_MINOR,
-    "speexdsp",
-    "Voice preprocessing using libspeex",
-    plugin_init, VERSION, "LGPL", "Farsight", "http://farsight.sf.net")
+void
+gst_speex_dsp_set_auto_attach (GstSpeexDSP * self, gboolean enabled)
+{
+  g_static_mutex_lock (&global_mutex);
+  if (enabled) {
+    if (!global_dsp) {
+      global_dsp = G_OBJECT (self);
+      try_auto_attach ();
+    }
+  }
+  else {
+    if (global_dsp == G_OBJECT (self))
+      global_dsp = NULL;
+  }
+  g_static_mutex_unlock (&global_mutex);
+}
+
+/* global_mutex locked during this call */
+void
+gst_speex_dsp_attach (GstSpeexDSP * self, GstSpeexEchoProbe * probe)
+{
+  g_object_ref (probe);
+  self->probe = probe;
+  gst_speex_echo_probe_capture_start (self->probe);
+}
+
+/* global_mutex locked during this call */
+void
+gst_speex_dsp_detach (GstSpeexDSP * self)
+{
+  if (self->probe) {
+    gst_speex_echo_probe_capture_stop (self->probe);
+    g_object_unref (self->probe);
+    self->probe = NULL;
+  }
+}

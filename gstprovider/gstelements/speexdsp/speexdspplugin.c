@@ -4,6 +4,8 @@
  *  Copyright 2008 Collabora Ltd
  *  Copyright 2008 Nokia Corporation
  *   @author: Olivier Crete <olivier.crete@collabora.co.uk>
+ *  Copyright 2009 Barracuda Networks, Inc
+ *   @author: Justin Karneges <justin@affinix.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,11 +23,13 @@
  *
  */
 
-#include "../speexdsp/speexdsp.h"
-
-#include <gst/audio/audio.h>
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 #include <string.h>
+#include <gst/audio/audio.h>
+#include "speexdsp.h"
 
 /* dsp/probe use these to discover each other */
 GStaticMutex global_mutex = G_STATIC_MUTEX_INIT;
@@ -47,18 +51,8 @@ plugin_init (GstPlugin * plugin)
   return TRUE;
 }
 
-void gstelements_speexdsp_register()
-{
-  gst_plugin_register_static(
-    GST_VERSION_MAJOR,
+GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
     "speexdsp",
     "Voice preprocessing using libspeex",
-    plugin_init,
-    "1.0.0",
-    "LGPL",
-    "my-application",
-    "my-application",
-    "http://www.my-application.net/"
-    );
-}
+    plugin_init, VERSION, "LGPL", "Farsight", "http://farsight.sf.net")
