@@ -287,7 +287,7 @@ public:
 
 		if(type == PDevice::AudioIn || type == PDevice::VideoIn)
 		{
-			if(!g_speexdsp)
+			/*if(!g_speexdsp)
 			{
 				speexdsp = gst_element_factory_make("speexdsp", NULL);
 				if(speexdsp)
@@ -297,7 +297,7 @@ public:
 #endif
 					g_speexdsp = speexdsp;
 				}
-			}
+			}*/
 
 			if(speexdsp)
 			{
@@ -309,13 +309,13 @@ public:
 			//gst_element_set_locked_state(tee, TRUE);
 			gst_bin_add(GST_BIN(pipeline), tee);
 
-			if(speexdsp)
-				gst_element_link(tee, speexdsp);
-
 			//gst_element_set_locked_state(bin, TRUE);
 			gst_bin_add(GST_BIN(pipeline), bin);
 
-			gst_element_link(bin, tee);
+			if(speexdsp)
+				gst_element_link_many(bin, speexdsp, tee, NULL);
+			else
+				gst_element_link(bin, tee);
 		}
 		else // AudioOut
 		{
@@ -334,12 +334,12 @@ public:
 			g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 			gst_caps_unref(caps);
 
-			if(!g_speexprobe)
+			/*if(!g_speexprobe)
 			{
 				speexprobe = gst_element_factory_make("speexechoprobe", NULL);
 				if(speexprobe)
 					g_speexprobe = speexprobe;
-			}
+			}*/
 
 			gst_bin_add(GST_BIN(pipeline), bin);
 			gst_bin_add(GST_BIN(pipeline), adder);
