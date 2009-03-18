@@ -2,6 +2,7 @@ api:
   multi-user jingle (mingle) stuff
 
 backend:
+  pausing/holding
   support playing file from bytearray
   support recording
   use farsight
