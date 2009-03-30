@@ -29,12 +29,16 @@
 
 #include "speexdsp.h"
 
+#include <stdio.h>
+//static FILE *file_rec = 0, *file_play = 0;
+//static GstClockTime file_start = GST_CLOCK_TIME_NONE;
+
 #include <string.h>
 #include <gst/audio/audio.h>
 
 extern GStaticMutex global_mutex;
-extern GObject * global_dsp;
-extern GObject * global_probe;
+extern GstSpeexDSP * global_dsp;
+extern GstSpeexEchoProbe * global_probe;
 
 GST_DEBUG_CATEGORY (speex_dsp_debug);
 #define GST_CAT_DEFAULT (speex_dsp_debug)
@@ -134,6 +138,12 @@ gst_speex_dsp_reset_locked (GstSpeexDSP * self);
 
 static void
 try_auto_attach ();
+
+static GstBuffer *
+try_echo_cancel (SpeexEchoState * echostate, const GstBuffer * recbuf,
+    GstClockTime rec_adj, GstClockTime rec_base, GQueue * buffers, int rate,
+    GstPad * srcpad, const GstCaps * outcaps, GstFlowReturn * res,
+    GstSpeexDSP * obj);
 
 static void
 gst_speex_dsp_base_init (gpointer klass)
@@ -306,10 +316,11 @@ gst_speex_dsp_init (GstSpeexDSP * self, GstSpeexDSPClass *klass)
   self->echo_suppress = DEFAULT_ECHO_SUPPRESS;
   self->echo_suppress_active = DEFAULT_ECHO_SUPPRESS_ACTIVE;
   self->noise_suppress = DEFAULT_NOISE_SUPPRESS;
+  self->buffers = g_queue_new();
 
   g_static_mutex_lock (&global_mutex);
   if (!global_dsp) {
-    global_dsp = G_OBJECT (self);
+    global_dsp = self;
     try_auto_attach ();
   }
   g_static_mutex_unlock (&global_mutex);
@@ -321,10 +332,12 @@ gst_speex_dsp_finalize (GObject * object)
   GstSpeexDSP * self = GST_SPEEX_DSP (object);
 
   if (self->probe) {
-    gst_speex_echo_probe_capture_stop (self->probe);
+    GST_OBJECT_LOCK (self->probe);
+    self->probe->dsp = NULL;
+    GST_OBJECT_UNLOCK (self->probe);
 
     g_static_mutex_lock (&global_mutex);
-    if (global_dsp && global_dsp == G_OBJECT (self) && global_probe && G_OBJECT (self->probe) == global_probe) {
+    if (global_dsp && global_dsp == self && global_probe && global_probe == self->probe) {
       GST_DEBUG_OBJECT (self, "speexdsp detaching from globally discovered speexechoprobe");
       global_dsp = NULL;
     }
@@ -333,6 +346,9 @@ gst_speex_dsp_finalize (GObject * object)
     g_object_unref (self->probe);
     self->probe = NULL;
   }
+
+  g_queue_foreach (self->buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_queue_free (self->buffers);
 
   if (self->preprocstate)
     speex_preprocess_state_destroy (self->preprocstate);
@@ -641,16 +657,18 @@ gst_speex_dsp_setcaps (GstPad * pad, GstCaps * caps)
 
   self->rate = rate;
 
-  if (self->probe) {
+  /*if (self->probe)*/ {
     guint probe_channels = 1;
     guint frame_size, filter_length;
 
     frame_size = rate * self->frame_size_ms / 1000;
     filter_length = rate * self->filter_length_ms / 1000;
 
-    GST_OBJECT_LOCK (self->probe);
-    probe_channels = self->probe->channels;
-    GST_OBJECT_UNLOCK (self->probe);
+    if (self->probe) {
+      GST_OBJECT_LOCK (self->probe);
+      probe_channels = self->probe->channels;
+      GST_OBJECT_UNLOCK (self->probe);
+    }
 
     // FIXME: if this is -1, then probe caps aren't set yet.  there should
     //   be a better solution besides forcing this to 1
@@ -730,6 +748,8 @@ gst_speex_dsp_rec_event (GstPad * pad, GstEvent * event)
       self->rec_offset = 0;
       self->rec_time = GST_CLOCK_TIME_NONE;
       gst_segment_init (&self->rec_segment, GST_FORMAT_UNDEFINED);
+      g_queue_foreach (self->buffers, (GFunc) gst_mini_object_unref, NULL);
+      g_queue_clear (self->buffers);
       GST_OBJECT_LOCK (self);
       gst_speex_dsp_reset_locked (self);
       GST_OBJECT_UNLOCK (self);
@@ -781,9 +801,7 @@ gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer)
   GstSpeexDSP * self = GST_SPEEX_DSP (gst_pad_get_parent (pad));
   GstFlowReturn res = GST_FLOW_OK;
   GstBuffer * recbuffer = NULL;
-  GstBuffer * play_buffer = NULL;
   gint bufsize;
-  gchar * buf = NULL;
   GstClockTime duration;
   GstSpeexEchoProbe * probe = NULL;
   gint rate = 0;
@@ -800,6 +818,24 @@ gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer)
   bufsize = 2 * rate * self->frame_size_ms / 1000;
   duration = self->frame_size_ms * GST_MSECOND;
 
+  // FIXME to the max
+  if (GST_BUFFER_IS_DISCONT (buffer)) {
+    printf("***discontinuous! starting over\n");
+
+    // clear adapter, because otherwise new data will be considered relative
+    //   to what's left in the adapter, which is of course wrong.  we need
+    //   timestamps in the adapter or something..
+    gst_adapter_clear (self->rec_adapter);
+
+    // clear played buffers, in case the discontinuity is due to a clock
+    //   change, which means existing buffers are timestamped wrong (there's
+    //   probably a better way to handle this...)
+    GST_OBJECT_LOCK (self);
+    g_queue_foreach (self->buffers, (GFunc) gst_mini_object_unref, NULL);
+    g_queue_clear (self->buffers);
+    GST_OBJECT_UNLOCK (self);
+  }
+
   if (gst_adapter_available (self->rec_adapter) == 0) {
     GST_LOG_OBJECT (self, "The adapter is empty, its a good time to reset the"
         " timestamp and offset");
@@ -812,222 +848,85 @@ gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer)
   if (self->rec_offset == GST_BUFFER_OFFSET_NONE)
     self->rec_offset = GST_BUFFER_OFFSET (buffer);
 
-  // TODO: handle gaps
+  //GST_LOG_OBJECT (self, "Receiving recorded buffer at %lld clock time"
+  //    " (base=%lld)", GST_BUFFER_TIMESTAMP (buffer) + base_time, base_time);
+
+  GST_LOG_OBJECT (self, "Receiving recorded buffer at %"GST_TIME_FORMAT
+        " (len=%"GST_TIME_FORMAT")",
+        GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buffer) + base_time),
+        GST_TIME_ARGS (GST_BUFFER_DURATION (buffer)));
+
+  // TODO: handle gaps (see above about discontinuity)
   gst_adapter_push (self->rec_adapter, buffer);
 
-  while ((recbuffer = gst_adapter_take_buffer (self->rec_adapter,
-      bufsize)) != NULL)
-  {
+  while (TRUE) {
     GstBuffer * outbuffer = NULL;
-    GstClockTime play_rt = 0, rec_rt = 0, rec_end = 0;
-    gint play_latency = 0;
-    gint rec_offset;
+    //GstClockTime rec_rt = 0;
+
+    // buffer at least 500ms + 1 frame before processing
+    //if (gst_adapter_available (self->rec_adapter) < (2 * rate * 2000 / 1000) + bufsize)
+    //  break;
+
+    recbuffer = gst_adapter_take_buffer (self->rec_adapter, bufsize);
+    if (!recbuffer)
+      break;
 
     GST_BUFFER_TIMESTAMP (recbuffer) = self->rec_time;
     GST_BUFFER_OFFSET (recbuffer) = self->rec_offset;
     GST_BUFFER_DURATION (recbuffer) = duration;
 
-    //play_latency = 200 * 1000000;
-    rec_rt = gst_segment_to_running_time (&self->rec_segment, GST_FORMAT_TIME,
-        self->rec_time) - play_latency;
-    //rec_rt += 200 * 1000000;
-
-    if (!self->echostate)
-    {
-      //printf("no echostate\n");
-      outbuffer = gst_buffer_make_writable (recbuffer);
-      gst_buffer_set_caps (outbuffer, GST_PAD_CAPS (self->rec_sinkpad));
-
-      goto no_echo;
+    /*if(!file_rec) {
+        GST_DEBUG_OBJECT (self, "gst_rec start time=%lld", GST_BUFFER_TIMESTAMP (recbuffer));
+        if (file_start == GST_CLOCK_TIME_NONE)
+            file_start = GST_BUFFER_TIMESTAMP (recbuffer) + base_time;
+        file_rec = fopen("gst_rec.sw", "wb");
     }
+    fwrite(GST_BUFFER_DATA (recbuffer), GST_BUFFER_SIZE (recbuffer), 1, file_rec);
+    fflush(file_rec);*/
 
-    if (probe)
-    {
-      GST_OBJECT_LOCK (probe);
-      play_latency = probe->latency;
+    // FIXME: don't need this?
+    //rec_rt = gst_segment_to_running_time (&self->rec_segment, GST_FORMAT_TIME,
+    //    self->rec_time);
 
-      play_buffer = g_queue_peek_tail (probe->buffers);
-      if (play_buffer)
-        play_rt = GST_BUFFER_TIMESTAMP (play_buffer) - base_time; // FIXME
-      GST_OBJECT_UNLOCK (probe);
-    } else {
-      GST_LOG_OBJECT (self, "No probe, not doing echo cancellation");
-      outbuffer = gst_buffer_make_writable (recbuffer);
-      gst_buffer_set_caps (outbuffer, GST_PAD_CAPS (self->rec_sinkpad));
-      goto no_echo;
-    }
-
-    if (!play_buffer) {
-      GST_LOG_OBJECT (self, "No playout buffer, not doing echo cancellation");
-      outbuffer = gst_buffer_make_writable (recbuffer);
-      gst_buffer_set_caps (outbuffer, GST_PAD_CAPS (self->rec_sinkpad));
-      goto no_echo;
-    }
-
-    if (play_latency < 0)
-    {
-      GST_LOG_OBJECT (self, "Don't have latency, not cancelling echo");
-      outbuffer = gst_buffer_make_writable (recbuffer);
-      gst_buffer_set_caps (outbuffer, GST_PAD_CAPS (self->rec_sinkpad));
-      goto no_echo;
-    }
-
-    if (play_latency > rec_rt ||
-        play_rt + play_latency > rec_rt + duration)
-    {
-      GST_LOG_OBJECT (self, "Have no buffers to compare to,"
-          " not cancelling echo");
-      outbuffer = gst_buffer_make_writable (recbuffer);
-      gst_buffer_set_caps (outbuffer, GST_PAD_CAPS (self->rec_sinkpad));
-      goto no_echo;
-    }
-
-    res = gst_pad_alloc_buffer (self->rec_srcpad, self->rec_offset,
-        bufsize, GST_PAD_CAPS (self->rec_sinkpad), &outbuffer);
-    if (res != GST_FLOW_OK)
-    {
+    GST_OBJECT_LOCK (self);
+    outbuffer = try_echo_cancel (self->echostate, recbuffer,
+        GST_BUFFER_TIMESTAMP (recbuffer) /*- (((GstClockTime)self->latency_tune) * GST_MSECOND)*/,
+        base_time, self->buffers, rate, self->rec_srcpad,
+        GST_PAD_CAPS (self->rec_sinkpad), &res, self);
+    GST_OBJECT_UNLOCK (self);
+    if (outbuffer) {
+      /* if cancel succeeds, then post-processing occurs on the newly returned
+       * buffer and we can free the original one.  newly returned buffer has
+       * appropriate caps.
+       */
       gst_buffer_unref (recbuffer);
-      goto out;
+    }
+    else {
+      /* if cancel fails, it's possible it was due to a flow error when
+       * creating a new buffer */
+      if (res != GST_FLOW_OK)
+        goto out;
+
+      /* if cancel fails, then post-processing occurs on the original buffer,
+       * just make it writable and set appropriate caps.
+       */
+      outbuffer = gst_buffer_make_writable (recbuffer);
+      gst_buffer_set_caps (outbuffer, GST_PAD_CAPS (self->rec_sinkpad));
     }
 
-    g_assert (outbuffer);
-
-    GST_BUFFER_TIMESTAMP (outbuffer) = GST_BUFFER_TIMESTAMP (recbuffer);
-    GST_BUFFER_OFFSET (outbuffer) =  GST_BUFFER_OFFSET (recbuffer);
-    GST_BUFFER_DURATION (outbuffer) = GST_BUFFER_DURATION (recbuffer);
-
-    if (self->rec_time != GST_CLOCK_TIME_NONE)
-      self->rec_time += self->frame_size_ms * GST_MSECOND;
-    if (self->rec_offset != GST_BUFFER_OFFSET_NONE)
-      self->rec_offset += bufsize;
-
-    if (buf)
-      memset (buf, 0, bufsize);
-    else
-      buf = g_malloc0 (bufsize);
-
-    rec_end = rec_rt + duration;
-
-    rec_offset = 0;
-
-    GST_OBJECT_LOCK (probe);
-
-    while (rec_offset < bufsize)
-    {
-      GstClockTime play_duration;
-      gint play_offset, size;
-
-      play_buffer = g_queue_peek_tail (probe->buffers);
-      if (!play_buffer) {
-        GST_LOG_OBJECT (self, "Queue empty, can't cancel everything");
-        break;
-      }
-
-      play_rt = GST_BUFFER_TIMESTAMP (play_buffer) - base_time; // FIXME
-
-      if (rec_end < play_rt) {
-        GST_LOG_OBJECT (self, "End of recorded buffer (at %"GST_TIME_FORMAT")"
-            " is before any played buffer"
-            " (which start at %"GST_TIME_FORMAT")",
-            GST_TIME_ARGS (rec_end),
-            GST_TIME_ARGS (play_rt));
-
-        break;
-      }
-
-      play_duration = GST_BUFFER_SIZE (play_buffer) * GST_SECOND /
-          (rate * 2);
-
-      if (play_rt + play_duration < rec_rt)
-      {
-        GST_LOG_OBJECT (self, "Start of rec data (at %"GST_TIME_FORMAT")"
-            " after the end of played data (at %"GST_TIME_FORMAT")",
-            GST_TIME_ARGS (rec_rt),
-            GST_TIME_ARGS (play_rt + play_duration));
-        g_queue_pop_tail (probe->buffers);
-        gst_buffer_unref (play_buffer);
-        continue;
-      }
-
-      if (rec_rt > play_rt) {
-        GstClockTime time_diff = rec_rt - play_rt;
-        time_diff *= 2 * rate;
-        time_diff /= GST_SECOND;
-
-        play_offset = time_diff;
-        GST_LOG_OBJECT (self, "rec>play off: %d", play_offset);
-      }
-      else {
-        GstClockTime time_diff = play_rt - rec_rt;
-        time_diff *= 2 * rate;
-        time_diff /= GST_SECOND;
-
-        rec_offset += time_diff;
-        rec_rt = play_rt;
-        play_offset = 0;
-        GST_LOG_OBJECT (self, "rec<=play off: %llu", time_diff);
-      }
-
-      play_offset = MIN (play_offset, GST_BUFFER_SIZE (play_buffer));
-
-      size = MIN (GST_BUFFER_SIZE (play_buffer) - play_offset,
-          bufsize - rec_offset);
-
-      {
-        GstClockTime time = play_offset;
-        time *= GST_SECOND;
-        time /= rate * 2;
-        time += play_rt;
-
-        GST_LOG_OBJECT (self, "Cancelling data recorded at %"GST_TIME_FORMAT
-            " with data played at %"GST_TIME_FORMAT
-            " (difference %"GST_TIME_FORMAT") for %d bytes",
-            GST_TIME_ARGS (rec_rt),
-            GST_TIME_ARGS (time),
-            GST_TIME_ARGS (rec_rt - time),
-            size);
-      }
-
-      memcpy (buf + rec_offset, GST_BUFFER_DATA (play_buffer) + play_offset,
-          size);
-
-      rec_rt += size * GST_SECOND / (rate * 2);
-      rec_offset += size;
-
-      if (GST_BUFFER_SIZE (play_buffer) == play_offset + size)
-      {
-        GstBuffer *pb = g_queue_pop_tail (probe->buffers);
-        gst_buffer_unref (play_buffer);
-        g_assert (pb == play_buffer);
-      }
-    }
-
-    GST_OBJECT_UNLOCK (probe);
-
-    GST_LOG_OBJECT (self, "Cancelling echo");
-
-    speex_echo_cancellation (self->echostate,
-        (const spx_int16_t *) GST_BUFFER_DATA (recbuffer),
-        (const spx_int16_t *) buf,
-        (spx_int16_t *) GST_BUFFER_DATA (outbuffer));
-
-    gst_buffer_unref (recbuffer);
-
- no_echo:
     GST_OBJECT_LOCK (self);
     speex_preprocess_run (self->preprocstate,
         (spx_int16_t *) GST_BUFFER_DATA (outbuffer));
     GST_OBJECT_UNLOCK (self);
 
+    self->rec_time += duration;
+    self->rec_offset += bufsize; // FIXME: does this work for >1 channels?
+
     GST_LOG_OBJECT (self, "Sending out buffer %p", outbuffer);
-
     res = gst_pad_push (self->rec_srcpad, outbuffer);
-
     if (res != GST_FLOW_OK)
       break;
   }
-
-  g_free (buf);
 
 out:
   if (probe)
@@ -1076,7 +975,7 @@ static void
 try_auto_attach ()
 {
   if (global_probe) {
-    gst_speex_dsp_attach (GST_SPEEX_DSP (global_dsp), GST_SPEEX_ECHO_PROBE (global_probe));
+    gst_speex_dsp_attach (global_dsp, global_probe);
     GST_DEBUG_OBJECT (global_dsp, "speexdsp attaching to globally discovered speexechoprobe");
   }
 }
@@ -1087,15 +986,49 @@ gst_speex_dsp_set_auto_attach (GstSpeexDSP * self, gboolean enabled)
   g_static_mutex_lock (&global_mutex);
   if (enabled) {
     if (!global_dsp) {
-      global_dsp = G_OBJECT (self);
+      global_dsp = self;
       try_auto_attach ();
     }
   }
   else {
-    if (global_dsp == G_OBJECT (self))
+    if (global_dsp == self)
       global_dsp = NULL;
   }
   g_static_mutex_unlock (&global_mutex);
+}
+
+void
+gst_speex_dsp_add_capture_buffer (GstSpeexDSP * self, GstBuffer * buf)
+{
+  //GstClockTime base_time = gst_element_get_base_time (GST_ELEMENT_CAST (self));
+  GstClockTime duration = GST_CLOCK_TIME_NONE;
+
+  if (self->rate != 0)
+    duration = GST_BUFFER_SIZE (buf) * GST_SECOND / (self->rate * 2);
+
+  //GST_LOG_OBJECT (self, "Capturing played buffer at %lld clock time", GST_BUFFER_TIMESTAMP (buf));
+  GST_LOG_OBJECT (self, "Capturing played buffer at %"GST_TIME_FORMAT
+        " (len=%"GST_TIME_FORMAT")",
+        GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)),
+        GST_TIME_ARGS (duration));
+
+  GST_OBJECT_LOCK (self);
+
+    /*if(!file_play) {
+        GST_DEBUG_OBJECT (self, "gst_play start time=%lld", GST_BUFFER_TIMESTAMP (buf) - base_time);
+        file_play = fopen("gst_play.sw", "wb");
+        if (file_start != GST_CLOCK_TIME_NONE) {
+            int padsize = 2 * 22050 * (GST_BUFFER_TIMESTAMP (buf) - file_start) / GST_SECOND;
+            char *pad = (char *)g_malloc0(padsize);
+            fwrite(pad, padsize, 1, file_play);
+            file_start = GST_CLOCK_TIME_NONE;
+        }
+    }
+    fwrite(GST_BUFFER_DATA (buf), GST_BUFFER_SIZE (buf), 1, file_play);
+    fflush(file_play);*/
+
+  g_queue_push_head (self->buffers, buf);
+  GST_OBJECT_UNLOCK (self);
 }
 
 /* global_mutex locked during this call */
@@ -1104,7 +1037,9 @@ gst_speex_dsp_attach (GstSpeexDSP * self, GstSpeexEchoProbe * probe)
 {
   g_object_ref (probe);
   self->probe = probe;
-  gst_speex_echo_probe_capture_start (self->probe);
+  GST_OBJECT_LOCK (probe);
+  probe->dsp = self;
+  GST_OBJECT_UNLOCK (probe);
 }
 
 /* global_mutex locked during this call */
@@ -1112,8 +1047,225 @@ void
 gst_speex_dsp_detach (GstSpeexDSP * self)
 {
   if (self->probe) {
-    gst_speex_echo_probe_capture_stop (self->probe);
+    GST_OBJECT_LOCK (self->probe);
+    self->probe->dsp = NULL;
+    GST_OBJECT_UNLOCK (self->probe);
     g_object_unref (self->probe);
     self->probe = NULL;
   }
+}
+
+/* this function attempts to cancel echo.
+ *
+ * echostate: AEC state
+ * recbuf:    recorded buffer to strip echo from
+ * rec_adj:   time of recorded buffer with latency adjustment
+ * rec_base:  base time of element that received the recorded buffer
+ * buffers:   a queue of recently played buffers, in clock time
+ * rate:      sample rate being used (both rec/play are the same rate)
+ * srcpad:    the pad that the resulting data should go out on
+ * outcaps:   the caps of the resulting data
+ * res:       if this function returns null, a flow value may be stored here
+ * obj:       object to log debug messages against
+ *
+ * returns:   new buffer with echo cancelled, or NULL if cancelling was not
+ *            possible.  check 'res' to see if the reason was a flow problem.
+ *
+ * note that while this function taks a pad as an argument, it does not
+ *   actually send a buffer out on the pad.  it uses gst_pad_alloc_buffer()
+ *   to create the output buffer, which requires a pad as input.
+ */
+GstBuffer *
+try_echo_cancel (SpeexEchoState * echostate, const GstBuffer * recbuf,
+    GstClockTime rec_adj, GstClockTime rec_base, GQueue * buffers, int rate,
+    GstPad * srcpad, const GstCaps * outcaps, GstFlowReturn * res,
+    GstSpeexDSP * obj)
+{
+  GstFlowReturn res_ = GST_FLOW_OK;
+  GstBuffer * recbuffer = NULL;
+  GstBuffer * play_buffer = NULL;
+  gchar * buf = NULL;
+  gint bufsize;
+  GstClockTime duration;
+  GstClockTime play_rt = 0, rec_rt = 0, rec_end = 0;
+  gint rec_offset;
+  GstBuffer * outbuffer = NULL;
+
+  recbuffer = (GstBuffer *)recbuf;
+  rec_rt = rec_adj;
+  rec_offset = GST_BUFFER_OFFSET (recbuffer);
+  bufsize = GST_BUFFER_SIZE (recbuffer);
+  duration = GST_BUFFER_DURATION (recbuffer);
+
+  if (!echostate) {
+    GST_LOG_OBJECT (obj, "No echostate, not doing echo cancellation");
+    return NULL;
+  }
+
+  /* clean out the queue, throwing out any buffers that are too old */
+  while (TRUE) {
+    play_buffer = g_queue_peek_tail (buffers);
+    if (!play_buffer || GST_BUFFER_TIMESTAMP (play_buffer) - rec_base + (GST_BUFFER_SIZE (play_buffer) * GST_SECOND / (rate * 2)) >= rec_rt)
+      break;
+    GST_LOG_OBJECT (obj, "Throwing out old played buffer");
+    g_queue_pop_tail (buffers);
+    gst_buffer_unref (play_buffer);
+  }
+
+  play_buffer = g_queue_peek_tail (buffers);
+  if (!play_buffer) {
+    GST_LOG_OBJECT (obj, "No playout buffer, not doing echo cancellation");
+    return NULL;
+  }
+
+  play_rt = GST_BUFFER_TIMESTAMP (play_buffer) - rec_base;
+
+  GST_LOG_OBJECT (obj, "rec_start=%"GST_TIME_FORMAT","
+      " play_start=%"GST_TIME_FORMAT"",
+      GST_TIME_ARGS (rec_rt), GST_TIME_ARGS (play_rt));
+
+  if (play_rt > rec_rt + duration) {
+    GST_LOG_OBJECT (obj, "Have no buffers to compare, not cancelling echo");
+    return NULL;
+  }
+
+  res_ = gst_pad_alloc_buffer (srcpad, rec_offset, bufsize,
+      (GstCaps *)outcaps, &outbuffer);
+  if (res_ != GST_FLOW_OK) {
+    *res = res_;
+    return NULL;
+  }
+
+  g_assert (outbuffer);
+
+  // FIXME: what if GST_BUFFER_SIZE (outbuffer) != bufsize ?
+
+  GST_BUFFER_TIMESTAMP (outbuffer) = GST_BUFFER_TIMESTAMP (recbuffer);
+  GST_BUFFER_OFFSET (outbuffer) =  GST_BUFFER_OFFSET (recbuffer);
+  GST_BUFFER_DURATION (outbuffer) = GST_BUFFER_DURATION (recbuffer);
+
+  /* here's a buffer we'll fill up with played data.  we initialize it to
+   * silence in case we don't have enough played data to populate the whole
+   * thing.
+   */
+  buf = g_malloc0 (bufsize);
+
+  /* canceling is done relative to rec_rt, even though it may not be the same
+   * as the actual timestamp of the recorded buffer (rec_rt has latency_tune
+   * applied)
+   */
+  rec_end = rec_rt + duration;
+  rec_offset = 0; // FIXME: slightly confusing, reusing this variable for
+      // different purpose
+
+  while (rec_offset < bufsize) {
+    GstClockTime play_duration, time;
+    gint play_offset, size;
+
+    play_buffer = g_queue_peek_tail (buffers);
+    if (!play_buffer) {
+      GST_LOG_OBJECT (obj, "Queue empty, can't cancel everything");
+      break;
+    }
+
+    play_rt = GST_BUFFER_TIMESTAMP (play_buffer) - rec_base;
+
+    if (rec_end < play_rt) {
+      GST_LOG_OBJECT (obj, "End of recorded buffer (at %"GST_TIME_FORMAT")"
+          " is before any played buffer"
+          " (which start at %"GST_TIME_FORMAT")",
+          GST_TIME_ARGS (rec_end),
+          GST_TIME_ARGS (play_rt));
+      break;
+    }
+
+    play_duration = GST_BUFFER_SIZE (play_buffer) * GST_SECOND /
+        (rate * 2);
+
+    // FIXME: it seems we already do something like this earlier.  we
+    //   shouldn't need it in two spots, and the one here is probably
+    //   more appropriate
+    if (play_rt + play_duration < rec_rt) {
+      GST_LOG_OBJECT (obj, "Start of rec data (at %"GST_TIME_FORMAT")"
+          " after the end of played data (at %"GST_TIME_FORMAT")",
+          GST_TIME_ARGS (rec_rt),
+          GST_TIME_ARGS (play_rt + play_duration));
+      g_queue_pop_tail (buffers);
+      gst_buffer_unref (play_buffer);
+      continue;
+    }
+
+    if (rec_rt > play_rt) {
+      GstClockTime time_diff = rec_rt - play_rt;
+      time_diff *= 2 * rate;
+      time_diff /= GST_SECOND;
+      time_diff &= ~0x01; // ensure even
+
+      play_offset = time_diff;
+      GST_LOG_OBJECT (obj, "rec>play off: %d", play_offset);
+    }
+    else {
+      gint rec_skip;
+      GstClockTime time_diff = play_rt - rec_rt;
+      time_diff *= 2 * rate;
+      time_diff /= GST_SECOND;
+      time_diff &= ~0x01; // ensure even
+
+      rec_skip = time_diff;
+      rec_rt += rec_skip * GST_SECOND / (rate * 2);
+      rec_offset += rec_skip;
+      play_offset = 0;
+      GST_LOG_OBJECT (obj, "rec<=play off: %d", rec_skip);
+    }
+
+    play_offset = MIN (play_offset, GST_BUFFER_SIZE (play_buffer));
+    size = MIN (GST_BUFFER_SIZE (play_buffer) - play_offset,
+        bufsize - rec_offset);
+
+    time = play_offset;
+    time *= GST_SECOND;
+    time /= rate * 2;
+    time += play_rt;
+
+    GST_LOG_OBJECT (obj, "Cancelling data recorded at %"GST_TIME_FORMAT
+        " with data played at %"GST_TIME_FORMAT
+        " (difference %"GST_TIME_FORMAT") for %d bytes",
+        GST_TIME_ARGS (rec_rt),
+        GST_TIME_ARGS (time),
+        GST_TIME_ARGS (rec_rt - time),
+        size);
+
+    GST_LOG_OBJECT (obj, "using play buffer %p (size=%d), mid(%d, %d)",
+        play_buffer, GST_BUFFER_SIZE (play_buffer), play_offset, size);
+
+    if(rec_offset < 0 || play_offset < 0 || rec_offset + size > bufsize || play_offset + size > GST_BUFFER_SIZE (play_buffer))
+    {
+      printf("***explosions!\n");
+      abort();
+      return NULL;
+    }
+
+    memcpy (buf + rec_offset, GST_BUFFER_DATA (play_buffer) + play_offset,
+        size);
+
+    rec_rt += size * GST_SECOND / (rate * 2);
+    rec_offset += size;
+
+    if (GST_BUFFER_SIZE (play_buffer) == play_offset + size) {
+      GstBuffer *pb = g_queue_pop_tail (buffers);
+      gst_buffer_unref (play_buffer);
+      g_assert (pb == play_buffer);
+    }
+  }
+
+  GST_LOG_OBJECT (obj, "Cancelling echo");
+
+  speex_echo_cancellation (echostate,
+      (const spx_int16_t *) GST_BUFFER_DATA (recbuffer),
+      (const spx_int16_t *) buf,
+      (spx_int16_t *) GST_BUFFER_DATA (outbuffer));
+
+  g_free (buf);
+
+  return outbuffer;
 }

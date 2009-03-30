@@ -44,11 +44,11 @@ GST_DEBUG_CATEGORY_EXTERN (speex_dsp_debug);
 #define GST_IS_SPEEX_DSP(obj) \
   (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_SPEEX_DSP))
 #define GST_SPEEX_DSP_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass) ,GST_TYPE_SPEEX_DSP,GstSpeexDSPClass))
+  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_SPEEX_DSP,GstSpeexDSPClass))
 #define GST_IS_SPEEX_DSP_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass) ,GST_TYPE_SPEEX_DSP))
+  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_SPEEX_DSP))
 #define GST_SPEEX_DSP_GET_CLASS(obj) \
-  (G_TYPE_INSTANCE_GET_CLASS((obj) ,GST_TYPE_SPEEX_DSP,GstSpeexDSPClass))
+  (G_TYPE_INSTANCE_GET_CLASS((obj),GST_TYPE_SPEEX_DSP,GstSpeexDSPClass))
 
 typedef struct _GstSpeexDSP GstSpeexDSP;
 typedef struct _GstSpeexDSPClass GstSpeexDSPClass;
@@ -84,6 +84,7 @@ struct _GstSpeexDSP
 
   /* Protected by the object lock */
   GstSpeexEchoProbe * probe;
+  GQueue * buffers;
 
   /* Protected by the object lock */
   gint latency_tune;
@@ -106,6 +107,7 @@ struct _GstSpeexDSPClass
 GType gst_speex_dsp_get_type (void);
 
 void gst_speex_dsp_set_auto_attach (GstSpeexDSP * self, gboolean enabled);
+void gst_speex_dsp_add_capture_buffer (GstSpeexDSP * self, GstBuffer * buf);
 
 /* called by probe, with global_mutex locked */
 void gst_speex_dsp_attach (GstSpeexDSP * self, GstSpeexEchoProbe * probe);

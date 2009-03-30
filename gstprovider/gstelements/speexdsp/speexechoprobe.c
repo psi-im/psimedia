@@ -34,8 +34,8 @@
 #include "speexdsp.h"
 
 extern GStaticMutex global_mutex;
-extern GObject * global_dsp;
-extern GObject * global_probe;
+extern GstSpeexDSP * global_dsp;
+extern GstSpeexEchoProbe * global_probe;
 
 #define GST_CAT_DEFAULT (speex_dsp_debug)
 
@@ -115,12 +115,6 @@ static void
 try_auto_attach ();
 
 static void
-buffer_unref_func (gpointer data, gpointer user_data)
-{
-  gst_buffer_unref (GST_BUFFER (data));
-}
-
-static void
 gst_speex_echo_probe_base_init (gpointer klass)
 {
 }
@@ -187,16 +181,15 @@ gst_speex_echo_probe_init (GstSpeexEchoProbe * self, GstSpeexEchoProbeClass * kl
       GST_DEBUG_FUNCPTR (gst_speex_echo_probe_getcaps));
   gst_element_add_pad (GST_ELEMENT (self), self->sinkpad);
 
-  self->buffers = g_queue_new ();
   self->latency = -1;
   self->latency_tune = DEFAULT_LATENCY_TUNE;
   self->rate = 0;
   self->channels = -1;
-  self->capturing = FALSE;
+  self->dsp = NULL;
 
   g_static_mutex_lock (&global_mutex);
   if (!global_probe) {
-    global_probe = G_OBJECT (self);
+    global_probe = self;
     try_auto_attach ();
   }
   g_static_mutex_unlock (&global_mutex);
@@ -208,7 +201,7 @@ gst_speex_echo_probe_finalize (GObject * object)
   GstSpeexEchoProbe * self = GST_SPEEX_ECHO_PROBE (object);
 
   g_static_mutex_lock (&global_mutex);
-  if (global_probe && global_probe == G_OBJECT (self)) {
+  if (global_probe && global_probe == self) {
     if (global_dsp) {
       gst_speex_dsp_detach (GST_SPEEX_DSP (global_dsp));
       GST_DEBUG_OBJECT (self, "speexechoprobe detaching from globally discovered speexdsp");
@@ -216,9 +209,6 @@ gst_speex_echo_probe_finalize (GObject * object)
     global_probe = NULL;
   }
   g_static_mutex_unlock (&global_mutex);
-
-  g_queue_foreach (self->buffers, buffer_unref_func, NULL);
-  g_queue_free (self->buffers);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -370,8 +360,6 @@ gst_speex_echo_probe_event (GstPad * pad, GstEvent * event)
       break;
     case GST_EVENT_FLUSH_STOP:
       GST_OBJECT_LOCK (self);
-      g_queue_foreach (self->buffers, (GFunc) gst_mini_object_unref, NULL);
-      g_queue_clear (self->buffers);
       gst_segment_init (&self->segment, GST_FORMAT_UNDEFINED);
       self->rate = 0;
       self->channels = -1;
@@ -433,7 +421,7 @@ gst_speex_echo_probe_chain (GstPad * pad, GstBuffer * buffer)
   base_time = gst_element_get_base_time (GST_ELEMENT_CAST (self));
 
   GST_OBJECT_LOCK (self);
-  if (self->capturing) {
+  if (self->dsp) {
     /* fork the buffer, changing the timestamp to be in clock time, with
      * latency applied */
     gst_buffer_ref (buffer);
@@ -441,10 +429,8 @@ gst_speex_echo_probe_chain (GstPad * pad, GstBuffer * buffer)
     GST_BUFFER_TIMESTAMP (newbuf) += base_time;
     if (self->latency != -1)
       GST_BUFFER_TIMESTAMP (newbuf) += self->latency;
-    GST_BUFFER_TIMESTAMP (newbuf) += self->latency_tune * GST_MSECOND;
-    g_queue_push_head (self->buffers, newbuf);
-
-    GST_LOG_OBJECT (self, "Capturing played buffer at %lld clock time", GST_BUFFER_TIMESTAMP (newbuf));
+    GST_BUFFER_TIMESTAMP (newbuf) += ((GstClockTime)self->latency_tune) * GST_MSECOND;
+    gst_speex_dsp_add_capture_buffer (self->dsp, newbuf);
   }
   GST_OBJECT_UNLOCK (self);
 
@@ -486,7 +472,7 @@ static void
 try_auto_attach ()
 {
   if (global_dsp) {
-    gst_speex_dsp_attach (GST_SPEEX_DSP (global_dsp), GST_SPEEX_ECHO_PROBE (global_probe));
+    gst_speex_dsp_attach (global_dsp, global_probe);
     GST_DEBUG_OBJECT (global_probe, "speexechoprobe attaching to globally discovered speexdsp");
   }
 }
@@ -497,31 +483,13 @@ gst_speex_echo_probe_set_auto_attach (GstSpeexEchoProbe * self, gboolean enabled
   g_static_mutex_lock (&global_mutex);
   if (enabled) {
     if (!global_probe) {
-      global_probe = G_OBJECT (self);
+      global_probe = self;
       try_auto_attach ();
     }
   }
   else {
-    if (global_probe == G_OBJECT (self))
+    if (global_probe == self)
       global_probe = NULL;
   }
   g_static_mutex_unlock (&global_mutex);
-}
-
-void
-gst_speex_echo_probe_capture_start (GstSpeexEchoProbe * self)
-{
-  GST_OBJECT_LOCK (self);
-  self->capturing = TRUE;
-  GST_OBJECT_UNLOCK (self);
-}
-
-void
-gst_speex_echo_probe_capture_stop (GstSpeexEchoProbe * self)
-{
-  GST_OBJECT_LOCK (self);
-  self->capturing = FALSE;
-  g_queue_foreach (self->buffers, buffer_unref_func, NULL);
-  g_queue_clear (self->buffers);
-  GST_OBJECT_UNLOCK (self);
 }

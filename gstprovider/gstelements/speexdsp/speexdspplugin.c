@@ -30,11 +30,12 @@
 #include <string.h>
 #include <gst/audio/audio.h>
 #include "speexdsp.h"
+#include "speexechoprobe.h"
 
 /* dsp/probe use these to discover each other */
 GStaticMutex global_mutex = G_STATIC_MUTEX_INIT;
-GObject * global_dsp = NULL;
-GObject * global_probe = NULL;
+GstSpeexDSP * global_dsp = NULL;
+GstSpeexEchoProbe * global_probe = NULL;
 
 static gboolean
 plugin_init (GstPlugin * plugin)
