@@ -287,7 +287,7 @@ public:
 
 		if(type == PDevice::AudioIn || type == PDevice::VideoIn)
 		{
-			/*if(!g_speexdsp)
+			if(!g_speexdsp)
 			{
 				speexdsp = gst_element_factory_make("speexdsp", NULL);
 				if(speexdsp)
@@ -297,7 +297,7 @@ public:
 #endif
 					g_speexdsp = speexdsp;
 				}
-			}*/
+			}
 
 			if(speexdsp)
 			{
@@ -334,12 +334,15 @@ public:
 			g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 			gst_caps_unref(caps);
 
-			/*if(!g_speexprobe)
+			if(!g_speexprobe)
 			{
 				speexprobe = gst_element_factory_make("speexechoprobe", NULL);
+				QString latency_tune = qgetenv("PSI_AUDIO_LTUNE");
+				if(!latency_tune.isEmpty())
+					g_object_set(G_OBJECT(speexprobe), "latency-tune", latency_tune.toInt(), NULL);
 				if(speexprobe)
 					g_speexprobe = speexprobe;
-			}*/
+			}
 
 			gst_bin_add(GST_BIN(pipeline), bin);
 			gst_bin_add(GST_BIN(pipeline), adder);
