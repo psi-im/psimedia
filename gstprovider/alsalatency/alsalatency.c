@@ -220,6 +220,14 @@ int main(int argc, char **argv)
 				if(!feof(fin))
 				{
 					count = fread(pbuf, 2, playback_psize, fin);
+					if(count <= 0)
+					{
+						snd_pcm_close(playback_handle);
+						free(pbuf);
+						fclose(fin);
+						fin = 0;
+						continue;
+					}
 
 					if((err = snd_pcm_writei(playback_handle, pbuf, count)) != count)
 					{
@@ -229,8 +237,9 @@ int main(int argc, char **argv)
 
 					at_play += count;
 
-					// buffer playback before recording
-					if(at_play < 4 * (int)playback_psize)
+					// make sure play buffer has enough
+					//   data to survive while capturing
+					if(at_play < (at == -1 ? 0 : at) + (4 * (int)capture_psize))
 						continue;
 				}
 				else
@@ -257,21 +266,6 @@ int main(int argc, char **argv)
 				count = capture_psize;
 			else
 				count = at_play - at;
-
-			// this can happen if the playback file is 0 samples,
-			//   or if we record so fast that we catch up to the
-			//   playback..
-			if(count == 0)
-			{
-				if(fin)
-				{
-					snd_pcm_close(playback_handle);
-					free(pbuf);
-					fclose(fin);
-					fin = 0;
-				}
-				break;
-			}
 
 			if((err = snd_pcm_readi(capture_handle, cbuf, count)) != count)
 			{
