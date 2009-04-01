@@ -960,7 +960,7 @@ gst_live_live_adder_chain (GstPad *pad, GstBuffer *buffer)
         " (expected %" GST_TIME_FORMAT ", got %" GST_TIME_FORMAT" drift:%ldms)",
         GST_TIME_ARGS (padprivate->expected_timestamp),
 		    GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buffer)),
-		    drift / GST_MSECOND);
+		    (long int)(drift / GST_MSECOND));
 
     /* We accept drifts of 10ms*/
     if (ABS(drift) < (10 * GST_MSECOND)) {

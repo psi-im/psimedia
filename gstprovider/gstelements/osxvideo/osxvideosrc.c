@@ -285,6 +285,8 @@ parse_device_id (const gchar * id, gchar ** sgname, int * inputIndex)
   GString * out1;
   int out2;
 
+  out2 = 0;
+
   parts = g_strsplit (id, ":", -1);
   numparts = 0;
   while (parts[numparts])
@@ -371,6 +373,7 @@ device_list (GstOSXVideoSrc * src)
   gchar sgname[256];
   gchar friendly_name[256];
 
+  component = NULL;
   list = NULL;
   default_dev = NULL;
 
