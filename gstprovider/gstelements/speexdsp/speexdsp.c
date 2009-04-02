@@ -30,8 +30,23 @@
 #include "speexdsp.h"
 
 #include <stdio.h>
-//static FILE *file_rec = 0, *file_play = 0;
-//static GstClockTime file_start = GST_CLOCK_TIME_NONE;
+typedef struct
+{
+  FILE * fp;
+  int offset;
+} FileLog;
+
+typedef struct
+{
+  char * pfname;
+  char * cfname;
+  FileLog * playback;
+  FileLog * capture;
+  GstClockTime start;
+} PairLog;
+
+GStaticMutex pairlog_mutex;
+static PairLog * pairlog = NULL;
 
 #include <string.h>
 #include <gst/audio/audio.h>
@@ -144,6 +159,223 @@ try_echo_cancel (SpeexEchoState * echostate, const GstBuffer * recbuf,
     GstClockTime rec_adj, GstClockTime rec_base, GQueue * buffers, int rate,
     GstPad * srcpad, const GstCaps * outcaps, GstFlowReturn * res,
     GstSpeexDSP * obj);
+
+static FileLog *
+filelog_new (const char * fname)
+{
+  FileLog * fl;
+  FILE *fp;
+
+  fp = fopen (fname, "wb");
+  if (!fp)
+    return NULL;
+
+  fl = (FileLog *)malloc (sizeof (FileLog));
+  fl->fp = fp;
+  fl->offset = 0;
+  return fl;
+}
+
+static void
+filelog_delete (FileLog * fl)
+{
+  fclose (fl->fp);
+  free (fl);
+}
+
+static void
+filelog_append (FileLog * fl, const unsigned char * buf, int offset, int size)
+{
+  int n, pad, start, len;
+
+  pad = 0;
+  start = 0;
+
+  if (offset < fl->offset) {
+    pad = 0;
+    start = fl->offset - offset;
+  }
+  else if (offset > fl->offset) {
+    pad = offset - fl->offset;
+    start = 0;
+  }
+
+  len = size - start;
+  if (len <= 0)
+    return;
+
+  for (n = 0; n < pad; ++n)
+    fputc (0, fl->fp);
+
+  fwrite (buf + start, len, 1, fl->fp);
+  //fflush (fl->fp);
+  fl->offset += pad + len;
+}
+
+/*static void
+filelog_append_pad (FileLog * fl, int size)
+{
+  int n;
+  for (n = 0; n < size; ++n)
+    fputc (0, fl->fp);
+}*/
+
+static PairLog *
+pairlog_new (const char * pfname, const char * cfname)
+{
+  PairLog * pl;
+  pl = (PairLog *)malloc (sizeof (PairLog));
+  pl->pfname = strdup (pfname);
+  pl->cfname = strdup (cfname);
+  pl->playback = NULL;
+  pl->capture = NULL;
+  pl->start = GST_CLOCK_TIME_NONE;
+  return pl;
+}
+
+static void
+pairlog_delete (PairLog * pl)
+{
+  if (pl->playback)
+    filelog_delete (pl->playback);
+  if (pl->capture)
+    filelog_delete (pl->capture);
+  free (pl->pfname);
+  free (pl->cfname);
+  free (pl);
+}
+
+static void
+pairlog_append_playback (PairLog * pl, const unsigned char * buf, int offset, int size, GstClockTime time, int rate)
+{
+  gint64 i;
+
+  if (rate <= 0) {
+    GST_DEBUG ("bad rate");
+    return;
+  }
+
+  if (!pl->playback) {
+    pl->playback = filelog_new (pl->pfname);
+    if (!pl->playback) {
+      GST_DEBUG ("unable to create playback log '%s'", pl->pfname);
+      return;
+    }
+
+    GST_DEBUG ("started playback log at %"GST_TIME_FORMAT,
+        GST_TIME_ARGS (time));
+
+    if (pl->capture)
+      pl->start = time;
+  }
+
+  if (pl->start == GST_CLOCK_TIME_NONE)
+    return;
+
+  i = ((time - pl->start) * rate / GST_SECOND) * 2;
+  offset = (int)i;
+  GST_LOG ("start=%"GST_TIME_FORMAT", time=%"GST_TIME_FORMAT", offset=%d",
+      GST_TIME_ARGS (pl->start), GST_TIME_ARGS (time), offset);
+  if (offset < 0)
+    return;
+  filelog_append (pl->playback, buf, offset, size);
+}
+
+static void
+pairlog_append_capture (PairLog * pl, const unsigned char * buf, int offset, int size, GstClockTime time, int rate)
+{
+  gint64 i;
+
+  if (rate <= 0) {
+    GST_DEBUG ("bad rate");
+    return;
+  }
+
+  if (!pl->capture) {
+    pl->capture = filelog_new (pl->cfname);
+    if (!pl->capture) {
+      GST_DEBUG ("unable to create capture log '%s'", pl->cfname);
+      return;
+    }
+
+    GST_DEBUG ("started capture log at %"GST_TIME_FORMAT,
+        GST_TIME_ARGS (time));
+
+    if (pl->playback)
+      pl->start = time;
+  }
+
+  if (pl->start == GST_CLOCK_TIME_NONE)
+    return;
+
+  i = ((time - pl->start) * rate / GST_SECOND) * 2;
+  offset = (int)i;
+  GST_LOG ("start=%"GST_TIME_FORMAT", time=%"GST_TIME_FORMAT", offset=%d",
+      GST_TIME_ARGS (pl->start), GST_TIME_ARGS (time), offset);
+  if (offset < 0)
+    return;
+  filelog_append (pl->capture, buf, offset, size);
+}
+
+static gboolean
+have_env (const char *var)
+{
+  const char *val = g_getenv (var);
+  if (val && strcmp (val, "1") == 0)
+    return TRUE;
+  else
+    return FALSE;
+}
+
+// within a hundredth of a millisecond
+static gboolean
+near_enough_to (GstClockTime a, GstClockTime b)
+{
+  GstClockTime dist = GST_MSECOND / 100 / 2;
+  if (b >= a - dist && b <= a + dist)
+    return TRUE;
+  else
+    return FALSE;
+}
+
+static void
+adapter_push_at (GstAdapter * adapter, GstBuffer * buffer, int offset)
+{
+  int size;
+  int n, pad, start, len;
+  int end;
+  GstBuffer * newbuf;
+  char * p;
+
+  pad = 0;
+  start = 0;
+  size = GST_BUFFER_SIZE (buffer);
+  end = gst_adapter_available (adapter);
+
+  if (offset < end) {
+    pad = 0;
+    start = end - offset;
+  }
+  else if (offset > end) {
+    pad = offset - end;
+    start = 0;
+  }
+
+  len = size - start;
+  if (len <= 0)
+    return;
+
+  newbuf = gst_buffer_new_and_alloc (pad + len);
+  p = (char *)GST_BUFFER_DATA (newbuf);
+  for (n = 0; n < pad; ++n)
+    *(p++) = 0;
+
+  memcpy (p, GST_BUFFER_DATA (buffer) + start, len);
+  gst_adapter_push (adapter, newbuf);
+  gst_buffer_unref (buffer);
+}
+
+// -----
 
 static void
 gst_speex_dsp_base_init (gpointer klass)
@@ -318,6 +550,11 @@ gst_speex_dsp_init (GstSpeexDSP * self, GstSpeexDSPClass *klass)
   self->noise_suppress = DEFAULT_NOISE_SUPPRESS;
   self->buffers = g_queue_new();
 
+  g_static_mutex_lock (&pairlog_mutex);
+  if (!pairlog && have_env("SPEEXDSP_LOG"))
+    pairlog = pairlog_new ("gst_play.raw", "gst_rec.raw");
+  g_static_mutex_unlock (&pairlog_mutex);
+
   g_static_mutex_lock (&global_mutex);
   if (!global_dsp) {
     global_dsp = self;
@@ -356,6 +593,13 @@ gst_speex_dsp_finalize (GObject * object)
     speex_echo_state_destroy (self->echostate);
 
   g_object_unref (self->rec_adapter);
+
+  g_static_mutex_lock (&pairlog_mutex);
+  if (pairlog) {
+    pairlog_delete (pairlog);
+    pairlog = NULL;
+  }
+  g_static_mutex_unlock (&pairlog_mutex);
 
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
@@ -801,13 +1045,16 @@ gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer)
   GstSpeexDSP * self = GST_SPEEX_DSP (gst_pad_get_parent (pad));
   GstFlowReturn res = GST_FLOW_OK;
   GstBuffer * recbuffer = NULL;
-  gint bufsize;
+  gint sampsize, bufsize;
   GstClockTime duration;
   GstSpeexEchoProbe * probe = NULL;
   gint rate = 0;
   GstClockTime base_time;
+  GstClockTime skew_fix;
+  gint buffer_offset;
 
   base_time = gst_element_get_base_time (GST_ELEMENT_CAST (self));
+  skew_fix = base_time; // FIXME FIXME FIXME FIXME!
 
   GST_OBJECT_LOCK (self);
   if (self->probe)
@@ -815,12 +1062,13 @@ gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer)
   rate = self->rate;
   GST_OBJECT_UNLOCK (self);
 
-  bufsize = 2 * rate * self->frame_size_ms / 1000;
+  sampsize = rate * self->frame_size_ms / 1000;
+  bufsize = 2 * sampsize;
   duration = self->frame_size_ms * GST_MSECOND;
 
   // FIXME to the max
   if (GST_BUFFER_IS_DISCONT (buffer)) {
-    printf("***discontinuous! starting over\n");
+    GST_LOG_OBJECT (self, "***discontinuous! starting over");
 
     // clear adapter, because otherwise new data will be considered relative
     //   to what's left in the adapter, which is of course wrong.  we need
@@ -843,21 +1091,56 @@ gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer)
     self->rec_offset = GST_BUFFER_OFFSET_NONE;
   }
 
+  buffer_offset = 0;
+  if (self->rec_time != GST_CLOCK_TIME_NONE) {
+    GstClockTime a, b;
+    gint64 i;
+    a = self->rec_time + ((gst_adapter_available (self->rec_adapter) / 2) * GST_SECOND / rate);
+    b = GST_BUFFER_TIMESTAMP (buffer);
+    i = (((gint64)GST_BUFFER_TIMESTAMP (buffer) - (gint64)self->rec_time) * rate / GST_SECOND) * 2;
+    buffer_offset = (gint)i;
+    if (!near_enough_to (a, b)) {
+      GST_LOG_OBJECT (self, "***continuous buffer with wrong timestamp"
+          " (want=%"GST_TIME_FORMAT", got=%"GST_TIME_FORMAT"),"
+          " compensating %d bytes",
+          GST_TIME_ARGS (a), GST_TIME_ARGS (b), buffer_offset);
+    }
+  }
+
   if (self->rec_time == GST_CLOCK_TIME_NONE)
     self->rec_time = GST_BUFFER_TIMESTAMP (buffer);
   if (self->rec_offset == GST_BUFFER_OFFSET_NONE)
     self->rec_offset = GST_BUFFER_OFFSET (buffer);
 
-  //GST_LOG_OBJECT (self, "Receiving recorded buffer at %lld clock time"
-  //    " (base=%lld)", GST_BUFFER_TIMESTAMP (buffer) + base_time, base_time);
+  {
+    GstClockTime rec_rt;
+    rec_rt = gst_segment_to_running_time (&self->rec_segment, GST_FORMAT_TIME,
+        GST_BUFFER_TIMESTAMP (buffer));
 
-  GST_LOG_OBJECT (self, "Receiving recorded buffer at %"GST_TIME_FORMAT
-        " (len=%"GST_TIME_FORMAT")",
-        GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buffer) + base_time),
-        GST_TIME_ARGS (GST_BUFFER_DURATION (buffer)));
+    GST_LOG_OBJECT (self, "Captured buffer at %"GST_TIME_FORMAT
+        " (len=%"GST_TIME_FORMAT", offset=%lld, base=%lld)",
+        //GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buffer) /*+ base_time*/),
+        GST_TIME_ARGS (rec_rt),
+        GST_TIME_ARGS (GST_BUFFER_DURATION (buffer)),
+        GST_BUFFER_OFFSET (buffer), base_time);
+  }
+
+  g_static_mutex_lock (&pairlog_mutex);
+  if (pairlog) {
+    pairlog_append_capture (pairlog,
+        (const unsigned char *)GST_BUFFER_DATA (buffer),
+        GST_BUFFER_OFFSET (buffer) * 2,
+        GST_BUFFER_SIZE (buffer),
+        GST_BUFFER_TIMESTAMP (buffer) + skew_fix,
+        rate);
+  }
+  g_static_mutex_unlock (&pairlog_mutex);
 
   // TODO: handle gaps (see above about discontinuity)
-  gst_adapter_push (self->rec_adapter, buffer);
+  //gst_adapter_push (self->rec_adapter, buffer);
+  adapter_push_at (self->rec_adapter, buffer, buffer_offset);
+  //res = gst_pad_push (self->rec_srcpad, buffer);
+  //goto out;
 
   while (TRUE) {
     GstBuffer * outbuffer = NULL;
@@ -875,24 +1158,22 @@ gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer)
     GST_BUFFER_OFFSET (recbuffer) = self->rec_offset;
     GST_BUFFER_DURATION (recbuffer) = duration;
 
-    /*if(!file_rec) {
-        GST_DEBUG_OBJECT (self, "gst_rec start time=%lld", GST_BUFFER_TIMESTAMP (recbuffer));
-        if (file_start == GST_CLOCK_TIME_NONE)
-            file_start = GST_BUFFER_TIMESTAMP (recbuffer) + base_time;
-        file_rec = fopen("gst_rec.sw", "wb");
-    }
-    fwrite(GST_BUFFER_DATA (recbuffer), GST_BUFFER_SIZE (recbuffer), 1, file_rec);
-    fflush(file_rec);*/
-
     // FIXME: don't need this?
     //rec_rt = gst_segment_to_running_time (&self->rec_segment, GST_FORMAT_TIME,
     //    self->rec_time);
 
     GST_OBJECT_LOCK (self);
-    outbuffer = try_echo_cancel (self->echostate, recbuffer,
-        GST_BUFFER_TIMESTAMP (recbuffer) /*- (((GstClockTime)self->latency_tune) * GST_MSECOND)*/,
-        base_time, self->buffers, rate, self->rec_srcpad,
-        GST_PAD_CAPS (self->rec_sinkpad), &res, self);
+    outbuffer = try_echo_cancel (
+        self->echostate,
+        recbuffer,
+        self->rec_time + skew_fix /*- (((GstClockTime)self->latency_tune) * GST_MSECOND)*/,
+        base_time,
+        self->buffers,
+        rate,
+        self->rec_srcpad,
+        GST_PAD_CAPS (self->rec_sinkpad),
+        &res,
+        self);
     GST_OBJECT_UNLOCK (self);
     if (outbuffer) {
       /* if cancel succeeds, then post-processing occurs on the newly returned
@@ -920,7 +1201,7 @@ gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer)
     GST_OBJECT_UNLOCK (self);
 
     self->rec_time += duration;
-    self->rec_offset += bufsize; // FIXME: does this work for >1 channels?
+    self->rec_offset += sampsize; // FIXME: does this work for >1 channels?
 
     GST_LOG_OBJECT (self, "Sending out buffer %p", outbuffer);
     res = gst_pad_push (self->rec_srcpad, outbuffer);
@@ -1000,33 +1281,45 @@ gst_speex_dsp_set_auto_attach (GstSpeexDSP * self, gboolean enabled)
 void
 gst_speex_dsp_add_capture_buffer (GstSpeexDSP * self, GstBuffer * buf)
 {
-  //GstClockTime base_time = gst_element_get_base_time (GST_ELEMENT_CAST (self));
+  GstClockTime base_time = gst_element_get_base_time (GST_ELEMENT_CAST (self));
   GstClockTime duration = GST_CLOCK_TIME_NONE;
+  GstCaps * caps;
+  GstStructure * structure;
+  int rate = 0;
 
-  if (self->rate != 0)
-    duration = GST_BUFFER_SIZE (buf) * GST_SECOND / (self->rate * 2);
+  if (self->rate != 0) {
+    rate = self->rate;
+  }
+  else {
+    caps = GST_BUFFER_CAPS (buf);
+    if (caps) {
+      structure = gst_caps_get_structure (GST_BUFFER_CAPS (buf), 0);
+      if (structure)
+        gst_structure_get_int (structure, "rate", &rate);
+    }
+  }
 
-  //GST_LOG_OBJECT (self, "Capturing played buffer at %lld clock time", GST_BUFFER_TIMESTAMP (buf));
-  GST_LOG_OBJECT (self, "Capturing played buffer at %"GST_TIME_FORMAT
-        " (len=%"GST_TIME_FORMAT")",
-        GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf)),
-        GST_TIME_ARGS (duration));
+  if (rate != 0)
+    duration = GST_BUFFER_SIZE (buf) * GST_SECOND / (rate * 2);
+
+  GST_LOG_OBJECT (self, "Played buffer at %"GST_TIME_FORMAT
+      " (len=%"GST_TIME_FORMAT", offset=%lld)",
+      GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buf) - base_time),
+      GST_TIME_ARGS (duration),
+      GST_BUFFER_OFFSET (buf));
+
+  g_static_mutex_lock (&pairlog_mutex);
+  if (pairlog && rate != 0) {
+    pairlog_append_playback (pairlog,
+        (const unsigned char *)GST_BUFFER_DATA (buf),
+        GST_BUFFER_OFFSET (buf) * 2,
+        GST_BUFFER_SIZE (buf),
+        GST_BUFFER_TIMESTAMP (buf) - base_time,
+        rate);
+  }
+  g_static_mutex_unlock (&pairlog_mutex);
 
   GST_OBJECT_LOCK (self);
-
-    /*if(!file_play) {
-        GST_DEBUG_OBJECT (self, "gst_play start time=%lld", GST_BUFFER_TIMESTAMP (buf) - base_time);
-        file_play = fopen("gst_play.sw", "wb");
-        if (file_start != GST_CLOCK_TIME_NONE) {
-            int padsize = 2 * 22050 * (GST_BUFFER_TIMESTAMP (buf) - file_start) / GST_SECOND;
-            char *pad = (char *)g_malloc0(padsize);
-            fwrite(pad, padsize, 1, file_play);
-            file_start = GST_CLOCK_TIME_NONE;
-        }
-    }
-    fwrite(GST_BUFFER_DATA (buf), GST_BUFFER_SIZE (buf), 1, file_play);
-    fflush(file_play);*/
-
   g_queue_push_head (self->buffers, buf);
   GST_OBJECT_UNLOCK (self);
 }
@@ -1059,7 +1352,7 @@ gst_speex_dsp_detach (GstSpeexDSP * self)
  *
  * echostate: AEC state
  * recbuf:    recorded buffer to strip echo from
- * rec_adj:   time of recorded buffer with latency adjustment
+ * rec_adj:   time of recorded buffer with latency/skew adjustment
  * rec_base:  base time of element that received the recorded buffer
  * buffers:   a queue of recently played buffers, in clock time
  * rate:      sample rate being used (both rec/play are the same rate)
@@ -1240,7 +1533,7 @@ try_echo_cancel (SpeexEchoState * echostate, const GstBuffer * recbuf,
 
     if(rec_offset < 0 || play_offset < 0 || rec_offset + size > bufsize || play_offset + size > GST_BUFFER_SIZE (play_buffer))
     {
-      printf("***explosions!\n");
+      fprintf (stderr, "***speexdsp explosions!\n");
       abort();
       return NULL;
     }

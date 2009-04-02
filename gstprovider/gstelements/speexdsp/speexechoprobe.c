@@ -420,13 +420,32 @@ gst_speex_echo_probe_chain (GstPad * pad, GstBuffer * buffer)
 
   base_time = gst_element_get_base_time (GST_ELEMENT_CAST (self));
 
+  /*{
+    GstClockTime rec_rt, duration;
+
+    rec_rt = gst_segment_to_running_time (&self->segment, GST_FORMAT_TIME,
+        GST_BUFFER_TIMESTAMP (buffer));
+    duration = GST_BUFFER_SIZE (buffer) * GST_SECOND / (self->rate * 2);
+
+    GST_LOG_OBJECT (self, "Played buffer at %"GST_TIME_FORMAT
+        " (len=%"GST_TIME_FORMAT", offset=%lld, base=%lld)",
+        //GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (buffer)),
+        GST_TIME_ARGS (rec_rt) + self->latency,
+        GST_TIME_ARGS (duration),
+        GST_BUFFER_OFFSET (buffer), base_time);
+  }*/
+
   GST_OBJECT_LOCK (self);
   if (self->dsp) {
     /* fork the buffer, changing the timestamp to be in clock time, with
      * latency applied */
-    gst_buffer_ref (buffer);
+    //gst_buffer_ref (buffer); // FIXME: don't need to ref this, right?
     newbuf = gst_buffer_create_sub (buffer, 0, GST_BUFFER_SIZE (buffer));
     GST_BUFFER_TIMESTAMP (newbuf) += base_time;
+    // FIXME: if we don't have latency yet, does it make sense to be passing
+    //   buffers without it applied?  i'm not sure but i think if we manage
+    //   to get a buffer before latency is known, then it means latency will
+    //   end up being zero anyway, so maybe this is fine...
     if (self->latency != -1)
       GST_BUFFER_TIMESTAMP (newbuf) += self->latency;
     GST_BUFFER_TIMESTAMP (newbuf) += ((GstClockTime)self->latency_tune) * GST_MSECOND;
