@@ -334,14 +334,16 @@ public:
 			g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 			gst_caps_unref(caps);
 
-			if(!g_speexprobe)
+			if(!g_speexprobe && QString(qgetenv("PSI_NO_ECHO_CANCEL")) != "1")
 			{
 				speexprobe = gst_element_factory_make("speexechoprobe", NULL);
-				QString latency_tune = qgetenv("PSI_AUDIO_LTUNE");
-				if(!latency_tune.isEmpty())
-					g_object_set(G_OBJECT(speexprobe), "latency-tune", latency_tune.toInt(), NULL);
-				if(speexprobe)
+				if(speexprobe) {
+					printf("using speexechoprobe\n");
 					g_speexprobe = speexprobe;
+					QString latency_tune = qgetenv("PSI_AUDIO_LTUNE");
+					if(!latency_tune.isEmpty())
+						g_object_set(G_OBJECT(speexprobe), "latency-tune", latency_tune.toInt(), NULL);
+				}
 			}
 
 			gst_bin_add(GST_BIN(pipeline), bin);
