@@ -272,7 +272,7 @@ pairlog_append_playback (PairLog * pl, const unsigned char * buf, int offset, in
   if (pl->start == GST_CLOCK_TIME_NONE)
     return;
 
-  i = ((time - pl->start) * rate / GST_SECOND) * 2;
+  i = (((gint64)time - (gint64)pl->start) * rate / GST_SECOND) * 2;
   offset = (int)i;
   GST_LOG ("start=%"GST_TIME_FORMAT", time=%"GST_TIME_FORMAT", offset=%d",
       GST_TIME_ARGS (pl->start), GST_TIME_ARGS (time), offset);
@@ -308,7 +308,7 @@ pairlog_append_capture (PairLog * pl, const unsigned char * buf, int offset, int
   if (pl->start == GST_CLOCK_TIME_NONE)
     return;
 
-  i = ((time - pl->start) * rate / GST_SECOND) * 2;
+  i = (((gint64)time - (gint64)pl->start) * rate / GST_SECOND) * 2;
   offset = (int)i;
   GST_LOG ("start=%"GST_TIME_FORMAT", time=%"GST_TIME_FORMAT", offset=%d",
       GST_TIME_ARGS (pl->start), GST_TIME_ARGS (time), offset);
