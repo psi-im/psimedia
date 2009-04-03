@@ -207,7 +207,9 @@ filelog_append (FileLog * fl, const unsigned char * buf, int offset, int size)
   for (n = 0; n < pad; ++n)
     fputc (0, fl->fp);
 
-  fwrite (buf + start, len, 1, fl->fp);
+  if (fwrite (buf + start, len, 1, fl->fp) < 1)
+    GST_DEBUG ("unable to write to log file");
+
   //fflush (fl->fp);
   fl->offset += pad + len;
 }
