@@ -168,7 +168,7 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
 		QString value = i.value;
 
 		// FIXME: is there a better way to detect when we should do this conversion?
-		if(i.name == "configuration" && (info.name == "THEORA" || info.name == "VORBIS"))
+		if(i.name == "configuration" && (info.name.toUpper() == "THEORA" || info.name.toUpper() == "VORBIS"))
 		{
 			QByteArray config = hexDecode(value);
 			if(config.isEmpty())

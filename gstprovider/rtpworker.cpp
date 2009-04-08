@@ -1108,7 +1108,7 @@ bool RtpWorker::startRecv()
 	for(int n = 0; n < remoteAudioPayloadInfo.count(); ++n)
 	{
 		const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
-		if(ri.name == "SPEEX" && ri.clockrate == 16000)
+		if(ri.name.toUpper() == "SPEEX" && ri.clockrate == 16000)
 		{
 			speex_at = n;
 			break;
@@ -1120,7 +1120,7 @@ bool RtpWorker::startRecv()
 	for(int n = 0; n < remoteVideoPayloadInfo.count(); ++n)
 	{
 		const PPayloadInfo &ri = remoteVideoPayloadInfo[n];
-		if(ri.name == "THEORA" && ri.clockrate == 90000)
+		if(ri.name.toUpper() == "THEORA" && ri.clockrate == 90000)
 		{
 			theora_at = n;
 			break;
@@ -1377,7 +1377,7 @@ bool RtpWorker::addAudioChain()
 	for(int n = 0; n < remoteAudioPayloadInfo.count(); ++n)
 	{
 		const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
-		if(ri.name == "SPEEX" && ri.clockrate == 16000)
+		if(ri.name.toUpper() == "SPEEX" && ri.clockrate == 16000)
 		{
 			pt = ri.id;
 			break;
@@ -1459,7 +1459,7 @@ bool RtpWorker::addVideoChain()
 	for(int n = 0; n < remoteVideoPayloadInfo.count(); ++n)
 	{
 		const PPayloadInfo &ri = remoteVideoPayloadInfo[n];
-		if(ri.name == "THEORA" && ri.clockrate == 90000)
+		if(ri.name.toUpper() == "THEORA" && ri.clockrate == 90000)
 		{
 			pt = ri.id;
 			break;
@@ -1632,7 +1632,7 @@ bool RtpWorker::updateTheoraConfig()
 	for(int n = 0; n < actual_remoteVideoPayloadInfo.count(); ++n)
 	{
 		const PPayloadInfo &ri = actual_remoteVideoPayloadInfo[n];
-		if(ri.name == "THEORA" && ri.clockrate == 90000)
+		if(ri.name.toUpper() == "THEORA" && ri.clockrate == 90000)
 		{
 			theora_at = n;
 			break;
@@ -1645,7 +1645,7 @@ bool RtpWorker::updateTheoraConfig()
 	for(int n = 0; n < remoteAudioPayloadInfo.count(); ++n)
 	{
 		const PPayloadInfo &ri = remoteVideoPayloadInfo[n];
-		if(ri.name == "THEORA" && ri.clockrate == 90000 && ri.id == actual_remoteVideoPayloadInfo[theora_at].id)
+		if(ri.name.toUpper() == "THEORA" && ri.clockrate == 90000 && ri.id == actual_remoteVideoPayloadInfo[theora_at].id)
 		{
 			GstStructure *cs = payloadInfoToStructure(remoteVideoPayloadInfo[n], "video");
 			if(!cs)
