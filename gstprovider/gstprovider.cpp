@@ -142,22 +142,12 @@ static QList<PDevice> get_videoInputDevices()
 	return list;
 }
 
-static PFeatures lookup_all()
-{
-	PFeatures out;
-	out.audioOutputDevices = get_audioOutputDevices();
-	out.audioInputDevices = get_audioInputDevices();
-	out.videoInputDevices = get_videoInputDevices();
-	out.supportedAudioModes = modes_supportedAudio();
-	out.supportedVideoModes = modes_supportedVideo();
-	return out;
-}
-
 class FeaturesThread : public QThread
 {
         Q_OBJECT
 
 public:
+	int types;
 	PFeatures results;
 
 	FeaturesThread(QObject *parent = 0) :
@@ -167,7 +157,18 @@ public:
 
 	virtual void run()
 	{
-		results = lookup_all();
+		PFeatures out;
+		if(types & FeaturesContext::AudioOut)
+			out.audioOutputDevices = get_audioOutputDevices();
+		if(types & FeaturesContext::AudioIn)
+			out.audioInputDevices = get_audioInputDevices();
+		if(types & FeaturesContext::VideoIn)
+			out.videoInputDevices = get_videoInputDevices();
+		if(types & FeaturesContext::AudioModes)
+			out.supportedAudioModes = modes_supportedAudio();
+		if(types & FeaturesContext::VideoModes)
+			out.supportedVideoModes = modes_supportedVideo();
+		results = out;
 	}
 };
 
@@ -202,7 +203,10 @@ public:
 	virtual void lookup(int types)
 	{
 		if(types > 0)
+		{
+			thread->types = types;
 			thread->start();
+		}
 	}
 
 	virtual bool waitForFinished(int msecs)
