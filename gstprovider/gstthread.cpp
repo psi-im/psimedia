@@ -100,7 +100,7 @@ static void loadPlugins(const QString &pluginPath, bool print = false)
 		QString filePath = dir.filePath(entry);
 		GError *err = 0;
 		GstPlugin *plugin = gst_plugin_load_file(
-			filePath.toLatin1().data(), &err);
+			filePath.toUtf8().data(), &err);
 		if(!plugin)
 		{
 			if(print)

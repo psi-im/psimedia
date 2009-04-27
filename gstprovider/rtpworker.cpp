@@ -934,7 +934,7 @@ bool RtpWorker::startSend()
 		sendbin = gst_bin_new("sendbin");
 
 		GstElement *fileSource = gst_element_factory_make("filesrc", NULL);
-		g_object_set(G_OBJECT(fileSource), "location", infile.toLatin1().data(), NULL);
+		g_object_set(G_OBJECT(fileSource), "location", infile.toUtf8().data(), NULL);
 
 		fileDemux = gst_element_factory_make("oggdemux", NULL);
 		g_signal_connect(G_OBJECT(fileDemux),
