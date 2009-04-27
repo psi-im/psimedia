@@ -287,7 +287,7 @@ public:
 
 		if(type == PDevice::AudioIn || type == PDevice::VideoIn)
 		{
-			if(!g_speexdsp)
+			if(type == PDevice::AudioIn && !g_speexdsp)
 			{
 				speexdsp = gst_element_factory_make("speexdsp", NULL);
 				if(speexdsp)
