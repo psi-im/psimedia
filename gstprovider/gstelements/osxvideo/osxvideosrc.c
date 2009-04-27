@@ -850,6 +850,16 @@ gst_osx_video_src_set_caps (GstBaseSrc * src, GstCaps * caps)
 
   GST_DEBUG_OBJECT (src, "changing caps to %dx%d@%f", width, height, fps);
 
+  if (self->world) {
+    /* capture is already active.  we currently don't allow dynamic changing
+     * of caps, so make sure the caps match what we are already doing
+     */
+    if (width == rect.right && height == rect.bottom && (int)fps == FRAMERATE)
+      return TRUE;
+    else
+      return FALSE;
+  }
+
   SetRect (&self->rect, 0, 0, width, height);
 
   err = QTNewGWorld (&self->world, k422YpCbCr8PixelFormat, &self->rect, 0,
