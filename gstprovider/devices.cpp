@@ -350,7 +350,10 @@ static QList<GstDevice> devices_for_drivers(const QStringList &drivers, PDevice:
 			foreach(const GstDeviceProbeValue &i, list)
 			{
 				GstDevice dev;
-				dev.name = i.name + QString(" (%1)").arg(driver);
+				dev.name = i.name;
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+				dev.name += QString(" (%1)").arg(driver);
+#endif
 				dev.isDefault = first;
 
 				QStringList parts;
@@ -381,7 +384,10 @@ static QList<GstDevice> devices_for_drivers(const QStringList &drivers, PDevice:
 				}
 
 				GstDevice dev;
-				dev.name = i.name + QString(" (%1)").arg(i.driver);
+				dev.name = i.name;
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MAC)
+				dev.name += QString(" (%1)").arg(i.driver);
+#endif
 				dev.isDefault = first;
 
 				QStringList parts;
