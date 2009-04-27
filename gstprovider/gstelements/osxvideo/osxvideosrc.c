@@ -854,7 +854,8 @@ gst_osx_video_src_set_caps (GstBaseSrc * src, GstCaps * caps)
     /* capture is already active.  we currently don't allow dynamic changing
      * of caps, so make sure the caps match what we are already doing
      */
-    if (width == rect.right && height == rect.bottom && (int)fps == FRAMERATE)
+    if (width == self->rect.right && height == self->rect.bottom &&
+           (int)fps == FRAMERATE)
       return TRUE;
     else
       return FALSE;
