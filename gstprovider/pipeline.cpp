@@ -149,7 +149,7 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 		return 0;
 
 	// explicitly set audio devices to be low-latency
-	if(type == PDevice::AudioIn || type == PDevice::AudioOut)
+	if(/*type == PDevice::AudioIn ||*/ type == PDevice::AudioOut)
 	{
 		gint64 lt = 20 * GST_USECOND;
 		g_object_set(G_OBJECT(e), "latency-time", lt, NULL);
