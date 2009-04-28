@@ -190,7 +190,12 @@ public:
 
 		// manually load plugins?
 		if(!pluginPath.isEmpty())
+		{
+			// ignore "system" plugins
+			qputenv("GST_PLUGIN_PATH", "");
+
 			loadPlugins(pluginPath);
+		}
 
 		gstcustomelements_register();
 		gstelements_register();
