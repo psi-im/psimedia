@@ -148,6 +148,11 @@ gst_speex_dsp_rec_chain (GstPad * pad, GstBuffer * buffer);
 static gboolean
 gst_speex_dsp_rec_event (GstPad * pad, GstEvent * event);
 
+static const GstQueryType *
+gst_speex_dsp_query_type (GstPad * pad);
+static gboolean
+gst_speex_dsp_query (GstPad * pad, GstQuery * query);
+
 static void
 gst_speex_dsp_reset_locked (GstSpeexDSP * self);
 
@@ -515,6 +520,10 @@ gst_speex_dsp_init (GstSpeexDSP * self, GstSpeexDSPClass *klass)
       GST_DEBUG_FUNCPTR (gst_speex_dsp_getcaps));
   gst_pad_set_event_function (self->rec_srcpad,
       GST_DEBUG_FUNCPTR (gst_speex_dsp_rec_event));
+  gst_pad_set_query_function (self->rec_srcpad,
+      GST_DEBUG_FUNCPTR (gst_speex_dsp_query));
+  gst_pad_set_query_type_function (self->rec_srcpad,
+      GST_DEBUG_FUNCPTR (gst_speex_dsp_query_type));
   gst_element_add_pad (GST_ELEMENT (self), self->rec_srcpad);
 
   template = gst_static_pad_template_get (&gst_speex_dsp_rec_sink_template);
@@ -1036,6 +1045,67 @@ gst_speex_dsp_rec_event (GstPad * pad, GstEvent * event)
     res = gst_pad_push_event (self->rec_sinkpad, event);
 
 out:
+  gst_object_unref (self);
+  return res;
+}
+
+static const GstQueryType *
+gst_speex_dsp_query_type (GstPad * pad)
+{
+  static const GstQueryType types[] = {
+    GST_QUERY_LATENCY,
+    0
+  };
+
+  return types;
+}
+
+static gboolean
+gst_speex_dsp_query (GstPad * pad, GstQuery * query)
+{
+  GstSpeexDSP * self = GST_SPEEX_DSP (gst_pad_get_parent (pad));
+  gboolean res = TRUE;
+
+  switch (GST_QUERY_TYPE (query)) {
+    case GST_QUERY_LATENCY:
+    {
+      GstClockTime min, max;
+      gboolean live;
+      guint64 latency;
+      GstPad * peer;
+
+      if ((peer = gst_pad_get_peer (self->rec_sinkpad))) {
+        if ((res = gst_pad_query (peer, query))) {
+          gst_query_parse_latency (query, &live, &min, &max);
+
+          GST_DEBUG_OBJECT (self, "Peer latency: min %"
+              GST_TIME_FORMAT " max %" GST_TIME_FORMAT,
+              GST_TIME_ARGS (min), GST_TIME_ARGS (max));
+
+          /* add our own latency */
+          latency = ((guint64)self->frame_size_ms) * 1000000; /* to nanos */
+
+          GST_DEBUG_OBJECT (self, "Our latency: %" GST_TIME_FORMAT,
+              GST_TIME_ARGS (latency));
+
+          min += latency;
+          if (max != GST_CLOCK_TIME_NONE)
+            max += latency;
+
+          GST_DEBUG_OBJECT (self, "Calculated total latency : min %"
+              GST_TIME_FORMAT " max %" GST_TIME_FORMAT,
+              GST_TIME_ARGS (min), GST_TIME_ARGS (max));
+
+          gst_query_set_latency (query, live, min, max);
+        }
+        gst_object_unref (peer);
+      }
+      break;
+    }
+    default:
+      res = gst_pad_query_default (pad, query);
+      break;
+  }
   gst_object_unref (self);
   return res;
 }
