@@ -286,6 +286,16 @@ static GstElement *make_element_with_device(const QString &element_name, const Q
 		else
 			g_object_set(G_OBJECT(e), "device", device_id.toLatin1().data(), NULL);
 	}
+	else
+	{
+		// FIXME: remove this when ksvideosrc supports enumeration
+		if(element_name == "ksvideosrc")
+		{
+			QByteArray val = qgetenv("PSI_KSVIDEOSRC_INDEX");
+			if(!val.isEmpty())
+				g_object_set(G_OBJECT(e), "device-index", val.toInt(), NULL);
+		}
+	}
 
 	return e;
 }
