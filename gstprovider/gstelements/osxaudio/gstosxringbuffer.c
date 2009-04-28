@@ -355,6 +355,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   GstStructure * structure;
   GstAudioChannelPosition * positions;
   UInt32 frameSize;
+  int bytesPerSecond;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
@@ -443,9 +444,6 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
     goto done;
   }
 
-  spec->segsize = 4096;
-  spec->segtotal = 16;
-
   /* create AudioBufferList needed for recording */
   if (osxbuf->is_src) {
     propertySize = sizeof (frameSize);
@@ -463,6 +461,10 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
     osxbuf->recBufferList = buffer_list_alloc (format.mChannelsPerFrame,
         frameSize * format.mBytesPerFrame);
   }
+
+  bytesPerSecond = format.mBytesPerFrame * (int)format.mSampleRate;
+  spec->segsize = gst_util_uint64_scale_int (bytesPerSecond, spec->latency_time, 1000000);
+  spec->segtotal = gst_util_uint64_scale_int (bytesPerSecond, spec->buffer_time, 1000000) / spec->segsize;
 
   buf->data = gst_buffer_new_and_alloc (spec->segtotal * spec->segsize);
   memset (GST_BUFFER_DATA (buf->data), 0, GST_BUFFER_SIZE (buf->data));
