@@ -693,7 +693,7 @@ public:
 		recordFile(0)
 	{
 		ui.setupUi(this);
-		setWindowTitle(tr("PsiMedia Test"));
+		setWindowTitle(tr("PsiMedia Demo"));
 
 		creditName = PsiMedia::creditName();
 		if(!creditName.isEmpty())
@@ -773,6 +773,11 @@ public:
 		int goodWidth = (heightEstimate * 4) / 3;
 		ui.vw_remote->setMinimumSize(goodWidth, heightEstimate);
 		ui.vw_self->setMinimumSize(goodWidth, heightEstimate);
+
+		// hack: remove empty File menu on mac
+#ifdef Q_WS_MAC
+		ui.menu_File->menuAction()->setVisible(false);
+#endif
 	}
 
 	~MainWin()
@@ -873,8 +878,8 @@ private slots:
 
 	void doAbout()
 	{
-		QMessageBox::about(this, tr("About PsiMedia Test"), tr(
-			"PsiMedia Test v1.0\n"
+		QMessageBox::about(this, tr("About PsiMedia Demo"), tr(
+			"PsiMedia Demo v1.0\n"
 			"A simple test application for the PsiMedia system.\n"
 			"\n"
 			"Copyright (C) 2008  Barracuda Networks, Inc."
@@ -1320,7 +1325,7 @@ int main(int argc, char **argv)
 
 	if(!PsiMedia::isSupported())
 	{
-		QMessageBox::critical(0, MainWin::tr("PsiMedia Test"),
+		QMessageBox::critical(0, MainWin::tr("PsiMedia Demo"),
 			MainWin::tr(
 			"Error: Could not load PsiMedia subsystem."
 			));
