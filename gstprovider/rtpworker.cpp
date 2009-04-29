@@ -32,6 +32,11 @@
 
 #define RTPWORKER_DEBUG
 
+// needed for echo-cancel
+// if you turn this off, to debug or something, you better set
+//   the PSI_NO_ECHO_CANCEL=1 environment variable
+#define SHARE_CLOCKS
+
 namespace PsiMedia {
 
 static GstStaticPadTemplate raw_audio_src_template = GST_STATIC_PAD_TEMPLATE("src",
@@ -178,10 +183,13 @@ static PipelineContext *send_pipelineContext = 0;
 static PipelineContext *recv_pipelineContext = 0;
 static GstElement *spipeline = 0;
 static GstElement *rpipeline = 0;
+//static GstBus *sbus = 0;
 static bool send_in_use = false;
 static bool recv_in_use = false;
+#ifdef SHARE_CLOCKS
 static GstClock *send_clock = 0;
 static GstClock *recv_clock = 0;
+#endif
 
 RtpWorker::RtpWorker(GMainContext *mainContext) :
 	loopFile(false),
@@ -223,19 +231,20 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
 	{
 		send_pipelineContext = new PipelineContext;
 		recv_pipelineContext = new PipelineContext;
-	}
 
-	spipeline = send_pipelineContext->element();
-	rpipeline = recv_pipelineContext->element();
-	++worker_refs;
+		spipeline = send_pipelineContext->element();
+		rpipeline = recv_pipelineContext->element();
 
 #ifdef RTPWORKER_DEBUG
-	GstBus *bus = gst_pipeline_get_bus(GST_PIPELINE(spipeline));
-	GSource *source = gst_bus_create_watch(bus);
-	gst_object_unref(bus);
-	g_source_set_callback(source, (GSourceFunc)cb_bus_call, this, NULL);
-	g_source_attach(source, mainContext_);
+		/*sbus = gst_pipeline_get_bus(GST_PIPELINE(spipeline));
+		GSource *source = gst_bus_create_watch(bus);
+		gst_object_unref(bus);
+		g_source_set_callback(source, (GSourceFunc)cb_bus_call, this, NULL);
+		g_source_attach(source, mainContext_);*/
 #endif
+	}
+
+	++worker_refs;
 }
 
 RtpWorker::~RtpWorker()
@@ -262,6 +271,8 @@ RtpWorker::~RtpWorker()
 
 		delete recv_pipelineContext;
 		recv_pipelineContext = 0;
+
+		//sbus = 0;
 	}
 
 	delete audioStats;
@@ -312,6 +323,7 @@ void RtpWorker::cleanup()
 		sendbin = 0;
 		send_in_use = false;
 
+#ifdef SHARE_CLOCKS
 		if(send_clock)
 		{
 			if(recvbin)
@@ -320,6 +332,7 @@ void RtpWorker::cleanup()
 			gst_object_unref(send_clock);
 			send_clock = 0;
 		}
+#endif
 	}
 
 	if(recvbin)
@@ -331,6 +344,7 @@ void RtpWorker::cleanup()
 		recvbin = 0;
 		recv_in_use = false;
 
+#ifdef SHARE_CLOCKS
 		if(recv_clock)
 		{
 			if(sendbin)
@@ -339,6 +353,7 @@ void RtpWorker::cleanup()
 			gst_object_unref(recv_clock);
 			recv_clock = 0;
 		}
+#endif
 	}
 
 	if(pd_audiosrc)
@@ -1063,8 +1078,10 @@ bool RtpWorker::startSend()
 			//pd_videosrc->activate();
 		}
 
+#ifdef SHARE_CLOCKS
 		if(recv_clock)
 			gst_pipeline_use_clock(GST_PIPELINE(spipeline), recv_clock);
+#endif
 
 		//gst_element_set_state(pipeline, GST_STATE_PLAYING);
 		//gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
@@ -1072,11 +1089,13 @@ bool RtpWorker::startSend()
 		gst_element_get_state(spipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 		//gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
 
+#ifdef SHARE_CLOCKS
 		if(!recv_clock)
 		{
 			send_clock = gst_pipeline_get_clock(GST_PIPELINE(spipeline));
 			gst_pipeline_use_clock(GST_PIPELINE(spipeline), send_clock);
 		}
+#endif
 
 #ifdef RTPWORKER_DEBUG
 		printf("state changed\n");
@@ -1301,8 +1320,10 @@ bool RtpWorker::startRecv()
 		gst_element_link(recvbin, audioout);
 	}
 
+#ifdef SHARE_CLOCKS
 	if(send_clock)
 		gst_pipeline_use_clock(GST_PIPELINE(rpipeline), send_clock);
+#endif
 
 	//gst_element_set_locked_state(recvbin, FALSE);
 	//gst_element_set_state(recvbin, GST_STATE_PLAYING);
@@ -1315,11 +1336,13 @@ bool RtpWorker::startRecv()
 
 	recv_pipelineContext->activate();
 
+#ifdef SHARE_CLOCKS
 	if(!send_clock)
 	{
 		recv_clock = gst_pipeline_get_clock(GST_PIPELINE(rpipeline));
 		gst_pipeline_use_clock(GST_PIPELINE(rpipeline), recv_clock);
 	}
+#endif
 
 #ifdef RTPWORKER_DEBUG
 	printf("receive pipeline started\n");
