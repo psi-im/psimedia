@@ -53,7 +53,7 @@ public:
 		if(count > 0)
 		{
 			for(int n = 0; n < count; ++n)
-				free(data[n]);
+				delete [] data[n];
 			free(argv);
 			free(data);
 		}
