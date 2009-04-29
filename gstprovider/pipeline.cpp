@@ -327,10 +327,10 @@ public:
 		}
 		else // AudioOut
 		{
-			adder = gst_element_factory_make("liveadder", NULL);
+			//adder = gst_element_factory_make("liveadder", NULL);
 
-			audioconvert = gst_element_factory_make("audioconvert", NULL);
-			audioresample = gst_element_factory_make("audioresample", NULL);
+			//audioconvert = gst_element_factory_make("audioconvert", NULL);
+			//audioresample = gst_element_factory_make("audioresample", NULL);
 
 			capsfilter = gst_element_factory_make("capsfilter", NULL);
 			GstCaps *caps = gst_caps_new_empty();
@@ -355,20 +355,23 @@ public:
 			}
 
 			gst_bin_add(GST_BIN(pipeline), bin);
-			gst_bin_add(GST_BIN(pipeline), adder);
-			gst_bin_add(GST_BIN(pipeline), audioconvert);
-			gst_bin_add(GST_BIN(pipeline), audioresample);
+			//gst_bin_add(GST_BIN(pipeline), adder);
+			//gst_bin_add(GST_BIN(pipeline), audioconvert);
+			//gst_bin_add(GST_BIN(pipeline), audioresample);
 			gst_bin_add(GST_BIN(pipeline), capsfilter);
 
 			if(speexprobe)
 				gst_bin_add(GST_BIN(pipeline), speexprobe);
 
-			gst_element_link_many(adder, audioconvert, audioresample, capsfilter, NULL);
+			//gst_element_link_many(adder, audioconvert, audioresample, capsfilter, NULL);
 
 			if(speexprobe)
 				gst_element_link_many(capsfilter, speexprobe, bin, NULL);
 			else
 				gst_element_link(capsfilter, bin);
+
+			// HACK
+			adder = capsfilter;
 
 			/*gst_element_set_state(bin, GST_STATE_PLAYING);
 			if(speexprobe)
@@ -409,9 +412,9 @@ public:
 		{
 			if(adder)
 			{
-				gst_element_set_state(adder, GST_STATE_NULL);
-				gst_element_set_state(audioconvert, GST_STATE_NULL);
-				gst_element_set_state(audioresample, GST_STATE_NULL);
+				//gst_element_set_state(adder, GST_STATE_NULL);
+				//gst_element_set_state(audioconvert, GST_STATE_NULL);
+				//gst_element_set_state(audioresample, GST_STATE_NULL);
 				gst_element_set_state(capsfilter, GST_STATE_NULL);
 				if(speexprobe)
 					gst_element_set_state(speexprobe, GST_STATE_NULL);
@@ -421,14 +424,14 @@ public:
 
 			if(adder)
 			{
-				gst_element_get_state(adder, NULL, NULL, GST_CLOCK_TIME_NONE);
+				/*gst_element_get_state(adder, NULL, NULL, GST_CLOCK_TIME_NONE);
 				gst_bin_remove(GST_BIN(pipeline), adder);
 
 				gst_element_get_state(audioconvert, NULL, NULL, GST_CLOCK_TIME_NONE);
 				gst_bin_remove(GST_BIN(pipeline), audioconvert);
 
 				gst_element_get_state(audioresample, NULL, NULL, GST_CLOCK_TIME_NONE);
-				gst_bin_remove(GST_BIN(pipeline), audioresample);
+				gst_bin_remove(GST_BIN(pipeline), audioresample);*/
 
 				gst_element_get_state(capsfilter, NULL, NULL, GST_CLOCK_TIME_NONE);
 				gst_bin_remove(GST_BIN(pipeline), capsfilter);
