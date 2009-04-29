@@ -216,16 +216,38 @@ public:
 class PsiMediaFeaturesSnapshot
 {
 public:
+	enum Mode
+	{
+		Input  = 0x01,
+		Output = 0x02,
+		All    = 0x03
+	};
+
+	int mode;
 	QList<PsiMedia::Device> audioOutputDevices;
 	QList<PsiMedia::Device> audioInputDevices;
 	QList<PsiMedia::Device> videoInputDevices;
 	QList<PsiMedia::AudioParams> supportedAudioModes;
 	QList<PsiMedia::VideoParams> supportedVideoModes;
 
-	PsiMediaFeaturesSnapshot()
+	PsiMediaFeaturesSnapshot(Mode m)
 	{
+		mode = m;
+
 		PsiMedia::Features f;
-		f.lookup();
+
+		int flags = 0;
+		flags |= PsiMedia::Features::AudioModes;
+		flags |= PsiMedia::Features::VideoModes;
+		if(mode & Input)
+		{
+			flags |= PsiMedia::Features::AudioIn;
+			flags |= PsiMedia::Features::VideoIn;
+		}
+		if(mode & Output)
+			flags |= PsiMedia::Features::AudioOut;
+
+		f.lookup(flags);
 		f.waitForFinished();
 
 		audioOutputDevices = f.audioOutputDevices();
@@ -243,7 +265,7 @@ static Configuration getDefaultConfiguration()
 	config.liveInput = true;
 	config.loopFile = true;
 
-	PsiMediaFeaturesSnapshot snap;
+	PsiMediaFeaturesSnapshot snap(PsiMediaFeaturesSnapshot::All);
 
 	QList<PsiMedia::Device> devs;
 
@@ -271,7 +293,7 @@ static Configuration adjustConfiguration(const Configuration &in, const PsiMedia
 	Configuration out = in;
 	bool found;
 
-	if(!out.audioOutDeviceId.isEmpty())
+	if((snap.mode & PsiMediaFeaturesSnapshot::Output) && !out.audioOutDeviceId.isEmpty())
 	{
 		found = false;
 		foreach(const PsiMedia::Device &dev, snap.audioOutputDevices)
@@ -291,7 +313,7 @@ static Configuration adjustConfiguration(const Configuration &in, const PsiMedia
 		}
 	}
 
-	if(!out.audioInDeviceId.isEmpty())
+	if((snap.mode & PsiMediaFeaturesSnapshot::Input) && !out.audioInDeviceId.isEmpty())
 	{
 		found = false;
 		foreach(const PsiMedia::Device &dev, snap.audioInputDevices)
@@ -311,7 +333,7 @@ static Configuration adjustConfiguration(const Configuration &in, const PsiMedia
 		}
 	}
 
-	if(!out.videoInDeviceId.isEmpty())
+	if((snap.mode & PsiMediaFeaturesSnapshot::Input) && !out.videoInDeviceId.isEmpty())
 	{
 		found = false;
 		foreach(const PsiMedia::Device &dev, snap.videoInputDevices)
@@ -386,7 +408,7 @@ public:
 		connect(ui.rb_sendFile, SIGNAL(toggled(bool)), SLOT(file_toggled(bool)));
 		connect(ui.tb_file, SIGNAL(clicked()), SLOT(file_choose()));
 
-		PsiMediaFeaturesSnapshot snap;
+		PsiMediaFeaturesSnapshot snap(PsiMediaFeaturesSnapshot::All);
 
 		ui.cb_audioOutDevice->addItem("<None>", QString());
 		foreach(const PsiMedia::Device &dev, snap.audioOutputDevices)
@@ -895,7 +917,7 @@ private slots:
 
 	void start_send()
 	{
-		config = adjustConfiguration(config, PsiMediaFeaturesSnapshot());
+		config = adjustConfiguration(config, PsiMediaFeaturesSnapshot(PsiMediaFeaturesSnapshot::Input));
 
 		transmitAudio = false;
 		transmitVideo = false;
@@ -1028,7 +1050,7 @@ private slots:
 
 	void start_receive()
 	{
-		config = adjustConfiguration(config, PsiMediaFeaturesSnapshot());
+		config = adjustConfiguration(config, PsiMediaFeaturesSnapshot(PsiMediaFeaturesSnapshot::Output));
 
 		QString receiveConfig = ui.le_receiveConfig->text();
 		PsiMedia::PayloadInfo audio;
