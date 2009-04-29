@@ -32,11 +32,6 @@
 
 #define RTPWORKER_DEBUG
 
-// needed for echo-cancel
-// if you turn this off, to debug or something, you better set
-//   the PSI_NO_ECHO_CANCEL=1 environment variable
-#define SHARE_CLOCKS
-
 namespace PsiMedia {
 
 static GstStaticPadTemplate raw_audio_src_template = GST_STATIC_PAD_TEMPLATE("src",
@@ -186,10 +181,11 @@ static GstElement *rpipeline = 0;
 //static GstBus *sbus = 0;
 static bool send_in_use = false;
 static bool recv_in_use = false;
-#ifdef SHARE_CLOCKS
-static GstClock *send_clock = 0;
-static GstClock *recv_clock = 0;
-#endif
+
+static bool use_shared_clock = true;
+static GstClock *shared_clock = 0;
+static bool send_clock_is_shared = false;
+static bool recv_clock_is_shared = false;
 
 RtpWorker::RtpWorker(GMainContext *mainContext) :
 	loopFile(false),
@@ -242,6 +238,10 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
 		g_source_set_callback(source, (GSourceFunc)cb_bus_call, this, NULL);
 		g_source_attach(source, mainContext_);*/
 #endif
+
+		QByteArray val = qgetenv("PSI_NO_SHARED_CLOCK");
+		if(!val.isEmpty())
+			use_shared_clock = false;
 	}
 
 	++worker_refs;
@@ -323,16 +323,29 @@ void RtpWorker::cleanup()
 		sendbin = 0;
 		send_in_use = false;
 
-#ifdef SHARE_CLOCKS
-		if(send_clock)
+		if(shared_clock && send_clock_is_shared)
 		{
-			if(recvbin)
-				gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
+			gst_object_unref(shared_clock);
+			shared_clock = 0;
+			send_clock_is_shared = false;
 
-			gst_object_unref(send_clock);
-			send_clock = 0;
+			if(recv_in_use)
+			{
+				// FIXME: do we really need to restart the pipeline?
+
+				printf("recv clock becomes master\n");
+				recv_pipelineContext->deactivate();
+				gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
+				recv_pipelineContext->activate();
+				//gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+				// recv clock becomes shared
+				shared_clock = gst_pipeline_get_clock(GST_PIPELINE(rpipeline));
+				gst_object_ref(GST_OBJECT(shared_clock));
+				gst_pipeline_use_clock(GST_PIPELINE(rpipeline), shared_clock);
+				recv_clock_is_shared = true;
+			}
 		}
-#endif
 	}
 
 	if(recvbin)
@@ -344,16 +357,29 @@ void RtpWorker::cleanup()
 		recvbin = 0;
 		recv_in_use = false;
 
-#ifdef SHARE_CLOCKS
-		if(recv_clock)
+		if(shared_clock && recv_clock_is_shared)
 		{
-			if(sendbin)
-				gst_pipeline_auto_clock(GST_PIPELINE(spipeline));
+			gst_object_unref(shared_clock);
+			shared_clock = 0;
+			recv_clock_is_shared = false;
 
-			gst_object_unref(recv_clock);
-			recv_clock = 0;
+			if(send_in_use)
+			{
+				// FIXME: do we really need to restart the pipeline?
+
+				printf("send clock becomes master\n");
+				send_pipelineContext->deactivate();
+				gst_pipeline_auto_clock(GST_PIPELINE(spipeline));
+				send_pipelineContext->activate();
+				//gst_element_get_state(spipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+				// send clock becomes shared
+				shared_clock = gst_pipeline_get_clock(GST_PIPELINE(spipeline));
+				gst_object_ref(GST_OBJECT(shared_clock));
+				gst_pipeline_use_clock(GST_PIPELINE(spipeline), shared_clock);
+				send_clock_is_shared = true;
+			}
 		}
-#endif
 	}
 
 	if(pd_audiosrc)
@@ -1078,10 +1104,14 @@ bool RtpWorker::startSend()
 			//pd_videosrc->activate();
 		}
 
-#ifdef SHARE_CLOCKS
-		if(recv_clock)
-			gst_pipeline_use_clock(GST_PIPELINE(spipeline), recv_clock);
-#endif
+		if(shared_clock && recv_clock_is_shared)
+		{
+			printf("send pipeline slaving to recv clock\n");
+
+			// ref shared clock and use it
+			gst_object_ref(GST_OBJECT(shared_clock));
+			gst_pipeline_use_clock(GST_PIPELINE(spipeline), shared_clock);
+		}
 
 		//gst_element_set_state(pipeline, GST_STATE_PLAYING);
 		//gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
@@ -1089,13 +1119,15 @@ bool RtpWorker::startSend()
 		gst_element_get_state(spipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 		//gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
 
-#ifdef SHARE_CLOCKS
-		if(!recv_clock)
+		if(!shared_clock)
 		{
-			send_clock = gst_pipeline_get_clock(GST_PIPELINE(spipeline));
-			gst_pipeline_use_clock(GST_PIPELINE(spipeline), send_clock);
+			printf("send clock is master\n");
+
+			shared_clock = gst_pipeline_get_clock(GST_PIPELINE(spipeline));
+			gst_object_ref(GST_OBJECT(shared_clock));
+			gst_pipeline_use_clock(GST_PIPELINE(spipeline), shared_clock);
+			send_clock_is_shared = true;
 		}
-#endif
 
 #ifdef RTPWORKER_DEBUG
 		printf("state changed\n");
@@ -1320,10 +1352,14 @@ bool RtpWorker::startRecv()
 		gst_element_link(recvbin, audioout);
 	}
 
-#ifdef SHARE_CLOCKS
-	if(send_clock)
-		gst_pipeline_use_clock(GST_PIPELINE(rpipeline), send_clock);
-#endif
+	if(shared_clock && send_clock_is_shared)
+	{
+		printf("recv pipeline slaving to send clock\n");
+
+		// ref shared clock and use it
+		gst_object_ref(GST_OBJECT(shared_clock));
+		gst_pipeline_use_clock(GST_PIPELINE(rpipeline), shared_clock);
+	}
 
 	//gst_element_set_locked_state(recvbin, FALSE);
 	//gst_element_set_state(recvbin, GST_STATE_PLAYING);
@@ -1336,13 +1372,15 @@ bool RtpWorker::startRecv()
 
 	recv_pipelineContext->activate();
 
-#ifdef SHARE_CLOCKS
-	if(!send_clock)
+	if(!shared_clock)
 	{
-		recv_clock = gst_pipeline_get_clock(GST_PIPELINE(rpipeline));
-		gst_pipeline_use_clock(GST_PIPELINE(rpipeline), recv_clock);
+		printf("recv clock is master\n");
+
+		shared_clock = gst_pipeline_get_clock(GST_PIPELINE(rpipeline));
+		gst_object_ref(GST_OBJECT(shared_clock));
+		gst_pipeline_use_clock(GST_PIPELINE(rpipeline), shared_clock);
+		recv_clock_is_shared = true;
 	}
-#endif
 
 #ifdef RTPWORKER_DEBUG
 	printf("receive pipeline started\n");
