@@ -24,7 +24,19 @@
 #include <QSize>
 #include <gst/gst.h>
 
+// default latency is 200ms
+#define DEFAULT_RTP_LATENCY 200
+
 namespace PsiMedia {
+
+static int get_rtp_latency()
+{
+	QString val = QString::fromLatin1(qgetenv("PSI_RTP_LATENCY"));
+	if(!val.isEmpty())
+		return val.toInt();
+	else
+		return DEFAULT_RTP_LATENCY;
+}
 
 static GstElement *audio_codec_to_enc_element(const QString &name)
 {
@@ -416,7 +428,7 @@ GstElement *bins_audiodec_create(const QString &codec)
 
 	gst_element_link_many(audiortpjitterbuffer, audiortpdepay, audiodec, NULL);
 
-	//g_object_set(G_OBJECT(audiortpjitterbuffer), "latency", (unsigned int)400, NULL);
+	g_object_set(G_OBJECT(audiortpjitterbuffer), "latency", (unsigned int)get_rtp_latency(), NULL);
 
 	GstPad *pad;
 
@@ -448,7 +460,7 @@ GstElement *bins_videodec_create(const QString &codec)
 
 	gst_element_link_many(videortpjitterbuffer, videortpdepay, videodec, NULL);
 
-	//g_object_set(G_OBJECT(videortpjitterbuffer), "latency", (unsigned int)400, NULL);
+	g_object_set(G_OBJECT(videortpjitterbuffer), "latency", (unsigned int)get_rtp_latency(), NULL);
 
 	GstPad *pad;
 
