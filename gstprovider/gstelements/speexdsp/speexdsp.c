@@ -579,17 +579,19 @@ gst_speex_dsp_finalize (GObject * object)
 {
   GstSpeexDSP * self = GST_SPEEX_DSP (object);
 
+  g_static_mutex_lock (&global_mutex);
+  if (global_dsp && global_dsp == self) {
+    if (global_probe && global_probe == self->probe)
+      GST_DEBUG_OBJECT (self, "speexdsp detaching from globally discovered speexechoprobe");
+
+    global_dsp = NULL;
+  }
+  g_static_mutex_unlock (&global_mutex);
+
   if (self->probe) {
     GST_OBJECT_LOCK (self->probe);
     self->probe->dsp = NULL;
     GST_OBJECT_UNLOCK (self->probe);
-
-    g_static_mutex_lock (&global_mutex);
-    if (global_dsp && global_dsp == self && global_probe && global_probe == self->probe) {
-      GST_DEBUG_OBJECT (self, "speexdsp detaching from globally discovered speexechoprobe");
-      global_dsp = NULL;
-    }
-    g_static_mutex_unlock (&global_mutex);
 
     g_object_unref (self->probe);
     self->probe = NULL;
@@ -1359,10 +1361,13 @@ gst_speex_dsp_add_capture_buffer (GstSpeexDSP * self, GstBuffer * buf)
   GstStructure * structure;
   int rate = 0;
 
+  GST_OBJECT_LOCK (self);
   if (self->rate != 0) {
     rate = self->rate;
+    GST_OBJECT_UNLOCK (self);
   }
   else {
+    GST_OBJECT_UNLOCK (self);
     caps = GST_BUFFER_CAPS (buf);
     if (caps) {
       structure = gst_caps_get_structure (GST_BUFFER_CAPS (buf), 0);
