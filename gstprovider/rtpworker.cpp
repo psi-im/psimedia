@@ -328,8 +328,14 @@ void RtpWorker::cleanup()
 				gst_element_set_state(rpipeline, GST_STATE_READY);
 				gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 				gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
-				gst_element_set_state(rpipeline, GST_STATE_PLAYING);
-				//gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+				// only restart the receive pipeline if it is
+				//   owned by a separate session
+				if(!recvbin)
+				{
+					gst_element_set_state(rpipeline, GST_STATE_PLAYING);
+					//gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+				}
 			}
 		}
 
@@ -371,6 +377,7 @@ void RtpWorker::cleanup()
 		}*/
 
 		recv_pipelineContext->deactivate();
+		gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
 		//gst_element_set_state(recvbin, GST_STATE_NULL);
 		//gst_element_get_state(recvbin, NULL, NULL, GST_CLOCK_TIME_NONE);
 		gst_bin_remove(GST_BIN(rpipeline), recvbin);
