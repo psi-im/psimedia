@@ -25,13 +25,34 @@
 #include <gst/gst.h>
 #include "devices.h"
 
-#define PIPELINE_DEBUG
-
 // FIXME: this file is heavily commented out and a mess, mainly because
 //   all of my attempts at a dynamic pipeline were futile.  someday we
 //   can uncomment and clean this up...
 
+#define PIPELINE_DEBUG
+
+// we'll make the default fixed rate the same as our audio codec, which at
+//   the time of this writing is always SPEEX at 16000.  this should avoid
+//   double resamples (receiving at 16000, converting to the fixed rate,
+//   then converting to the sound card)
+#define DEFAULT_FIXED_RATE 16000
+
 namespace PsiMedia {
+
+static int get_fixed_rate()
+{
+	QString val = QString::fromLatin1(qgetenv("PSI_FIXED_RATE"));
+	if(!val.isEmpty())
+	{
+		int rate = val.toInt();
+		if(rate > 0)
+			return rate;
+		else
+			return 0;
+	}
+	else
+		return DEFAULT_FIXED_RATE;
+}
 
 static const char *type_to_str(PDevice::Type type)
 {
@@ -167,10 +188,21 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 
 		GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
 		GstCaps *caps = gst_caps_new_empty();
-		GstStructure *cs = gst_structure_new("audio/x-raw-int",
-			"rate", G_TYPE_INT, 22050,
-			"width", G_TYPE_INT, 16,
-			"channels", G_TYPE_INT, 1, NULL);
+		int rate = get_fixed_rate();
+		GstStructure *cs;
+		if(rate > 0)
+		{
+			cs = gst_structure_new("audio/x-raw-int",
+				"rate", G_TYPE_INT, rate,
+				"width", G_TYPE_INT, 16,
+				"channels", G_TYPE_INT, 1, NULL);
+		}
+		else
+		{
+			cs = gst_structure_new("audio/x-raw-int",
+				"width", G_TYPE_INT, 16,
+				"channels", G_TYPE_INT, 1, NULL);
+		}
 		gst_caps_append_structure(caps, cs);
 		g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 		gst_caps_unref(caps);
@@ -334,15 +366,26 @@ public:
 
 			capsfilter = gst_element_factory_make("capsfilter", NULL);
 			GstCaps *caps = gst_caps_new_empty();
-			GstStructure *cs = gst_structure_new("audio/x-raw-int",
-				"rate", G_TYPE_INT, 22050,
-				"width", G_TYPE_INT, 16,
-				"channels", G_TYPE_INT, 1, NULL);
+			int rate = get_fixed_rate();
+			GstStructure *cs;
+			if(rate > 0)
+			{
+				cs = gst_structure_new("audio/x-raw-int",
+					"rate", G_TYPE_INT, rate,
+					"width", G_TYPE_INT, 16,
+					"channels", G_TYPE_INT, 1, NULL);
+			}
+			else
+			{
+				cs = gst_structure_new("audio/x-raw-int",
+					"width", G_TYPE_INT, 16,
+					"channels", G_TYPE_INT, 1, NULL);
+			}
 			gst_caps_append_structure(caps, cs);
 			g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 			gst_caps_unref(caps);
 
-			if(!g_speexprobe && QString(qgetenv("PSI_NO_ECHO_CANCEL")) != "1")
+			if(!g_speexprobe && QString::fromLatin1(qgetenv("PSI_NO_ECHO_CANCEL")) != "1")
 			{
 				speexprobe = gst_element_factory_make("speexechoprobe", NULL);
 				if(speexprobe) {
