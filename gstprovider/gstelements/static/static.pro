@@ -4,7 +4,7 @@ CONFIG += staticlib create_prl
 TARGET = gstelements_static
 DESTDIR = lib
 
-CONFIG += rtpmanager videomaxrate liveadder speexdsp
+CONFIG += rtpmanager videomaxrate liveadder audioresample speexdsp
 windows:CONFIG += directsound winks
 mac:CONFIG += osxaudio osxvideo
 
@@ -24,6 +24,11 @@ videomaxrate {
 liveadder {
 	include(../liveadder.pri)
 	DEFINES += HAVE_LIVEADDER
+}
+
+audioresample {
+	include(../audioresample.pri)
+	DEFINES += HAVE_AUDIORESAMPLE
 }
 
 speexdsp {
