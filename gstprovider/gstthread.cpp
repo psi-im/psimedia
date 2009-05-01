@@ -220,7 +220,8 @@ public:
 			<< "videomaxrate"
 			<< "videoscale"
 			<< "gstrtpjitterbuffer"
-			<< "liveadder";
+			<< "liveadder"
+			<< "legacyresample";
 
 #if defined(Q_OS_MAC)
 			reqelem

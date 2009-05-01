@@ -1307,7 +1307,7 @@ bool RtpWorker::startRecv()
 		}
 
 		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-		GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
+		GstElement *audioresample = gst_element_factory_make("legacyresample", NULL);
 		if(pd_audiosink)
 			asrc = audioresample;
 

@@ -31,11 +31,8 @@
 
 #define PIPELINE_DEBUG
 
-// we'll make the default fixed rate the same as our audio codec, which at
-//   the time of this writing is always SPEEX at 16000.  this should avoid
-//   double resamples (receiving at 16000, converting to the fixed rate,
-//   then converting to the sound card)
-#define DEFAULT_FIXED_RATE 16000
+// lower rates (e.g. 16000) might not work with echo-cancel
+#define DEFAULT_FIXED_RATE 22050
 
 //#define USE_LIVEADDER
 
@@ -251,7 +248,7 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 	else // AudioOut
 	{
 		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-		GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
+		GstElement *audioresample = gst_element_factory_make("legacyresample", NULL);
 		gst_bin_add(GST_BIN(bin), audioconvert);
 		gst_bin_add(GST_BIN(bin), audioresample);
 		gst_bin_add(GST_BIN(bin), e);
