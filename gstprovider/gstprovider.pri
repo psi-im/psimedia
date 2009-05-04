@@ -1,5 +1,7 @@
 CONFIG += link_prl depend_prl
 
+LIBS += -L$$PWD/gstelements/static/lib -lgstelements_static
+
 include(gstconf.pri)
 
 include(deviceenum/deviceenum.pri)
@@ -25,5 +27,3 @@ SOURCES += \
 	$$PWD/gstthread.cpp \
 	$$PWD/rwcontrol.cpp \
 	$$PWD/gstprovider.cpp
-
-LIBS += -L$$PWD/gstelements/static/lib -lgstelements_static

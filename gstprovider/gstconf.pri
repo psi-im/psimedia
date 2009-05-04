@@ -1,3 +1,8 @@
+# FIXME: building elements in shared mode causes them to drag in the entire
+#   dependencies of psimedia
+
+include(../conf.pri)
+
 windows {
 	INCLUDEPATH += \
 		c:/mingw/include/glib-2.0 \
@@ -5,11 +10,30 @@ windows {
 		c:/msys/1.0/home/gst/include \
 		c:/msys/1.0/home/gst/include/gstreamer-0.10
 	LIBS += \
-		-Lc:/msys/1.0/home/gst/lib -llibgstreamer-0.10 -lgthread-2.0 -lglib-2.0 -lgobject-2.0 -llibgstvideo-0.10 -llibgstbase-0.10 -llibgstinterfaces-0.10
+		-Lc:/msys/1.0/home/gst/lib \
+		-lgstreamer-0.10.dll \
+		-lgthread-2.0 \
+		-lglib-2.0 \
+		-lgobject-2.0 \
+		-lgstvideo-0.10.dll \
+		-lgstbase-0.10.dll \
+		-lgstinterfaces-0.10.dll
+
+	# qmake mingw seems to have broken prl support, so force these
+	win32-g++|contains($$list($$[QT_VERSION]), 4.0.*|4.1.*|4.2.*|4.3.*) {
+		LIBS *= \
+			-lgstaudio-0.10.dll \
+			-lgstrtp-0.10.dll \
+			-lgstnetbuffer-0.10.dll \
+			-lspeexdsp.dll \
+			-lsetupapi \
+			-lksuser \
+			-lamstrmid \
+			-ldsound \
+			-ldxerr9
+	}
 }
 
 unix {
-	include(../conf.pri)
-
 	LIBS += -lgstvideo-0.10 -lgstinterfaces-0.10
 }
