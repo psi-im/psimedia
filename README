@@ -25,3 +25,13 @@ Description
   To build the plugin and demo program, run:
     ./configure
     make
+
+
+Building from SVN
+------------------
+First, install the 'qconf' program, at least version 1.4.  You can download
+the source here:
+  http://delta.affinix.com/qconf/
+
+Then, go into the PsiMedia source tree and type 'qconf'.  You should now have
+a configure program to execute, just like from a normal source package.
