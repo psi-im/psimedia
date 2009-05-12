@@ -158,6 +158,13 @@ public:
 		if(!g_thread_supported())
 			g_thread_init(NULL);
 
+		// ignore "system" plugins
+		if(!pluginPath.isEmpty())
+		{
+			qputenv("GST_PLUGIN_SYSTEM_PATH", "");
+			qputenv("GST_PLUGIN_PATH", "");
+		}
+
 		// you can also use NULLs here if you don't want to pass args
 		GError *error;
 		if(!gst_init_check(&args.argc, &args.argv, &error))
@@ -190,12 +197,7 @@ public:
 
 		// manually load plugins?
 		if(!pluginPath.isEmpty())
-		{
-			// ignore "system" plugins
-			qputenv("GST_PLUGIN_PATH", "");
-
 			loadPlugins(pluginPath);
-		}
 
 		gstcustomelements_register();
 		gstelements_register();
