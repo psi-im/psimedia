@@ -1332,21 +1332,32 @@ static QString findPlugin(const QString &relpath, const QString &basename)
 }
 #endif
 
-#define GSTBUNDLE_PATH QString(QCoreApplication::applicationDirPath() + "/gstreamer-0.10")
-
 int main(int argc, char **argv)
 {
 	QApplication qapp(argc, argv);
 
 #ifndef GSTPROVIDER_STATIC
-	QString pluginFile = findPlugin(".", "gstprovider");
+	QString pluginFile;
+	QString resourcePath;
+
+	pluginFile = qgetenv("PSI_MEDIA_PLUGIN");
 	if(pluginFile.isEmpty())
-		pluginFile = findPlugin("../gstprovider", "gstprovider");
-# ifdef GSTBUNDLE_PATH
-	PsiMedia::loadPlugin(pluginFile, GSTBUNDLE_PATH);
-# else
-	PsiMedia::loadPlugin(pluginFile, QString());
-# endif
+	{
+#if defined(Q_OS_WIN)
+		pluginFile = findPlugin(".", "gstprovider");
+		if(!pluginFile.isEmpty())
+			resourcePath = QCoreApplication::applicationDirPath() + "/gstreamer-0.10";
+#elif defined(Q_OS_MAC)
+		pluginFile = findPlugin("../plugins", "gstprovider");
+		if(!pluginFile.isEmpty())
+			resourcePath = QCoreApplication::applicationDirPath() + "/../Frameworks/gstreamer-0.10";
+#endif
+
+		if(pluginFile.isEmpty())
+			pluginFile = findPlugin("../gstprovider", "gstprovider");
+	}
+
+	PsiMedia::loadPlugin(pluginFile, resourcePath);
 #endif
 
 	if(!PsiMedia::isSupported())
