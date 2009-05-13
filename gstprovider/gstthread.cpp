@@ -26,6 +26,9 @@
 #include <QCoreApplication>
 #include <QMutex>
 #include <QWaitCondition>
+#include <QApplication>
+#include <QStyle>
+#include <QIcon>
 #include <gst/gst.h>
 #include "gstcustomelements/gstcustomelements.h"
 #include "gstelements/static/gstelements.h"
@@ -261,8 +264,9 @@ public:
 
 	~GstSession()
 	{
-		// nothing i guess.  docs say to not bother with gst_deinit
-		//gst_deinit();
+		// docs say to not bother with gst_deinit, but we'll do it
+		//   anyway in case there's an issue with plugin unloading
+		gst_deinit();
 	}
 };
 
@@ -303,6 +307,18 @@ GstThread::GstThread(QObject *parent) :
 	QThread(parent)
 {
 	d = new Private;
+
+	// HACK: if gstreamer initializes before certain Qt internal
+	//   initialization occurs, then the app becomes unstable.
+	//   I don't know what exactly needs to happen, or where the
+	//   bug is, but if I fiddle with the default QStyle before
+	//   initializing gstreamer, then this seems to solve it.
+	//   it could be a bug in QCleanlooksStyle or QGtkStyle, which
+	//   may conflict with separate Gtk initialization that may
+	//   occur through gstreamer plugin loading.
+	{
+		QIcon icon = QApplication::style()->standardIcon(QStyle::SP_MessageBoxCritical, 0, 0);
+	}
 }
 
 GstThread::~GstThread()
