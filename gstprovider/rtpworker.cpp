@@ -1011,6 +1011,9 @@ bool RtpWorker::startSend()
 #ifdef RTPWORKER_DEBUG
 				printf("Failed to create audio input element '%s'.\n", qPrintable(ain));
 #endif
+				g_object_unref(G_OBJECT(sendbin));
+				sendbin = 0;
+
 				error = RtpSessionContext::ErrorGeneric;
 				return false;
 			}
@@ -1029,6 +1032,11 @@ bool RtpWorker::startSend()
 #ifdef RTPWORKER_DEBUG
 				printf("Failed to create video input element '%s'.\n", qPrintable(vin));
 #endif
+				delete pd_audiosrc;
+				pd_audiosrc = 0;
+				g_object_unref(G_OBJECT(sendbin));
+				sendbin = 0;
+
 				error = RtpSessionContext::ErrorGeneric;
 				return false;
 			}
@@ -1047,6 +1055,10 @@ bool RtpWorker::startSend()
 	{
 		if(!addAudioChain())
 		{
+			delete pd_audiosrc;
+			pd_audiosrc = 0;
+			delete pd_videosrc;
+			pd_videosrc = 0;
 			g_object_unref(G_OBJECT(sendbin));
 			sendbin = 0;
 
@@ -1058,6 +1070,10 @@ bool RtpWorker::startSend()
 	{
 		if(!addVideoChain())
 		{
+			delete pd_audiosrc;
+			pd_audiosrc = 0;
+			delete pd_videosrc;
+			pd_videosrc = 0;
 			g_object_unref(G_OBJECT(sendbin));
 			sendbin = 0;
 
@@ -1066,10 +1082,10 @@ bool RtpWorker::startSend()
 		}
 	}
 
+	gst_bin_add(GST_BIN(spipeline), sendbin);
+
 	if(!audiosrc && !videosrc)
 	{
-		gst_bin_add(GST_BIN(spipeline), sendbin);
-
 		// in the case of files, preroll
 		gst_element_set_state(spipeline, GST_STATE_PAUSED);
 		gst_element_get_state(spipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
@@ -1085,8 +1101,6 @@ bool RtpWorker::startSend()
 	}
 	else
 	{
-		gst_bin_add(GST_BIN(spipeline), sendbin);
-
 		// in the case of live transmission, wait for it to start and signal
 		//gst_element_set_state(sendbin, GST_STATE_READY);
 		//gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
@@ -1239,7 +1253,7 @@ bool RtpWorker::startRecv()
 #ifdef RTPWORKER_DEBUG
 			printf("cannot parse payload info\n");
 #endif
-			return false;
+			goto fail1;
 		}
 
 		if(recv_in_use)
