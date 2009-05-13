@@ -1130,8 +1130,19 @@ bool RtpWorker::startSend()
 		//gst_element_set_state(pipeline, GST_STATE_PLAYING);
 		//gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 		send_pipelineContext->activate();
-		gst_element_get_state(spipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+		// 6 seconds ought to be enough time to init
+		int ret = gst_element_get_state(spipeline, NULL, NULL, 6 * GST_SECOND);
 		//gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
+		if(ret != GST_STATE_CHANGE_SUCCESS && ret != GST_STATE_CHANGE_NO_PREROLL)
+		{
+#ifdef RTPWORKER_DEBUG
+			printf("error/timeout while setting send pipeline to PLAYING\n");
+#endif
+			cleanup();
+			error = RtpSessionContext::ErrorGeneric;
+			return false;
+		}
 
 		if(!shared_clock && use_shared_clock)
 		{
