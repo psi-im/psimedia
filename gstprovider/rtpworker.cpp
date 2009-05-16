@@ -1024,9 +1024,11 @@ bool RtpWorker::startSend()
 		if(!vin.isEmpty() && !localVideoParams.isEmpty())
 		{
 			PipelineDeviceOptions opts;
-			opts.videoSize = localVideoParams[0].size;
+			//opts.videoSize = localVideoParams[0].size;
+			opts.videoSize = QSize(320, 240);
+			opts.fps = 30;
 
-			pd_videosrc = PipelineDeviceContext::create(send_pipelineContext, vin, PDevice::VideoIn);
+			pd_videosrc = PipelineDeviceContext::create(send_pipelineContext, vin, PDevice::VideoIn, opts);
 			if(!pd_videosrc)
 			{
 #ifdef RTPWORKER_DEBUG
