@@ -369,6 +369,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   GstAudioChannelPosition * positions;
   UInt32 frameSize;
   int bytesPerSecond;
+  Boolean isWritable;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
@@ -435,7 +436,12 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
       kAudioUnitScope_Output:kAudioUnitScope_Input;
   element = osxbuf->is_src ? 1 : 0;
 
-  propertySize = sizeof (format);
+  status = AudioUnitGetPropertyInfo (osxbuf->audiounit,
+      kAudioUnitProperty_StreamFormat,
+      scope, element,
+      &propertySize,
+      &isWritable);
+
   status = AudioUnitSetProperty (osxbuf->audiounit,
       kAudioUnitProperty_StreamFormat,
       scope, element,
@@ -446,6 +452,28 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
         status);
     goto done;
   }
+
+  status = AudioUnitGetProperty (osxbuf->audiounit,
+      kAudioUnitProperty_StreamFormat,
+      scope, element,
+      &format, propertySize);
+
+  if (status) {
+    GST_WARNING_OBJECT (osxbuf, "Failed to get audio description: %lx",
+        status);
+    goto done;
+  }
+
+  GST_LOG_OBJECT (osxbuf, "Actual format: %x, %f, %u, %x, %d, %d, %d, %d, %d",
+      (unsigned int) format.mFormatID,
+      format.mSampleRate,
+      (unsigned int) format.mChannelsPerFrame,
+      (unsigned int) format.mFormatFlags,
+      (unsigned int) format.mBytesPerFrame,
+      (unsigned int) format.mBitsPerChannel,
+      (unsigned int) format.mBytesPerPacket,
+      (unsigned int) format.mFramesPerPacket,
+      (unsigned int) format.mReserved);
 
   status = AudioUnitSetProperty (osxbuf->audiounit,
       kAudioUnitProperty_AudioChannelLayout,
@@ -495,30 +523,6 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
     GST_WARNING_OBJECT (osxbuf,
         "Failed to initialise AudioUnit: %d", (int) status);
     goto done;
-  }
-
-  propertySize = sizeof (format);
-  status = AudioUnitGetProperty (osxbuf->audiounit,
-      kAudioUnitProperty_StreamFormat,
-      scope, element,
-      &format, propertySize);
-
-  if (status) {
-    GST_WARNING_OBJECT (osxbuf, "Failed to get audio description: %lx",
-        status);
-    /* not fatal */
-  }
-  else {
-    GST_LOG_OBJECT (osxbuf, "Actual format: %x, %f, %u, %x, %d, %d, %d, %d, %d",
-        (unsigned int) format.mFormatID,
-        format.mSampleRate,
-        (unsigned int) format.mChannelsPerFrame,
-        (unsigned int) format.mFormatFlags,
-        (unsigned int) format.mBytesPerFrame,
-        (unsigned int) format.mBitsPerChannel,
-        (unsigned int) format.mBytesPerPacket,
-        (unsigned int) format.mFramesPerPacket,
-        (unsigned int) format.mReserved);
   }
 
   GST_DEBUG_OBJECT (osxbuf, "osx ring buffer acquired");
