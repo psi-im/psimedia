@@ -405,7 +405,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
     positions = NULL;
   }
 
-  GST_LOG_OBJECT (osxbuf, "Format: %x, %f, %u, %x, %d, %d, %d, %d, %d",
+  GST_LOG_OBJECT (osxbuf, "Desired format: %x, %f, %u, %x, %d, %d, %d, %d, %d",
       (unsigned int) format.mFormatID,
       format.mSampleRate,
       (unsigned int) format.mChannelsPerFrame,
@@ -434,6 +434,17 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
     goto done;
   }
 
+  GST_LOG_OBJECT (osxbuf, "Actual format: %x, %f, %u, %x, %d, %d, %d, %d, %d",
+      (unsigned int) format.mFormatID,
+      format.mSampleRate,
+      (unsigned int) format.mChannelsPerFrame,
+      (unsigned int) format.mFormatFlags,
+      (unsigned int) format.mBytesPerFrame,
+      (unsigned int) format.mBitsPerChannel,
+      (unsigned int) format.mBytesPerPacket,
+      (unsigned int) format.mFramesPerPacket,
+      (unsigned int) format.mReserved);
+
   status = AudioUnitSetProperty (osxbuf->audiounit,
       kAudioUnitProperty_AudioChannelLayout,
       scope, element,
@@ -459,7 +470,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
     }
 
     osxbuf->recBufferList = buffer_list_alloc (format.mChannelsPerFrame,
-        frameSize * format.mBytesPerFrame);
+        frameSize, format.mBitsPerChannel / 8, TRUE);
   }
 
   bytesPerSecond = format.mBytesPerFrame * (int)format.mSampleRate;
@@ -702,18 +713,33 @@ gst_osx_ring_buffer_delay (GstRingBuffer * buf)
 }
 
 static AudioBufferList *
-buffer_list_alloc (int channels, int size)
+buffer_list_alloc (int channels, int frames, int bytesPerChannel,
+    gboolean interleaved)
 {
   AudioBufferList * list;
-  int total_size;
+  int buffer_count;
+  int size, total_size;
   int n;
 
-  total_size = sizeof (AudioBufferList) + 1 * sizeof (AudioBuffer);
+  if (interleaved)
+    buffer_count = 1;
+  else
+    buffer_count = channels;
+
+  total_size = sizeof (AudioBufferList) + buffer_count * sizeof (AudioBuffer);
   list = (AudioBufferList *) g_malloc (total_size);
 
-  list->mNumberBuffers = 1;
-  for (n = 0; n < (int)list->mNumberBuffers; ++n) {
-    list->mBuffers[n].mNumberChannels = channels;
+  list->mNumberBuffers = buffer_count;
+  for (n = 0; n < buffer_count; ++n) {
+    if (interleaved) {
+      list->mBuffers[n].mNumberChannels = channels;
+      size = bytesPerChannel * channels * frames;
+    }
+    else {
+      list->mBuffers[n].mNumberChannels = 1;
+      size = bytesPerChannel * frames;
+    }
+
     list->mBuffers[n].mDataByteSize = size;
     list->mBuffers[n].mData = g_malloc (size);
   }
