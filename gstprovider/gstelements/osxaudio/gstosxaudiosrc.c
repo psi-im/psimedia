@@ -101,7 +101,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
         "depth = (int) 32, "
         "rate = (int) [1, MAX], "
         //"channels = (int) [1, MAX]")
-        "channels = (int) [1, 1]")
+        "channels = (int) 1")
     );
 
 static void gst_osx_audio_src_set_property (GObject * object, guint prop_id,
@@ -234,7 +234,7 @@ gst_osx_audio_src_get_caps (GstBaseSrc * src)
   GstPadTemplate * pad_template;
   GstCaps * caps;
   GstStructure * structure;
-  gint rate, cmin, cmax;
+  gint rate; //, cmin, cmax;
 
   gstelement_class = GST_ELEMENT_GET_CLASS (src);
   osxsrc = GST_OSX_AUDIO_SRC (src);
@@ -246,15 +246,18 @@ gst_osx_audio_src_get_caps (GstBaseSrc * src)
     return NULL;
   }
 
+#if 0
   if (osxsrc->deviceChannels == -1) {
     /* -1 means we don't know the number of channels yet.  for now, return
      * template caps.
      */
     return NULL;
   }
+#endif
 
   rate = osxsrc->deviceRate;
 
+#if 0
   // FIXME: for now, hardcode channels to 1 until someone cares to really test
   //   multichannel audio capture
   //cmax = osxsrc->deviceChannels;
@@ -263,6 +266,7 @@ gst_osx_audio_src_get_caps (GstBaseSrc * src)
     cmax = 1; /* 0 channels means 1 channel? */
 
   cmin = MIN (1, cmax);
+#endif
 
   pad_template = gst_element_class_get_pad_template (gstelement_class, "src");
   g_return_val_if_fail (pad_template != NULL, NULL);
@@ -270,9 +274,11 @@ gst_osx_audio_src_get_caps (GstBaseSrc * src)
   caps = gst_caps_copy (gst_pad_template_get_caps (pad_template));
 
   structure = gst_caps_get_structure (caps, 0);
-  gst_structure_set (structure, "rate", GST_TYPE_INT, rate, NULL);
+  gst_structure_set (structure, "rate", G_TYPE_INT, rate, NULL);
+#if 0
   gst_structure_set (structure, "channels", GST_TYPE_INT_RANGE, cmin, cmax,
       NULL);
+#endif
 
   return caps;
 }
