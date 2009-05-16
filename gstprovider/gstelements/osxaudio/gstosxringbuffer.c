@@ -279,7 +279,7 @@ gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
       return FALSE;
     }
 
-    GST_LOG_OBJECT (osxbuf, "Default format: %x, %f, %u, %x, %d, %d, %d, %d,"
+    GST_LOG_OBJECT (osxbuf, "Device format: %x, %f, %u, %x, %d, %d, %d, %d,"
         " %d",
         (unsigned int) asbd_in.mFormatID,
         asbd_in.mSampleRate,
@@ -291,6 +291,7 @@ gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
         (unsigned int) asbd_in.mFramesPerPacket,
         (unsigned int) asbd_in.mReserved);
 
+    src->deviceRate = (int) asbd_in.mSampleRate;
     src->deviceChannels = asbd_in.mChannelsPerFrame;
   }
   else {
@@ -442,6 +443,12 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
       &propertySize,
       &isWritable);
 
+  if (status) {
+    GST_WARNING_OBJECT (osxbuf, "Failed to get stream format info: %lx",
+        status);
+    goto done;
+  }
+
   status = AudioUnitSetProperty (osxbuf->audiounit,
       kAudioUnitProperty_StreamFormat,
       scope, element,
@@ -456,7 +463,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   status = AudioUnitGetProperty (osxbuf->audiounit,
       kAudioUnitProperty_StreamFormat,
       scope, element,
-      &format, propertySize);
+      &format, &propertySize);
 
   if (status) {
     GST_WARNING_OBJECT (osxbuf, "Failed to get audio description: %lx",
@@ -464,7 +471,8 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
     goto done;
   }
 
-  GST_LOG_OBJECT (osxbuf, "Actual format: %x, %f, %u, %x, %d, %d, %d, %d, %d",
+  // afaik, if we set our own format then this will always be the same
+  /*GST_LOG_OBJECT (osxbuf, "Actual format: %x, %f, %u, %x, %d, %d, %d, %d, %d",
       (unsigned int) format.mFormatID,
       format.mSampleRate,
       (unsigned int) format.mChannelsPerFrame,
@@ -483,7 +491,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
     GST_WARNING_OBJECT (osxbuf, "Failed to set output channel layout: %lx",
         status);
     goto done;
-  }
+  }*/
 
   /* create AudioBufferList needed for recording */
   if (osxbuf->is_src) {

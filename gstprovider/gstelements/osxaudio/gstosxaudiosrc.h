@@ -66,7 +66,8 @@ struct _GstOsxAudioSrc
 
   AudioDeviceID device_id;
 
-  /* actual number of channels reported by input device */
+  /* properties reported by the hardware */
+  int deviceRate;
   int deviceChannels;
 };
 
