@@ -266,7 +266,11 @@ public:
 	{
 		// docs say to not bother with gst_deinit, but we'll do it
 		//   anyway in case there's an issue with plugin unloading
-		gst_deinit();
+		// update: there could be other gstreamer users, so we
+		//   probably shouldn't call this.  also, it appears to crash
+		//   on mac for at least one user..   maybe the function is
+		//   not very well tested.
+		//gst_deinit();
 	}
 };
 
