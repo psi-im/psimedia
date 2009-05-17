@@ -219,6 +219,20 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 	else if(type == PDevice::VideoIn)
 	{
 		GstElement *capsfilter = 0;
+
+#ifdef Q_OS_MAC
+		// FIXME: hardcode resolution because filter_for_desired_size
+		//   doesn't really work with osxvideosrc due to the fact that
+		//   it can handle any resolution.  for example, setting
+		//   desiredSize to 320x240 yields a caps of 320x480 which is
+		//   wrong (and may crash videoscale, but that's another
+		//   matter).  We'll hardcode the caps to 320x240, since that's
+		//   the resolution psimedia currently wants anyway,
+		//   as opposed to not specifying a captureSize, which would
+		//   also work fine but may result in double-resizing.
+		captureSize = QSize(320, 240);
+#endif
+
 		if(captureSize.isValid())
 			capsfilter = filter_for_capture_size(captureSize);
 		else if(desiredSize.isValid())
