@@ -1214,6 +1214,14 @@ bool RtpWorker::startRecv()
 		}
 	}
 
+	// if remote does not support our codecs, error out
+	// FIXME: again, support more than speex/theora
+	if((!remoteAudioPayloadInfo.isEmpty() && speex_at == -1) ||
+		(!remoteVideoPayloadInfo.isEmpty() && theora_at == -1))
+	{
+		return false;
+	}
+
 	if(!remoteAudioPayloadInfo.isEmpty() && speex_at != -1)
 	{
 #ifdef RTPWORKER_DEBUG
