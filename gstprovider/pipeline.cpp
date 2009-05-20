@@ -38,6 +38,9 @@
 #define DEFAULT_FIXED_RATE 22050
 #endif
 
+// in milliseconds
+#define DEFAULT_LATENCY 20
+
 //#define USE_LIVEADDER
 
 namespace PsiMedia {
@@ -55,6 +58,21 @@ static int get_fixed_rate()
 	}
 	else
 		return DEFAULT_FIXED_RATE;
+}
+
+static int get_latency_time()
+{
+	QString val = QString::fromLatin1(qgetenv("PSI_AUDIO_LTIME"));
+	if(!val.isEmpty())
+	{
+		int x = val.toInt();
+		if(x > 0)
+			return x;
+		else
+			return 0;
+	}
+	else
+		return DEFAULT_LATENCY;
 }
 
 static const char *type_to_str(PDevice::Type type)
@@ -176,9 +194,13 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 	// explicitly set audio devices to be low-latency
 	if(/*type == PDevice::AudioIn ||*/ type == PDevice::AudioOut)
 	{
-		gint64 lt = 20 * GST_USECOND;
-		g_object_set(G_OBJECT(e), "latency-time", lt, NULL);
-		g_object_set(G_OBJECT(e), "buffer-time", 2 * lt, NULL);
+		int latency_ms = get_latency_time();
+		if(latency_ms > 0)
+		{
+			gint64 lt = latency_ms * 1000; // microseconds
+			g_object_set(G_OBJECT(e), "latency-time", lt, NULL);
+			//g_object_set(G_OBJECT(e), "buffer-time", 2 * lt, NULL);
+		}
 	}
 #endif
 
