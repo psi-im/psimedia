@@ -319,7 +319,8 @@ parse_device_id (const gchar * id, gchar ** sgname, int * inputIndex)
   return TRUE;
 }
 
-typedef struct {
+typedef struct
+{
   gchar * id;
   gchar * name;
 } video_device;
