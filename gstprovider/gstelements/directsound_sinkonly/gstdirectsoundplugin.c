@@ -31,7 +31,7 @@
 
 #include "gstdirectsoundsink.h"
 
-GST_DEBUG_CATEGORY (directsound_debug);
+GST_DEBUG_CATEGORY (directsound);
 
 static gboolean
 plugin_init (GstPlugin * plugin)
