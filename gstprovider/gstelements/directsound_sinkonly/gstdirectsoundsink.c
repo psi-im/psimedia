@@ -1,29 +1,28 @@
 /* GStreamer
-* Copyright (C) 2005 Sebastien Moutte <sebastien@moutte.net>
-* Copyright (C) 2007-2009 Pioneers of the Inevitable <songbird@songbirdnest.com>
-*
-* gstdirectsoundsink.c:
-*
-* This library is free software; you can redistribute it and/or
-* modify it under the terms of the GNU Library General Public
-* License as published by the Free Software Foundation; either
-* version 2 of the License, or (at your option) any later version.
-*
-* This library is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-* Library General Public License for more details.
-*
-* You should have received a copy of the GNU Library General Public
-* License along with this library; if not, write to the
-* Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-* Boston, MA 02111-1307, USA.
-*
-*
-* The development of this code was made possible due to the involvement
-* of Pioneers of the Inevitable, the creators of the Songbird Music player
-*
-*/
+ * Copyright (C) 2005 Sebastien Moutte <sebastien@moutte.net>
+ * Copyright (C) 2007-2009 Pioneers of the Inevitable <songbird@songbirdnest.com>
+ *
+ * gstdirectsoundsink.c:
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the
+ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+ * Boston, MA 02111-1307, USA.
+ *
+ * The development of this code was made possible due to the involvement
+ * of Pioneers of the Inevitable, the creators of the Songbird Music player
+ *
+ */
 
 /**
  * SECTION:element-directsoundsink
@@ -79,15 +78,16 @@ static void gst_directsound_sink_class_init (GstDirectSoundSinkClass * klass);
 static void gst_directsound_sink_init (GstDirectSoundSink * dsoundsink,
     GstDirectSoundSinkClass * g_class);
 
-static gboolean gst_directsound_sink_event (GstBaseSink * bsink, GstEvent * event);
+static gboolean gst_directsound_sink_event (GstBaseSink * bsink,
+    GstEvent * event);
 
-static void gst_directsound_sink_set_property (GObject *object, guint prop_id,
-    const GValue *value, GParamSpec *pspec);
-static void gst_directsound_sink_get_property (GObject *object, guint prop_id,
-    GValue *value, GParamSpec *pspec);
+static void gst_directsound_sink_set_property (GObject * object,
+    guint prop_id, const GValue * value, GParamSpec * pspec);
+static void gst_directsound_sink_get_property (GObject * object,
+    guint prop_id, GValue * value, GParamSpec * pspec);
 
-static GstRingBuffer *gst_directsound_sink_create_ringbuffer (GstBaseAudioSink *
-    sink);
+static GstRingBuffer * gst_directsound_sink_create_ringbuffer (
+    GstBaseAudioSink * sink);
 
 enum
 {
@@ -101,9 +101,10 @@ GST_BOILERPLATE (GstDirectSoundSink, gst_directsound_sink, GstBaseAudioSink,
 static void
 gst_directsound_sink_base_init (gpointer g_class)
 {
-  GstElementClass *element_class = GST_ELEMENT_CLASS (g_class);
+  GstElementClass * element_class = GST_ELEMENT_CLASS (g_class);
 
-  gst_element_class_set_details (element_class, &gst_directsound_sink_details);
+  gst_element_class_set_details (element_class,
+      &gst_directsound_sink_details);
   gst_element_class_add_pad_template (element_class,
       gst_static_pad_template_get (&directsoundsink_sink_factory));
 }
@@ -111,10 +112,10 @@ gst_directsound_sink_base_init (gpointer g_class)
 static void
 gst_directsound_sink_class_init (GstDirectSoundSinkClass * klass)
 {
-  GObjectClass *gobject_class;
-  GstElementClass *gstelement_class;
-  GstBaseSinkClass *gstbasesink_class;
-  GstBaseAudioSinkClass *gstbaseaudiosink_class;
+  GObjectClass * gobject_class;
+  GstElementClass * gstelement_class;
+  GstBaseSinkClass * gstbasesink_class;
+  GstBaseAudioSinkClass * gstbaseaudiosink_class;
 
   gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
@@ -154,7 +155,7 @@ gst_directsound_sink_event (GstBaseSink * bsink, GstEvent * event)
   DWORD dwSizeBuffer = 0;
   LPVOID pLockedBuffer = NULL;
 
-  GstDirectSoundSink *dsoundsink;
+  GstDirectSoundSink * dsoundsink;
 
   dsoundsink = GST_DIRECTSOUND_SINK (bsink);
 
@@ -179,7 +180,7 @@ gst_directsound_sink_event (GstBaseSink * bsink, GstEvent * event)
 
         if (FAILED(hr)) {
           GST_DSOUND_UNLOCK (dsoundsink->dsoundbuffer);
-          GST_WARNING("gst_directsound_sink_event: IDirectSoundBuffer8_GetStatus, hr = %X", hr);
+          GST_WARNING("gst_directsound_sink_event: IDirectSoundBuffer8_GetStatus, hr = %X", (unsigned int) hr);
           return FALSE;
         }
 
@@ -202,12 +203,13 @@ gst_directsound_sink_event (GstBaseSink * bsink, GstEvent * event)
 
             if (FAILED(hr)) {
               GST_DSOUND_UNLOCK (dsoundsink->dsoundbuffer);
-              GST_WARNING("gst_directsound_sink_event: IDirectSoundBuffer8_Unlock, hr = %X", hr);
+              GST_WARNING("gst_directsound_sink_event: IDirectSoundBuffer8_Unlock, hr = %X", (unsigned int) hr);
               return FALSE;
             }
-          } else {
+          }
+          else {
             GST_DSOUND_UNLOCK (dsoundsink->dsoundbuffer);
-            GST_WARNING ( "gst_directsound_sink_event: IDirectSoundBuffer8_Lock, hr = %X", hr);
+            GST_WARNING ( "gst_directsound_sink_event: IDirectSoundBuffer8_Lock, hr = %X", (unsigned int) hr);
             return FALSE;
           }
         }
@@ -222,14 +224,14 @@ gst_directsound_sink_event (GstBaseSink * bsink, GstEvent * event)
 }
 
 static void
-gst_directsound_sink_set_volume (GstDirectSoundSink *dsoundsink)
+gst_directsound_sink_set_volume (GstDirectSoundSink * dsoundsink)
 {
   if (dsoundsink->dsoundbuffer) {
     GST_DSOUND_LOCK (dsoundsink->dsoundbuffer);
 
     dsoundsink->dsoundbuffer->volume = dsoundsink->volume;
     if (dsoundsink->dsoundbuffer->pDSB8) {
-      directsound_set_volume(dsoundsink->dsoundbuffer->pDSB8,
+      gst_directsound_set_volume (dsoundsink->dsoundbuffer->pDSB8,
           dsoundsink->volume);
     }
     GST_DSOUND_UNLOCK (dsoundsink->dsoundbuffer);
@@ -237,10 +239,10 @@ gst_directsound_sink_set_volume (GstDirectSoundSink *dsoundsink)
 }
 
 static void
-gst_directsound_sink_set_property (GObject *object,
-    guint prop_id, const GValue *value , GParamSpec *pspec)
+gst_directsound_sink_set_property (GObject * object,
+    guint prop_id, const GValue * value , GParamSpec * pspec)
 {
-  GstDirectSoundSink *sink = GST_DIRECTSOUND_SINK (object);
+  GstDirectSoundSink * sink = GST_DIRECTSOUND_SINK (object);
 
   switch (prop_id) {
     case ARG_VOLUME:
@@ -254,10 +256,10 @@ gst_directsound_sink_set_property (GObject *object,
 }
 
 static void
-gst_directsound_sink_get_property (GObject *object,
-    guint prop_id, GValue *value , GParamSpec *pspec)
+gst_directsound_sink_get_property (GObject * object,
+    guint prop_id, GValue * value , GParamSpec * pspec)
 {
-  GstDirectSoundSink *sink = GST_DIRECTSOUND_SINK (object);
+  GstDirectSoundSink * sink = GST_DIRECTSOUND_SINK (object);
 
   switch (prop_id) {
     case ARG_VOLUME:
@@ -273,8 +275,8 @@ gst_directsound_sink_get_property (GObject *object,
 static GstRingBuffer *
 gst_directsound_sink_create_ringbuffer (GstBaseAudioSink * sink)
 {
-  GstDirectSoundSink *dsoundsink;
-  GstDirectSoundRingBuffer *ringbuffer;
+  GstDirectSoundSink * dsoundsink;
+  GstDirectSoundRingBuffer * ringbuffer;
 
   dsoundsink = GST_DIRECTSOUND_SINK (sink);
 

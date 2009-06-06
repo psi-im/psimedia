@@ -45,7 +45,7 @@ GST_DEBUG_CATEGORY_EXTERN (directsound);
 
 G_BEGIN_DECLS
 
-void directsound_set_volume (LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume);
+void gst_directsound_set_volume (LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume);
 
 G_END_DECLS
 

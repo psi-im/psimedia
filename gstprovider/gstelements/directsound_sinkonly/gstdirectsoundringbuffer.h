@@ -59,10 +59,10 @@ struct _GstDirectSoundRingBuffer
   GstRingBuffer object;
 
   /* sink element */
-  struct _GstDirectSoundSink *dsoundsink;
+  struct _GstDirectSoundSink * dsoundsink;
 
   /* lock used to protect writes and resets */
-  GMutex *dsound_lock;
+  GMutex * dsound_lock;
 
   /* directsound buffer waveformat description */
   WAVEFORMATEX wave_format;
@@ -112,7 +112,7 @@ struct _GstDirectSoundRingBuffer
 
 struct _GstDirectSoundRingBufferClass
 {
-	GstRingBufferClass    parent_class;
+  GstRingBufferClass    parent_class;
 };
 
 GType gst_directsound_ring_buffer_get_type (void);

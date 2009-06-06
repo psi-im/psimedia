@@ -34,11 +34,16 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_DIRECTSOUND_SINK            (gst_directsound_sink_get_type())
-#define GST_DIRECTSOUND_SINK(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_DIRECTSOUND_SINK,GstDirectSoundSink))
-#define GST_DIRECTSOUND_SINK_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_DIRECTSOUND_SINK,GstDirectSoundSinkClass))
-#define GST_IS_DIRECTSOUND_SINK(obj)         (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_DIRECTSOUND_SINK))
-#define GST_IS_DIRECTSOUND_SINK_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_DIRECTSOUND_SINK))
+#define GST_TYPE_DIRECTSOUND_SINK \
+    (gst_directsound_sink_get_type())
+#define GST_DIRECTSOUND_SINK(obj) \
+    (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_DIRECTSOUND_SINK,GstDirectSoundSink))
+#define GST_DIRECTSOUND_SINK_CLASS(klass) \
+    (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_DIRECTSOUND_SINK,GstDirectSoundSinkClass))
+#define GST_IS_DIRECTSOUND_SINK(obj) \
+    (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_DIRECTSOUND_SINK))
+#define GST_IS_DIRECTSOUND_SINK_CLASS(klass) \
+    (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_DIRECTSOUND_SINK))
 
 typedef struct _GstDirectSoundSink GstDirectSoundSink;
 typedef struct _GstDirectSoundSinkClass GstDirectSoundSinkClass;
@@ -49,7 +54,7 @@ struct _GstDirectSoundSink
   GstBaseAudioSink sink;
 
   /* ringbuffer */
-  GstDirectSoundRingBuffer *dsoundbuffer;
+  GstDirectSoundRingBuffer * dsoundbuffer;
 
   /* current volume */
   gdouble volume;

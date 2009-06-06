@@ -39,7 +39,7 @@ GST_DEBUG_CATEGORY (directsound);
 #define GST_CAT_DEFAULT directsound
 
 void
-directsound_set_volume (LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume)
+gst_directsound_set_volume (LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume)
 {
   HRESULT hr;
   long dsVolume;
