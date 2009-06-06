@@ -61,16 +61,6 @@ static guint gst_directsound_ring_buffer_delay (GstRingBuffer * buf);
 
 static DWORD WINAPI gst_directsound_write_proc (LPVOID lpParameter);
 
-static GstRingBufferClass * ring_parent_class = NULL;
-static void gst_directsound_ring_buffer_class_init_trampoline (
-    gpointer g_class, gpointer data)
-{
-  ring_parent_class =
-      (GstRingBufferClass *) g_type_class_peek_parent (g_class);
-  gst_directsound_ring_buffer_class_init (
-      (GstDirectSoundRingBufferClass *) g_class);
-}
-
 GST_BOILERPLATE (GstDirectSoundRingBuffer, gst_directsound_ring_buffer,
     GstRingBuffer, GST_TYPE_RING_BUFFER);
 
