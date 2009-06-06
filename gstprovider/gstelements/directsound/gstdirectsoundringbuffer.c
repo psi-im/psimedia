@@ -58,11 +58,18 @@ static gboolean gst_directsound_ring_buffer_pause (GstRingBuffer * buf);
 static gboolean gst_directsound_ring_buffer_resume (GstRingBuffer * buf);
 static gboolean gst_directsound_ring_buffer_stop (GstRingBuffer * buf);
 static guint gst_directsound_ring_buffer_delay (GstRingBuffer * buf);
+static GstRingBufferClass * ring_parent_class = NULL;
 
 static DWORD WINAPI gst_directsound_write_proc (LPVOID lpParameter);
 
 GST_BOILERPLATE (GstDirectSoundRingBuffer, gst_directsound_ring_buffer,
     GstRingBuffer, GST_TYPE_RING_BUFFER);
+
+static void
+gst_directsound_ring_buffer_base_init (gpointer g_class)
+{
+  /* Nothing to do right now */
+}
 
 static void
 gst_directsound_ring_buffer_class_init (GstDirectSoundRingBufferClass * klass)
@@ -74,6 +81,8 @@ gst_directsound_ring_buffer_class_init (GstDirectSoundRingBufferClass * klass)
   gobject_class = (GObjectClass *) klass;
   gstobject_class = (GstObjectClass *) klass;
   gstringbuffer_class = (GstRingBufferClass *) klass;
+
+  ring_parent_class = g_type_class_peek_parent (klass);
 
   gobject_class->dispose =
       GST_DEBUG_FUNCPTR (gst_directsound_ring_buffer_dispose);
