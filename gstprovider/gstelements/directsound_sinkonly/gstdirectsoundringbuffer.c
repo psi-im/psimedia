@@ -189,7 +189,7 @@ gst_directsound_ring_buffer_open_device (GstRingBuffer * buf)
 
   if (FAILED (hr = DirectSoundCreate8 (NULL, &dsoundbuffer->pDS8, NULL))) {
     GST_ELEMENT_ERROR (dsoundbuffer->dsoundsink, RESOURCE, FAILED,
-      ("%ls.", DXGetErrorDescription9(hr)),
+      ("%ls.", DXGetErrorDescription9W(hr)),
       ("Failed to create directsound device. (%X)", (unsigned int) hr));
     dsoundbuffer->pDS8 = NULL;
     return FALSE;
@@ -585,7 +585,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
         }
         else {
           GST_ELEMENT_ERROR (dsoundbuffer->dsoundsink, RESOURCE, FAILED,
-             ("%ls.", DXGetErrorDescription9(hr)),
+             ("%ls.", DXGetErrorDescription9W(hr)),
              ("gst_directsound_write_proc: IDirectSoundBuffer8_Restore, hr = %X", (unsigned int) hr));
           goto complete;
         }
@@ -621,7 +621,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
       /* only trigger an error if we're not already in an error state */
       if (FAILED(hr) && !error) {
         GST_ELEMENT_ERROR (dsoundbuffer->dsoundsink, RESOURCE, FAILED,
-           ("%ls.", DXGetErrorDescription9(hr)),
+           ("%ls.", DXGetErrorDescription9W(hr)),
            ("gst_directsound_write_proc: IDirectSoundBuffer8_GetCurrentPosition, hr = %X", (unsigned int) hr));
         error = TRUE;
         goto complete;
