@@ -71,31 +71,8 @@ static void gst_directsound_ring_buffer_class_init_trampoline (
       (GstDirectSoundRingBufferClass *) g_class);
 }
 
-GType gst_directsound_ring_buffer_get_type (void);
-
-GType
-gst_directsound_ring_buffer_get_type (void)
-{
-  static volatile gsize gonce_data;
-  if (__gst_once_init_enter (&gonce_data)) {
-    GType _type;
-    _type = gst_type_register_static_full (GST_TYPE_RING_BUFFER,
-        g_intern_static_string ("GstDirectSoundRingBuffer"),
-        sizeof (GstDirectSoundRingBufferClass),
-        NULL,
-        NULL,
-        gst_directsound_ring_buffer_class_init_trampoline,
-        NULL,
-        NULL,
-        sizeof (GstDirectSoundRingBuffer),
-        0,
-        (GInstanceInitFunc) gst_directsound_ring_buffer_init,
-        NULL,
-        (GTypeFlags) 0);
-    __gst_once_init_leave (&gonce_data, (gsize) _type);
-  }
-  return (GType) gonce_data;
-}
+GST_BOILERPLATE (GstDirectSoundRingBuffer, gst_directsound_ring_buffer,
+    GstRingBuffer, GST_TYPE_RING_BUFFER);
 
 static void
 gst_directsound_ring_buffer_class_init (GstDirectSoundRingBufferClass * klass)
