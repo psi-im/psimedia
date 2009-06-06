@@ -8,7 +8,8 @@ SOURCES += \
 	$$PWD/directsound/gstdirectsound.c \
 	$$PWD/directsound/gstdirectsoundringbuffer.c \
 	$$PWD/directsound/gstdirectsoundsink.c \
-	$$PWD/directsound/gstdirectsoundsrc.c
+	$$PWD/directsound/gstdirectsoundsrc.c \
+	$$PWD/directsound/dsguids.c
 
 gstplugin:SOURCES += $$PWD/directsound/gstdirectsoundplugin.c
 !gstplugin:SOURCES += $$PWD/static/directsound_static.c

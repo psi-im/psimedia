@@ -24,44 +24,7 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
-// note: INITGUID clashes with amstrmid.lib from winks, if both plugins are
-//   statically built together.  we'll get around this by only defining the
-//   directsound-specific GUIDs we actually use (see dsguids.c)
-//#define INITGUID
-
-#include "gstdirectsound.h"
-
-#include <math.h>
-
-GST_DEBUG_CATEGORY (directsound);
-
-#define GST_CAT_DEFAULT directsound
-
-void
-gst_directsound_set_volume (LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume)
-{
-  HRESULT hr;
-  long dsVolume;
-
-  /* DirectSound controls volume using units of 100th of a decibel,
-   * ranging from -10000 to 0. We use a linear scale of 0 - 100
-   * here, so remap.
-   */
-  if (volume == 0)
-    dsVolume = -10000;
-  else
-    dsVolume = 100 * (long) (20 * log10 (volume));
-
-  dsVolume = CLAMP (dsVolume, -10000, 0);
-
-  GST_DEBUG ("Setting volume on secondary buffer to %d", (int) dsVolume);
-
-  hr = IDirectSoundBuffer8_SetVolume (pDSB8, dsVolume);
-  if (G_UNLIKELY (FAILED(hr))) {
-    GST_WARNING ("Setting volume on secondary buffer failed.");
-  }
-}
+// define the GUIDs we use here.  according to KB130869, initguid.h needs to be
+//   included after objbase.h, so we'll do it as late as possible
+#include "initguid.h"
+DEFINE_GUID(IID_IDirectSoundBuffer8, 0x6825a449, 0x7524, 0x4d82, 0x92, 0x0f, 0x50, 0xe3, 0x6a, 0xb3, 0xab, 0x1e);
