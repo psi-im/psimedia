@@ -40,7 +40,7 @@ plugin_init (GstPlugin * plugin)
           GST_TYPE_DIRECTSOUND_SINK))
     return FALSE;
 
-  GST_DEBUG_CATEGORY_INIT (directsound_debug, "directsound", 0,
+  GST_DEBUG_CATEGORY_INIT (directsound, "directsound", 0,
         "DirectSound Elements");
 
   return TRUE;
