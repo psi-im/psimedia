@@ -363,7 +363,7 @@ gst_directsound_ring_buffer_start (GstRingBuffer * buf)
   dsoundbuffer->hThread = hThread;
   dsoundbuffer->should_run = TRUE;
 
-  directsound_set_volume (dsoundbuffer->pDSB8, dsoundbuffer->volume);
+  gst_directsound_set_volume (dsoundbuffer->pDSB8, dsoundbuffer->volume);
 
   if (G_UNLIKELY (!SetThreadPriority(hThread, THREAD_PRIORITY_TIME_CRITICAL)))
     GST_WARNING ("gst_directsound_ring_buffer_start: Failed to set thread priority.");
@@ -480,7 +480,7 @@ gst_directsound_ring_buffer_stop (GstRingBuffer * buf)
   ret = WaitForSingleObject (hThread, 5000);
 
   if (G_UNLIKELY (ret == WAIT_TIMEOUT)) {
-    GST_WARNING ("gst_directsound_ring_buffer_stop: Failed to wait for thread shutdown. (%u)", ret);
+    GST_WARNING ("gst_directsound_ring_buffer_stop: Failed to wait for thread shutdown. (%u)", (unsigned int) ret);
     return FALSE;
   }
 
@@ -583,7 +583,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
           goto restore_buffer;
         }
         else {
-          GST_ELEMENT_ERROR (dsoundbuffer->dsoundsink, RESOURCE, FAILED, 
+          GST_ELEMENT_ERROR (dsoundbuffer->dsoundsink, RESOURCE, FAILED,
              ("%S.", DXGetErrorDescription9(hr)),
              ("gst_directsound_write_proc: IDirectSoundBuffer8_Restore, hr = %X", (unsigned int) hr));
 
@@ -622,14 +622,14 @@ gst_directsound_write_proc (LPVOID lpParameter)
       if (FAILED(hr) && !error) {
         GST_ELEMENT_ERROR (dsoundbuffer->dsoundsink, RESOURCE, FAILED,
            ("%S.", DXGetErrorDescription9(hr)),
-           ("gst_directsound_write_proc: IDirectSoundBuffer8_GetCurrentPosition, hr = %X", hr));
+           ("gst_directsound_write_proc: IDirectSoundBuffer8_GetCurrentPosition, hr = %X", (unsigned int) hr));
         error = TRUE;
         goto complete;
       }
     }
 
-    GST_LOG ("Current Play Cursor: %d Current Write Offset: %d",
-             dwCurrentPlayCursor,
+    GST_LOG ("Current Play Cursor: %u Current Write Offset: %d",
+             (unsigned int) dwCurrentPlayCursor,
              dsoundbuffer->buffer_write_offset);
 
     /* calculate the free size of the circular buffer */
@@ -646,7 +646,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
 
     len -= dsoundbuffer->segoffset;
 
-    GST_LOG ("Size of segment to write: %d Free buffer size: %d",
+    GST_LOG ("Size of segment to write: %d Free buffer size: %lld",
              len, freeBufferSize);
 
     /* If we can't write this into directsound because we don't have enough 
@@ -698,8 +698,8 @@ gst_directsound_write_proc (LPVOID lpParameter)
 
     freeBufferSize -= dwSizeBuffer1 + (len - dwSizeBuffer1);
 
-    GST_LOG ("DirectSound Buffer1 Data Size: %d DirectSound Buffer2 Data Size: %d",
-        dwSizeBuffer1, dwSizeBuffer2);
+    GST_LOG ("DirectSound Buffer1 Data Size: %u DirectSound Buffer2 Data Size: %u",
+        (unsigned int) dwSizeBuffer1, (unsigned int) dwSizeBuffer2);
     GST_LOG ("Free buffer size: %d", freeBufferSize);
 
     /* check if we read a whole segment */
