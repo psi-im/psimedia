@@ -26,5 +26,9 @@
 
 // define the GUIDs we use here.  according to KB130869, initguid.h needs to be
 //   included after objbase.h, so we'll do it as late as possible
-#include "initguid.h"
+// FIXME: the DEFINE_GUID macro from initguid.h throws warnings, so we use the
+//   macro from objbase.h instead?
+//#include <initguid.h>
+#define INITGUID
+#include <objbase.h>
 DEFINE_GUID(IID_IDirectSoundBuffer8, 0x6825a449, 0x7524, 0x4d82, 0x92, 0x0f, 0x50, 0xe3, 0x6a, 0xb3, 0xab, 0x1e);
