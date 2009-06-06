@@ -32,8 +32,6 @@
 #include "gstdirectsound.h"
 #include "gstdirectsoundringbuffer.h"
 
-GST_DEBUG_CATEGORY_EXTERN (directsound);
-
 G_BEGIN_DECLS
 
 #define GST_TYPE_DIRECTSOUND_SINK            (gst_directsound_sink_get_type())

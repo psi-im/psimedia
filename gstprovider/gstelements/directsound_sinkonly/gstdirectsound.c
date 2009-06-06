@@ -34,6 +34,8 @@
 
 #include <math.h>
 
+GST_DEBUG_CATEGORY (directsound);
+
 #define GST_CAT_DEFAULT directsound
 
 void

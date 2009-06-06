@@ -31,8 +31,6 @@
 #include <gst/audio/gstringbuffer.h>
 #include "gstdirectsound.h"
 
-GST_DEBUG_CATEGORY_EXTERN (directsound);
-
 G_BEGIN_DECLS
 
 struct _GstDirectSoundSink;
