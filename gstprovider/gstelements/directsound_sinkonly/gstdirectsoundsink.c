@@ -53,8 +53,6 @@
 
 #include "gstdirectsoundsink.h"
 
-//#include <gst/audio/multichannel.h>
-
 #define GST_CAT_DEFAULT directsound
 
 /* elementfactory information */

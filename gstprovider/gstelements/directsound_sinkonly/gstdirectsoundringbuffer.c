@@ -30,13 +30,9 @@
 
 #include "gstdirectsoundringbuffer.h"
 
-//#include <gst/audio/multichannel.h>
-
 #define GST_CAT_DEFAULT directsound
 
 #define MAX_LOST_RETRIES 10
-//#define THREAD_ERROR_BUFFER_RESTORE 1
-//#define THREAD_ERROR_NO_POSITION    2
 #define DIRECTSOUND_ERROR_DEVICE_RECONFIGURED 0x88780096
 #define DIRECTSOUND_ERROR_DEVICE_NO_DRIVER    0x88780078
 
