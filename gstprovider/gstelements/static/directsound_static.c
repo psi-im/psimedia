@@ -29,10 +29,9 @@
 #include "config.h"
 #endif
 
+#include "../directsound/gstdirectsound.h"
 #include "../directsound/gstdirectsoundsink.h"
 #include "../directsound/gstdirectsoundsrc.h"
-
-GST_DEBUG_CATEGORY (directsound_debug);
 
 static gboolean
 plugin_init (GstPlugin * plugin)
@@ -44,7 +43,7 @@ plugin_init (GstPlugin * plugin)
           GST_TYPE_DIRECTSOUND_SRC))
     return FALSE;
 
-  GST_DEBUG_CATEGORY_INIT (directsound_debug, "directsound", 0,
+  GST_DEBUG_CATEGORY_INIT (directsound, "directsound", 0,
         "DirectSound Elements");
 
   return TRUE;
