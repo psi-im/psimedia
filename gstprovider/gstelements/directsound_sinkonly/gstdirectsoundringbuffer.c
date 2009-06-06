@@ -189,7 +189,7 @@ gst_directsound_ring_buffer_open_device (GstRingBuffer * buf)
 
   if (FAILED (hr = DirectSoundCreate8 (NULL, &dsoundbuffer->pDS8, NULL))) {
     GST_ELEMENT_ERROR (dsoundbuffer->dsoundsink, RESOURCE, FAILED,
-      ("%S.", DXGetErrorDescription9(hr)),
+      ("%ls.", DXGetErrorDescription9(hr)),
       ("Failed to create directsound device. (%X)", (unsigned int) hr));
     dsoundbuffer->pDS8 = NULL;
     return FALSE;
@@ -242,7 +242,8 @@ gst_directsound_create_buffer (GstRingBuffer * buf)
     return FALSE;
   }
 
-  hr = IDirectSoundBuffer_QueryInterface (pDSB, &IID_IDirectSoundBuffer8, &dsoundbuffer->pDSB8);
+  hr = IDirectSoundBuffer_QueryInterface (pDSB, &IID_IDirectSoundBuffer8,
+      (LPVOID *) &dsoundbuffer->pDSB8);
   if (G_UNLIKELY (FAILED (hr))) {
     IDirectSoundBuffer_Release (pDSB);
     GST_WARNING ("gst_directsound_ring_buffer_acquire: IDirectSoundBuffer_QueryInterface, hr = %X", (unsigned int) hr);
@@ -584,9 +585,8 @@ gst_directsound_write_proc (LPVOID lpParameter)
         }
         else {
           GST_ELEMENT_ERROR (dsoundbuffer->dsoundsink, RESOURCE, FAILED,
-             ("%S.", DXGetErrorDescription9(hr)),
+             ("%ls.", DXGetErrorDescription9(hr)),
              ("gst_directsound_write_proc: IDirectSoundBuffer8_Restore, hr = %X", (unsigned int) hr));
-
           goto complete;
         }
       }
@@ -621,7 +621,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
       /* only trigger an error if we're not already in an error state */
       if (FAILED(hr) && !error) {
         GST_ELEMENT_ERROR (dsoundbuffer->dsoundsink, RESOURCE, FAILED,
-           ("%S.", DXGetErrorDescription9(hr)),
+           ("%ls.", DXGetErrorDescription9(hr)),
            ("gst_directsound_write_proc: IDirectSoundBuffer8_GetCurrentPosition, hr = %X", (unsigned int) hr));
         error = TRUE;
         goto complete;
@@ -700,7 +700,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
 
     GST_LOG ("DirectSound Buffer1 Data Size: %u DirectSound Buffer2 Data Size: %u",
         (unsigned int) dwSizeBuffer1, (unsigned int) dwSizeBuffer2);
-    GST_LOG ("Free buffer size: %d", freeBufferSize);
+    GST_LOG ("Free buffer size: %lld", freeBufferSize);
 
     /* check if we read a whole segment */
     GST_DSOUND_LOCK (dsoundbuffer);
