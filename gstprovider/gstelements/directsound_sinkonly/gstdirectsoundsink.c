@@ -224,6 +224,21 @@ gst_directsound_sink_event (GstBaseSink * bsink, GstEvent * event)
 }
 
 static void
+gst_directsound_sink_set_volume (GstDirectSoundSink *dsoundsink)
+{
+  if (dsoundsink->dsoundbuffer) {
+    GST_DSOUND_LOCK (dsoundsink->dsoundbuffer);
+
+    dsoundsink->dsoundbuffer->volume = dsoundsink->volume;
+    if (dsoundsink->dsoundbuffer->pDSB8) {
+      directsound_set_volume(dsoundsink->dsoundbuffer->pDSB8,
+          dsoundsink->volume);
+    }
+    GST_DSOUND_UNLOCK (dsoundsink->dsoundbuffer);
+  }
+}
+
+static void
 gst_directsound_sink_set_property (GObject *object,
     guint prop_id, const GValue *value , GParamSpec *pspec)
 {
