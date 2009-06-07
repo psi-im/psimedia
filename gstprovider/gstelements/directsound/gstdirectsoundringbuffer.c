@@ -235,7 +235,7 @@ gst_directsound_create_buffer (GstRingBuffer * buf)
   descSecondary.lpwfxFormat = (WAVEFORMATEX *) &dsoundbuffer->wave_format;
 
   if (dsoundbuffer->is_src) {
-    hr = IDirectSoundCapture_CreateSoundBuffer (dsoundbuffer->pDSC8, &descSecondary,
+    hr = IDirectSoundCapture_CreateCaptureBuffer (dsoundbuffer->pDSC8, &descSecondary,
         &pDSCB, NULL);
     if (G_UNLIKELY (FAILED (hr))) {
       GST_WARNING ("gst_directsound_ring_buffer_acquire: IDirectSoundCapture_CreateSoundBuffer, hr = %X", (unsigned int) hr);
@@ -800,16 +800,16 @@ gst_directsound_read_proc (LPVOID lpParameter)
   GstRingBuffer * buf;
   GstDirectSoundRingBuffer * dsoundbuffer;
 
-  HRESULT hr;
+  /*HRESULT hr;
   DWORD dwStatus;
   LPVOID pLockedBuffer1 = NULL, pLockedBuffer2 = NULL;
   DWORD dwSizeBuffer1 = 0, dwSizeBuffer2 = 0;
-  DWORD dwCurrentPlayCursor = 0;
+  DWORD dwCurrentPlayCursor = 0;*/
 
   gint64 freeBufferSize = 0;
 
-  guint8 * readptr = NULL;
-  gint readseg = 0;
+  /*guint8 * readptr = NULL;
+  gint readseg = 0;*/
   guint len = 0;
   gint retries = 0;
 
@@ -983,9 +983,9 @@ gst_directsound_read_proc (LPVOID lpParameter)
       dsoundbuffer->segoffset = 0;
     }
     GST_DSOUND_UNLOCK (dsoundbuffer);
+#endif
 
   complete:
-#endif
     GST_DSOUND_LOCK (dsoundbuffer);
 
     should_run = dsoundbuffer->should_run;
