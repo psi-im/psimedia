@@ -224,18 +224,18 @@ gst_directsound_create_buffer (GstRingBuffer * buf)
   HRESULT hr;
   DSBUFFERDESC descSecondary;
   LPDIRECTSOUNDBUFFER pDSB;
+  DSCBUFFERDESC captureDescSecondary;
   LPDIRECTSOUNDCAPTUREBUFFER pDSCB;
 
-  memset (&descSecondary, 0, sizeof (DSBUFFERDESC));
-  descSecondary.dwSize = sizeof (DSBUFFERDESC);
-  descSecondary.dwFlags = DSBCAPS_GETCURRENTPOSITION2 |
-      DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLVOLUME;
-
-  descSecondary.dwBufferBytes = dsoundbuffer->buffer_size;
-  descSecondary.lpwfxFormat = (WAVEFORMATEX *) &dsoundbuffer->wave_format;
-
   if (dsoundbuffer->is_src) {
-    hr = IDirectSoundCapture_CreateCaptureBuffer (dsoundbuffer->pDSC8, &descSecondary,
+    memset (&captureDescSecondary, 0, sizeof (DSCBUFFERDESC));
+    captureDescSecondary.dwSize = sizeof (DSCBUFFERDESC);
+    captureDescSecondary.dwFlags = 0;
+
+    captureDescSecondary.dwBufferBytes = dsoundbuffer->buffer_size;
+    captureDescSecondary.lpwfxFormat = (WAVEFORMATEX *) &dsoundbuffer->wave_format;
+
+    hr = IDirectSoundCapture_CreateCaptureBuffer (dsoundbuffer->pDSC8, &captureDescSecondary,
         &pDSCB, NULL);
     if (G_UNLIKELY (FAILED (hr))) {
       GST_WARNING ("gst_directsound_ring_buffer_acquire: IDirectSoundCapture_CreateSoundBuffer, hr = %X", (unsigned int) hr);
@@ -253,6 +253,14 @@ gst_directsound_create_buffer (GstRingBuffer * buf)
     IDirectSoundCaptureBuffer_Release (pDSCB);
   }
   else {
+    memset (&descSecondary, 0, sizeof (DSBUFFERDESC));
+    descSecondary.dwSize = sizeof (DSBUFFERDESC);
+    descSecondary.dwFlags = DSBCAPS_GETCURRENTPOSITION2 |
+        DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLVOLUME;
+
+    descSecondary.dwBufferBytes = dsoundbuffer->buffer_size;
+    descSecondary.lpwfxFormat = (WAVEFORMATEX *) &dsoundbuffer->wave_format;
+
     hr = IDirectSound8_CreateSoundBuffer (dsoundbuffer->pDS8, &descSecondary,
         &pDSB, NULL);
     if (G_UNLIKELY (FAILED (hr))) {
