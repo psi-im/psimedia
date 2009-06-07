@@ -238,7 +238,7 @@ gst_directsound_create_buffer (GstRingBuffer * buf)
     hr = IDirectSoundCapture_CreateCaptureBuffer (dsoundbuffer->pDSC8, &captureDescSecondary,
         &pDSCB, NULL);
     if (G_UNLIKELY (FAILED (hr))) {
-      GST_WARNING ("gst_directsound_ring_buffer_acquire: IDirectSoundCapture_CreateSoundBuffer, hr = %X", (unsigned int) hr);
+      GST_WARNING ("gst_directsound_ring_buffer_acquire: IDirectSoundCapture_CreateCaptureBuffer, hr = %X", (unsigned int) hr);
       return FALSE;
     }
 
@@ -430,7 +430,7 @@ gst_directsound_ring_buffer_pause (GstRingBuffer * buf)
 
   if (dsoundbuffer->is_src) {
     if (dsoundbuffer->pDSCB8) {
-      hr = IDirectSoundCaptureBuffer8_Stop (dsoundbuffer->pDSCB8);
+      hr = IDirectSoundCaptureBuffer_Stop (dsoundbuffer->pDSCB8);
     }
   }
   else {
@@ -454,7 +454,7 @@ gst_directsound_ring_buffer_pause (GstRingBuffer * buf)
       G_UNLIKELY(hr != DIRECTSOUND_ERROR_DEVICE_RECONFIGURED) &&
       G_UNLIKELY(hr != DIRECTSOUND_ERROR_DEVICE_NO_DRIVER)) {
     if (dsoundbuffer->is_src)
-      GST_WARNING ("gst_directsound_ring_buffer_pause: IDirectSoundCaptureBuffer8_Stop, hr = %X", (unsigned int) hr);
+      GST_WARNING ("gst_directsound_ring_buffer_pause: IDirectSoundCaptureBuffer_Stop, hr = %X", (unsigned int) hr);
     else
       GST_WARNING ("gst_directsound_ring_buffer_pause: IDirectSoundBuffer8_Stop, hr = %X", (unsigned int) hr);
     return FALSE;
@@ -505,11 +505,11 @@ gst_directsound_ring_buffer_stop (GstRingBuffer * buf)
 
   if (dsoundbuffer->is_src) {
     if (dsoundbuffer->pDSCB8) {
-      hr = IDirectSoundCaptureBuffer8_Stop (dsoundbuffer->pDSCB8);
+      hr = IDirectSoundCaptureBuffer_Stop (dsoundbuffer->pDSCB8);
 
       if (G_UNLIKELY (FAILED(hr))) {
         GST_DSOUND_UNLOCK (dsoundbuffer);
-        GST_WARNING ("gst_directsound_ring_buffer_stop: IDirectSoundCaptureBuffer8_Stop, hr = %X", (unsigned int) hr);
+        GST_WARNING ("gst_directsound_ring_buffer_stop: IDirectSoundCaptureBuffer_Stop, hr = %X", (unsigned int) hr);
         return FALSE;
       }
     }
