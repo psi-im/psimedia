@@ -121,7 +121,7 @@ gst_directsound_ring_buffer_init (GstDirectSoundRingBuffer * ringbuffer,
   memset (&ringbuffer->wave_format, 0, sizeof (WAVEFORMATEX));
 
   ringbuffer->buffer_size = 0;
-  ringbuffer->buffer_write_offset = 0;
+  ringbuffer->buffer_circular_offset = 0;
 
   ringbuffer->min_buffer_size = 0;
   ringbuffer->min_sleep_time = 10; /* in milliseconds */
@@ -563,31 +563,55 @@ gst_directsound_ring_buffer_delay (GstRingBuffer * buf)
   HRESULT hr;
   DWORD dwCurrentPlayCursor;
   DWORD dwCurrentWriteCursor;
+  DWORD dwCurrentCaptureCursor;
+  DWORD dwCurrentReadCursor;
   DWORD dwBytesInQueue = 0;
   gint nNbSamplesInQueue = 0;
 
   dsoundbuffer = GST_DIRECTSOUND_RING_BUFFER (buf);
 
-  // TODO
-  if (dsoundbuffer->is_src)
-    return 0;
+  if (dsoundbuffer->is_src) {
+    if (G_LIKELY (dsoundbuffer->pDSCB8)) {
+      /* evaluate the number of samples in queue in the circular buffer */
+      hr = IDirectSoundCaptureBuffer8_GetCurrentPosition (
+          dsoundbuffer->pDSCB8, &dwCurrentCaptureCursor,
+          &dwCurrentReadCursor);
 
-  if (G_LIKELY (dsoundbuffer->pDSB8)) {
-    /* evaluate the number of samples in queue in the circular buffer */
-    hr = IDirectSoundBuffer8_GetCurrentPosition (dsoundbuffer->pDSB8,
-        &dwCurrentPlayCursor, &dwCurrentWriteCursor);
+      if (G_LIKELY (SUCCEEDED (hr))) {
+        if (dwCurrentCaptureCursor > dsoundbuffer->buffer_circular_offset)
+          dwBytesInQueue = dwCurrentCaptureCursor -
+              dsoundbuffer->buffer_circular_offset;
+        else
+          dwBytesInQueue = dwCurrentCaptureCursor +
+              (dsoundbuffer->buffer_size -
+              dsoundbuffer->buffer_circular_offset);
 
-    if (G_LIKELY (SUCCEEDED (hr))) {
-      if (dwCurrentPlayCursor <= dsoundbuffer->buffer_write_offset)
-        dwBytesInQueue = dsoundbuffer->buffer_write_offset - dwCurrentPlayCursor;
-      else
-        dwBytesInQueue = dsoundbuffer->buffer_write_offset +
-          (dsoundbuffer->buffer_size - dwCurrentPlayCursor);
-
-      nNbSamplesInQueue = dwBytesInQueue / dsoundbuffer->bytes_per_sample;
+        nNbSamplesInQueue = dwBytesInQueue / dsoundbuffer->bytes_per_sample;
+      }
+      else {
+        GST_WARNING ("gst_directsound_ring_buffer_delay: IDirectSoundCaptureBuffer8_GetCurrentPosition, hr = %X", (unsigned int) hr);
+      }
     }
-    else {
-      GST_WARNING ("gst_directsound_ring_buffer_delay: IDirectSoundBuffer8_GetCurrentPosition, hr = %X", (unsigned int) hr);
+  }
+  else {
+    if (G_LIKELY (dsoundbuffer->pDSB8)) {
+      /* evaluate the number of samples in queue in the circular buffer */
+      hr = IDirectSoundBuffer8_GetCurrentPosition (dsoundbuffer->pDSB8,
+          &dwCurrentPlayCursor, &dwCurrentWriteCursor);
+
+      if (G_LIKELY (SUCCEEDED (hr))) {
+        if (dwCurrentPlayCursor <= dsoundbuffer->buffer_circular_offset)
+          dwBytesInQueue = dsoundbuffer->buffer_circular_offset -
+              dwCurrentPlayCursor;
+        else
+          dwBytesInQueue = dsoundbuffer->buffer_circular_offset +
+              (dsoundbuffer->buffer_size - dwCurrentPlayCursor);
+
+        nNbSamplesInQueue = dwBytesInQueue / dsoundbuffer->bytes_per_sample;
+      }
+      else {
+        GST_WARNING ("gst_directsound_ring_buffer_delay: IDirectSoundBuffer8_GetCurrentPosition, hr = %X", (unsigned int) hr);
+      }
     }
   }
 
@@ -680,7 +704,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
         if (gst_directsound_ring_buffer_close_device (buf) &&
             gst_directsound_ring_buffer_open_device (buf) &&
             gst_directsound_create_buffer (buf) ) {
-          dsoundbuffer->buffer_write_offset = 0;
+          dsoundbuffer->buffer_circular_offset = 0;
           goto restore_buffer;
         }
       }
@@ -697,15 +721,15 @@ gst_directsound_write_proc (LPVOID lpParameter)
 
     GST_LOG ("Current Play Cursor: %u Current Write Offset: %d",
              (unsigned int) dwCurrentPlayCursor,
-             dsoundbuffer->buffer_write_offset);
+             dsoundbuffer->buffer_circular_offset);
 
     /* calculate the free size of the circular buffer */
     GST_DSOUND_LOCK (dsoundbuffer);
-    if (dwCurrentPlayCursor <= dsoundbuffer->buffer_write_offset)
+    if (dwCurrentPlayCursor <= dsoundbuffer->buffer_circular_offset)
       freeBufferSize = dsoundbuffer->buffer_size -
-        (dsoundbuffer->buffer_write_offset - dwCurrentPlayCursor);
+        (dsoundbuffer->buffer_circular_offset - dwCurrentPlayCursor);
     else
-      freeBufferSize = dwCurrentPlayCursor - dsoundbuffer->buffer_write_offset;
+      freeBufferSize = dwCurrentPlayCursor - dsoundbuffer->buffer_circular_offset;
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
     if (!gst_ring_buffer_prepare_read (buf, &readseg, &readptr, &len))
@@ -736,7 +760,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
     /* lock it */
     GST_DSOUND_LOCK (dsoundbuffer);
     hr = IDirectSoundBuffer8_Lock (dsoundbuffer->pDSB8,
-        dsoundbuffer->buffer_write_offset, len, &pLockedBuffer1,
+        dsoundbuffer->buffer_circular_offset, len, &pLockedBuffer1,
         &dwSizeBuffer1, &pLockedBuffer2, &dwSizeBuffer2, 0L);
 
     /* copy chunks */
@@ -759,8 +783,8 @@ gst_directsound_write_proc (LPVOID lpParameter)
     /* update tracking data */
     dsoundbuffer->segoffset += dwSizeBuffer1 + (len - dwSizeBuffer1);
 
-    dsoundbuffer->buffer_write_offset += dwSizeBuffer1 + (len - dwSizeBuffer1);
-    dsoundbuffer->buffer_write_offset %= dsoundbuffer->buffer_size;
+    dsoundbuffer->buffer_circular_offset += dwSizeBuffer1 + (len - dwSizeBuffer1);
+    dsoundbuffer->buffer_circular_offset %= dsoundbuffer->buffer_size;
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
     freeBufferSize -= dwSizeBuffer1 + (len - dwSizeBuffer1);
@@ -889,7 +913,7 @@ gst_directsound_read_proc (LPVOID lpParameter)
         if (gst_directsound_ring_buffer_close_device (buf) &&
             gst_directsound_ring_buffer_open_device (buf) &&
             gst_directsound_create_buffer (buf) ) {
-          dsoundbuffer->buffer_write_offset = 0;
+          dsoundbuffer->buffer_circular_offset = 0;
           goto restore_buffer;
         }
       }
@@ -906,15 +930,15 @@ gst_directsound_read_proc (LPVOID lpParameter)
 
     GST_LOG ("Current Play Cursor: %u Current Write Offset: %d",
              (unsigned int) dwCurrentPlayCursor,
-             dsoundbuffer->buffer_write_offset);
+             dsoundbuffer->buffer_circular_offset);
 
     /* calculate the free size of the circular buffer */
     GST_DSOUND_LOCK (dsoundbuffer);
-    if (dwCurrentPlayCursor <= dsoundbuffer->buffer_write_offset)
+    if (dwCurrentPlayCursor <= dsoundbuffer->buffer_circular_offset)
       freeBufferSize = dsoundbuffer->buffer_size -
-        (dsoundbuffer->buffer_write_offset - dwCurrentPlayCursor);
+        (dsoundbuffer->buffer_circular_offset - dwCurrentPlayCursor);
     else
-      freeBufferSize = dwCurrentPlayCursor - dsoundbuffer->buffer_write_offset;
+      freeBufferSize = dwCurrentPlayCursor - dsoundbuffer->buffer_circular_offset;
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
     if (!gst_ring_buffer_prepare_read (buf, &readseg, &readptr, &len))
@@ -945,7 +969,7 @@ gst_directsound_read_proc (LPVOID lpParameter)
     /* lock it */
     GST_DSOUND_LOCK (dsoundbuffer);
     hr = IDirectSoundBuffer8_Lock (dsoundbuffer->pDSB8,
-        dsoundbuffer->buffer_write_offset, len, &pLockedBuffer1,
+        dsoundbuffer->buffer_circular_offset, len, &pLockedBuffer1,
         &dwSizeBuffer1, &pLockedBuffer2, &dwSizeBuffer2, 0L);
 
     /* copy chunks */
@@ -968,8 +992,8 @@ gst_directsound_read_proc (LPVOID lpParameter)
     /* update tracking data */
     dsoundbuffer->segoffset += dwSizeBuffer1 + (len - dwSizeBuffer1);
 
-    dsoundbuffer->buffer_write_offset += dwSizeBuffer1 + (len - dwSizeBuffer1);
-    dsoundbuffer->buffer_write_offset %= dsoundbuffer->buffer_size;
+    dsoundbuffer->buffer_circular_offset += dwSizeBuffer1 + (len - dwSizeBuffer1);
+    dsoundbuffer->buffer_circular_offset %= dsoundbuffer->buffer_size;
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
     freeBufferSize -= dwSizeBuffer1 + (len - dwSizeBuffer1);

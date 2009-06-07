@@ -83,8 +83,8 @@ struct _GstDirectSoundRingBuffer
   /* directsound buffer size */
   guint buffer_size;
 
-  /* directsound buffer write offset */
-  guint buffer_write_offset;
+  /* directsound buffer read/write offset */
+  guint buffer_circular_offset;
 
   /* minimum buffer size before playback start */
   guint min_buffer_size;
@@ -119,7 +119,7 @@ struct _GstDirectSoundRingBuffer
 
 struct _GstDirectSoundRingBufferClass
 {
-  GstRingBufferClass    parent_class;
+  GstRingBufferClass parent_class;
 };
 
 GType gst_directsound_ring_buffer_get_type (void);

@@ -185,13 +185,13 @@ gst_directsound_sink_event (GstBaseSink * bsink, GstEvent * event)
         }
 
         if (!(dwStatus & DSBSTATUS_PLAYING)) {
-          /*reset position */
+          /* reset position */
           hr = IDirectSoundBuffer8_SetCurrentPosition (dsoundsink->dsoundbuffer->pDSB8, 0);
-          dsoundsink->dsoundbuffer->buffer_write_offset = 0;
+          dsoundsink->dsoundbuffer->buffer_circular_offset = 0;
 
-          /*reset the buffer */
+          /* reset the buffer */
           hr = IDirectSoundBuffer8_Lock (dsoundsink->dsoundbuffer->pDSB8,
-              dsoundsink->dsoundbuffer->buffer_write_offset, 0L,
+              dsoundsink->dsoundbuffer->buffer_circular_offset, 0L,
               &pLockedBuffer, &dwSizeBuffer, NULL, NULL, DSBLOCK_ENTIREBUFFER);
 
           if (SUCCEEDED (hr)) {
