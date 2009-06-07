@@ -33,8 +33,6 @@
 
 G_BEGIN_DECLS
 
-struct _GstDirectSoundSink;
-
 #define GST_DSOUND_LOCK(obj) (g_mutex_lock (obj->dsound_lock))
 #define GST_DSOUND_UNLOCK(obj) (g_mutex_unlock (obj->dsound_lock))
 
@@ -58,8 +56,11 @@ struct _GstDirectSoundRingBuffer
 {
   GstRingBuffer object;
 
-  /* sink element */
-  struct _GstDirectSoundSink * dsoundsink;
+  /* FALSE for playback, TRUE for capture */
+  gboolean is_src;
+
+  /* related element, either GstDirectSoundSink or GstDirectSoundSrc */
+  GstElement * element;
 
   /* lock used to protect writes and resets */
   GMutex * dsound_lock;
@@ -72,6 +73,12 @@ struct _GstDirectSoundRingBuffer
 
   /* directsound sound object interface pointer */
   LPDIRECTSOUNDBUFFER8 pDSB8;
+
+  /* directsound capture object interface pointer */
+  LPDIRECTSOUNDCAPTURE8 pDSC8;
+
+  /* directsound capture sound object interface pointer */
+  LPDIRECTSOUNDCAPTUREBUFFER8 pDSCB8;
 
   /* directsound buffer size */
   guint buffer_size;

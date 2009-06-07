@@ -284,8 +284,11 @@ gst_directsound_sink_create_ringbuffer (GstBaseAudioSink * sink)
   ringbuffer = g_object_new (GST_TYPE_DIRECTSOUND_RING_BUFFER, NULL);
   GST_DEBUG ("directsound sink 0x%p", dsoundsink);
 
+  /* playback */
+  ringbuffer->is_src = FALSE;
+
   /* set the sink element on the ringbuffer for error messages */
-  ringbuffer->dsoundsink = dsoundsink;
+  ringbuffer->element = GST_ELEMENT (dsoundsink);
 
   /* set the ringbuffer on the sink */
   dsoundsink->dsoundbuffer = ringbuffer;
