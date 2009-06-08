@@ -1,6 +1,7 @@
 /* GStreamer
  * Copyright (C) 2005 Sebastien Moutte <sebastien@moutte.net>
  * Copyright (C) 2007-2009 Pioneers of the Inevitable <songbird@songbirdnest.com>
+ * Copyright (C) 2009 Barracuda Networks, Inc.
  *
  * gstdirectsoundringbuffer.h:
  *
