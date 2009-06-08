@@ -131,8 +131,8 @@ gst_directsound_src_event (GstBaseSrc * bsrc, GstEvent * event)
 {
   HRESULT hr;
   DWORD dwStatus;
-  DWORD dwSizeBuffer = 0;
-  LPVOID pLockedBuffer = NULL;
+  //DWORD dwSizeBuffer = 0;
+  //LPVOID pLockedBuffer = NULL;
 
   GstDirectSoundSrc * dsoundsrc;
 
