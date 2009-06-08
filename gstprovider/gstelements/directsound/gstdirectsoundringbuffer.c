@@ -575,6 +575,8 @@ gst_directsound_ring_buffer_delay (GstRingBuffer * buf)
 
   dsoundbuffer = GST_DIRECTSOUND_RING_BUFFER (buf);
 
+  GST_DSOUND_LOCK (dsoundbuffer);
+
   if (dsoundbuffer->is_src) {
     if (G_LIKELY (dsoundbuffer->pDSCB8)) {
       /* evaluate the number of samples in queue in the circular buffer */
@@ -583,7 +585,7 @@ gst_directsound_ring_buffer_delay (GstRingBuffer * buf)
           &dwCurrentReadCursor);
 
       if (G_LIKELY (SUCCEEDED (hr))) {
-        if (dwCurrentCaptureCursor > dsoundbuffer->buffer_circular_offset)
+        if (dwCurrentCaptureCursor >= dsoundbuffer->buffer_circular_offset)
           dwBytesInQueue = dwCurrentCaptureCursor -
               dsoundbuffer->buffer_circular_offset;
         else
@@ -619,6 +621,8 @@ gst_directsound_ring_buffer_delay (GstRingBuffer * buf)
       }
     }
   }
+
+  GST_DSOUND_UNLOCK (dsoundbuffer);
 
   return nNbSamplesInQueue;
 }
@@ -959,11 +963,11 @@ gst_directsound_read_proc (LPVOID lpParameter)
 
     /* calculate the free size of the circular buffer */
     GST_DSOUND_LOCK (dsoundbuffer);
-    if (dwCurrentCaptureCursor > dsoundbuffer->buffer_circular_offset)
-      freeBufferSize = dsoundbuffer->buffer_size -
-        (dwCurrentCaptureCursor - dsoundbuffer->buffer_circular_offset);
+    if (dwCurrentCaptureCursor >= dsoundbuffer->buffer_circular_offset)
+      freeBufferSize = dwCurrentCaptureCursor - dsoundbuffer->buffer_circular_offset;
     else
-      freeBufferSize = dsoundbuffer->buffer_circular_offset - dwCurrentCaptureCursor;
+      freeBufferSize = dsoundbuffer->buffer_size -
+        (dsoundbuffer->buffer_circular_offset - dwCurrentCaptureCursor);
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
     if (!gst_ring_buffer_prepare_read (buf, &writeseg, &writeptr, &len))
