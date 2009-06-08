@@ -667,7 +667,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
       hr = IDirectSoundBuffer8_Restore (dsoundbuffer->pDSB8);
       GST_DSOUND_UNLOCK (dsoundbuffer);
 
-      /* restore may fail again, ensure we restore the 
+      /* restore may fail again, ensure we restore the
        * buffer before we continue */
       if (FAILED(hr) && hr == DSERR_BUFFERLOST) {
         if (retries++ < MAX_LOST_RETRIES) {
@@ -693,7 +693,8 @@ gst_directsound_write_proc (LPVOID lpParameter)
       /* try and reopen the default directsound device */
       if (hr == DIRECTSOUND_ERROR_DEVICE_RECONFIGURED) {
         /* we have to wait a while for the sound device removal to actually
-         * be processed before attempting to reopen the device. Yes, this sucks */
+         * be processed before attempting to reopen the device. Yes, this
+         * sucks */
         Sleep (2000);
 
         GST_DSOUND_LOCK (dsoundbuffer);
@@ -720,8 +721,8 @@ gst_directsound_write_proc (LPVOID lpParameter)
     }
 
     GST_LOG ("Current Play Cursor: %u Current Write Offset: %d",
-             (unsigned int) dwCurrentPlayCursor,
-             dsoundbuffer->buffer_circular_offset);
+        (unsigned int) dwCurrentPlayCursor,
+        dsoundbuffer->buffer_circular_offset);
 
     /* calculate the free size of the circular buffer */
     GST_DSOUND_LOCK (dsoundbuffer);
@@ -737,12 +738,15 @@ gst_directsound_write_proc (LPVOID lpParameter)
 
     len -= dsoundbuffer->segoffset;
 
-    GST_LOG ("Size of segment to write: %d Free buffer size: %lld",
-             len, freeBufferSize);
+    GST_LOG ("Size of segment to write: %d Free buffer size: %lld", len,
+        freeBufferSize);
 
-    /* If we can't write this into directsound because we don't have enough 
+    /* If we can't write this into directsound because we don't have enough
      * space, then start playback if we're currently paused. Then, sleep
      * for a little while to wait until space is available */
+    // ###: why >= and not > ?
+    // ###: what happens if this condition is true on the first iteration?
+    //   playback totally busted?
     if (len >= freeBufferSize) {
       if (!(dwStatus & DSBSTATUS_PLAYING)) {
         GST_DSOUND_LOCK (dsoundbuffer);
@@ -765,6 +769,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
 
     /* copy chunks */
     if (SUCCEEDED (hr)) {
+      // ###: is it possible for len > dwSizeBuffer1 + dwSizeBuffer2 ?
       if (len <= dwSizeBuffer1) {
         memcpy (pLockedBuffer1, (LPBYTE) readptr + dsoundbuffer->segoffset, len);
       }
@@ -817,6 +822,7 @@ gst_directsound_write_proc (LPVOID lpParameter)
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
     /* it's extremely important to sleep in without the lock! */
+    // ###: why >= and not > ?
     if (len >= freeBufferSize || flushing || error)
       Sleep (dsoundbuffer->min_sleep_time);
   }
@@ -825,23 +831,22 @@ gst_directsound_write_proc (LPVOID lpParameter)
   return 0;
 }
 
-// TODO
 static DWORD WINAPI
 gst_directsound_read_proc (LPVOID lpParameter)
 {
   GstRingBuffer * buf;
   GstDirectSoundRingBuffer * dsoundbuffer;
 
-  /*HRESULT hr;
+  HRESULT hr;
   DWORD dwStatus;
   LPVOID pLockedBuffer1 = NULL, pLockedBuffer2 = NULL;
   DWORD dwSizeBuffer1 = 0, dwSizeBuffer2 = 0;
-  DWORD dwCurrentPlayCursor = 0;*/
+  DWORD dwCurrentCaptureCursor = 0;
 
   gint64 freeBufferSize = 0;
 
-  /*guint8 * readptr = NULL;
-  gint readseg = 0;*/
+  guint8 * writeptr = NULL;
+  gint writeseg = 0;
   guint len = 0;
   gint retries = 0;
 
@@ -862,13 +867,15 @@ gst_directsound_read_proc (LPVOID lpParameter)
 
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
-#if 0
   restore_buffer:
     /* get current buffer status */
     GST_DSOUND_LOCK (dsoundbuffer);
-    hr = IDirectSoundBuffer8_GetStatus (dsoundbuffer->pDSB8, &dwStatus);
+    hr = IDirectSoundCaptureBuffer8_GetStatus (dsoundbuffer->pDSCB8, &dwStatus);
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
+    // ###: the capture api doesn't seem to have _BUFFERLOST and _Restore,
+    //   so commenting this out until it can be investigated.
+#if 0
     if (dwStatus & DSBSTATUS_BUFFERLOST) {
       GST_DEBUG ("Buffer was lost, attempting to restore");
 
@@ -876,7 +883,7 @@ gst_directsound_read_proc (LPVOID lpParameter)
       hr = IDirectSoundBuffer8_Restore (dsoundbuffer->pDSB8);
       GST_DSOUND_UNLOCK (dsoundbuffer);
 
-      /* restore may fail again, ensure we restore the 
+      /* restore may fail again, ensure we restore the
        * buffer before we continue */
       if (FAILED(hr) && hr == DSERR_BUFFERLOST) {
         if (retries++ < MAX_LOST_RETRIES) {
@@ -886,28 +893,39 @@ gst_directsound_read_proc (LPVOID lpParameter)
         else {
           GST_ELEMENT_ERROR (dsoundbuffer->element, RESOURCE, FAILED,
              ("%ls.", DXGetErrorDescription9W(hr)),
-             ("gst_directsound_write_proc: IDirectSoundBuffer8_Restore, hr = %X", (unsigned int) hr));
+             ("gst_directsound_read_proc: IDirectSoundBuffer8_Restore, hr = %X", (unsigned int) hr));
           goto complete;
         }
       }
     }
+#endif
 
-    /* get current play cursor and write cursor positions */
+    /* Starting capturing if not already */
+    if (!(dwStatus & DSCBSTATUS_CAPTURING)) {
+      hr = IDirectSoundCaptureBuffer8_Start (dsoundbuffer->pDSCB8,
+          DSCBSTART_LOOPING);
+      if (FAILED(hr)) {
+        GST_WARNING ("gst_directsound_read_proc: IDirectSoundCaptureBuffer8_Start, hr = %X", (unsigned int) hr);
+      }
+    }
+
+    /* get current capture cursor and read cursor positions */
     GST_DSOUND_LOCK (dsoundbuffer);
-    hr = IDirectSoundBuffer8_GetCurrentPosition (dsoundbuffer->pDSB8,
-        &dwCurrentPlayCursor, NULL);
+    hr = IDirectSoundCaptureBuffer8_GetCurrentPosition (dsoundbuffer->pDSCB8,
+        &dwCurrentCaptureCursor, NULL);
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
     if (G_UNLIKELY (FAILED(hr))) {
       /* try and reopen the default directsound device */
       if (hr == DIRECTSOUND_ERROR_DEVICE_RECONFIGURED) {
         /* we have to wait a while for the sound device removal to actually
-         * be processed before attempting to reopen the device. Yes, this sucks */
+         * be processed before attempting to reopen the device. Yes, this
+         * sucks */
         Sleep (2000);
 
         GST_DSOUND_LOCK (dsoundbuffer);
-        IDirectSoundBuffer8_Release (dsoundbuffer->pDSB8);
-        dsoundbuffer->pDSB8 = NULL;
+        IDirectSoundCaptureBuffer8_Release (dsoundbuffer->pDSCB8);
+        dsoundbuffer->pDSCB8 = NULL;
         GST_DSOUND_UNLOCK (dsoundbuffer);
 
         if (gst_directsound_ring_buffer_close_device (buf) &&
@@ -922,71 +940,54 @@ gst_directsound_read_proc (LPVOID lpParameter)
       if (FAILED(hr) && !error) {
         GST_ELEMENT_ERROR (dsoundbuffer->element, RESOURCE, FAILED,
            ("%ls.", DXGetErrorDescription9W(hr)),
-           ("gst_directsound_write_proc: IDirectSoundBuffer8_GetCurrentPosition, hr = %X", (unsigned int) hr));
+           ("gst_directsound_read_proc: IDirectSoundCaptureBuffer8_GetCurrentPosition, hr = %X", (unsigned int) hr));
         error = TRUE;
         goto complete;
       }
     }
 
-    GST_LOG ("Current Play Cursor: %u Current Write Offset: %d",
-             (unsigned int) dwCurrentPlayCursor,
-             dsoundbuffer->buffer_circular_offset);
+    GST_LOG ("Current Capture Cursor: %u Current Read Offset: %d",
+        (unsigned int) dwCurrentPlayCursor,
+        dsoundbuffer->buffer_circular_offset);
 
     /* calculate the free size of the circular buffer */
     GST_DSOUND_LOCK (dsoundbuffer);
-    if (dwCurrentPlayCursor <= dsoundbuffer->buffer_circular_offset)
+    if (dwCurrentCaptureCursor > dsoundbuffer->buffer_circular_offset)
       freeBufferSize = dsoundbuffer->buffer_size -
-        (dsoundbuffer->buffer_circular_offset - dwCurrentPlayCursor);
+        (dwCurrentCaptureCursor - dsoundbuffer->buffer_circular_offset);
     else
-      freeBufferSize = dwCurrentPlayCursor - dsoundbuffer->buffer_circular_offset;
+      freeBufferSize = dsoundbuffer->buffer_circular_offset - dwCurrentCaptureCursor;
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
-    if (!gst_ring_buffer_prepare_read (buf, &readseg, &readptr, &len))
+    if (!gst_ring_buffer_prepare_read (buf, &writeseg, &writeptr, &len))
       goto complete;
 
     len -= dsoundbuffer->segoffset;
 
-    GST_LOG ("Size of segment to write: %d Free buffer size: %lld",
-             len, freeBufferSize);
-
-    /* If we can't write this into directsound because we don't have enough 
-     * space, then start playback if we're currently paused. Then, sleep
-     * for a little while to wait until space is available */
-    if (len >= freeBufferSize) {
-      if (!(dwStatus & DSBSTATUS_PLAYING)) {
-        GST_DSOUND_LOCK (dsoundbuffer);
-        hr = IDirectSoundBuffer8_Play (dsoundbuffer->pDSB8, 0, 0, DSBPLAY_LOOPING);
-        GST_DSOUND_UNLOCK (dsoundbuffer);
-
-        if (FAILED(hr)) {
-          GST_WARNING ("gst_directsound_write_proc: IDirectSoundBuffer8_Play, hr = %X", (unsigned int) hr);
-        }
-      }
-
-      goto complete;
-    }
+    GST_LOG ("Size of segment to read: %d Free buffer size: %lld",
+        len, freeBufferSize);
 
     /* lock it */
     GST_DSOUND_LOCK (dsoundbuffer);
-    hr = IDirectSoundBuffer8_Lock (dsoundbuffer->pDSB8,
+    hr = IDirectSoundCaptureBuffer8_Lock (dsoundbuffer->pDSCB8,
         dsoundbuffer->buffer_circular_offset, len, &pLockedBuffer1,
         &dwSizeBuffer1, &pLockedBuffer2, &dwSizeBuffer2, 0L);
 
     /* copy chunks */
     if (SUCCEEDED (hr)) {
       if (len <= dwSizeBuffer1) {
-        memcpy (pLockedBuffer1, (LPBYTE) readptr + dsoundbuffer->segoffset, len);
+        memcpy ((LPBYTE) writeptr + dsoundbuffer->segoffset, pLockedBuffer1, len);
       }
       else {
-        memcpy (pLockedBuffer1, (LPBYTE) readptr + dsoundbuffer->segoffset, dwSizeBuffer1);
-        memcpy (pLockedBuffer2, (LPBYTE) readptr + dsoundbuffer->segoffset + dwSizeBuffer1, len - dwSizeBuffer1);
+        memcpy ((LPBYTE) writeptr + dsoundbuffer->segoffset, pLockedBuffer1, dwSizeBuffer1);
+        memcpy ((LPBYTE) writeptr + dsoundbuffer->segoffset + dwSizeBuffer1, pLockedBuffer2, len - dwSizeBuffer1);
       }
 
-      IDirectSoundBuffer8_Unlock (dsoundbuffer->pDSB8, pLockedBuffer1,
+      IDirectSoundCaptureBuffer8_Unlock (dsoundbuffer->pDSCB8, pLockedBuffer1,
          dwSizeBuffer1, pLockedBuffer2, dwSizeBuffer2);
     }
     else {
-      GST_WARNING ("gst_directsound_write_proc: IDirectSoundBuffer8_Lock, hr = %X", (unsigned int) hr);
+      GST_WARNING ("gst_directsound_read_proc: IDirectSoundCaptureBuffer8_Lock, hr = %X", (unsigned int) hr);
     }
 
     /* update tracking data */
@@ -1002,20 +1003,18 @@ gst_directsound_read_proc (LPVOID lpParameter)
         (unsigned int) dwSizeBuffer1, (unsigned int) dwSizeBuffer2);
     GST_LOG ("Free buffer size: %lld", freeBufferSize);
 
-    /* check if we read a whole segment */
+    /* check if we wrote a whole segment */
     GST_DSOUND_LOCK (dsoundbuffer);
     if (dsoundbuffer->segoffset == dsoundbuffer->segsize) {
       GST_DSOUND_UNLOCK (dsoundbuffer);
 
       /* advance to next segment */
-      gst_ring_buffer_clear (buf, readseg);
       gst_ring_buffer_advance (buf, 1);
 
       GST_DSOUND_LOCK (dsoundbuffer);
       dsoundbuffer->segoffset = 0;
     }
     GST_DSOUND_UNLOCK (dsoundbuffer);
-#endif
 
   complete:
     GST_DSOUND_LOCK (dsoundbuffer);
