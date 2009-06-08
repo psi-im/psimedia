@@ -844,6 +844,8 @@ gst_directsound_read_proc (LPVOID lpParameter)
   DWORD dwSizeBuffer1 = 0, dwSizeBuffer2 = 0;
   DWORD dwCurrentCaptureCursor = 0;
 
+  // ###: this variable is misnamed.  in the context of capture, it means
+  //  the amount of data captured and available for reading.
   gint64 freeBufferSize = 0;
 
   guint8 * writeptr = NULL;
@@ -967,6 +969,16 @@ gst_directsound_read_proc (LPVOID lpParameter)
 
     GST_LOG ("Size of segment to read: %d Free buffer size: %lld",
         len, freeBufferSize);
+
+    /* If we can't read from directsound because we don't have enough
+     * captured data, then sleep for a little while to wait until data is
+     * available */
+    // ###: why >= and not > ?
+    // ###: what happens if this condition is true on the first iteration?
+    //   capture totally busted?
+    if (len >= freeBufferSize) {
+      goto complete;
+    }
 
     /* lock it */
     GST_DSOUND_LOCK (dsoundbuffer);
