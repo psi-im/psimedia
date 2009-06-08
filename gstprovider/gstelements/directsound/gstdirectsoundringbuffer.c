@@ -308,6 +308,10 @@ gst_directsound_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * sp
   wfx.nBlockAlign = spec->bytes_per_sample;
   wfx.nAvgBytesPerSec = wfx.nSamplesPerSec * wfx.nBlockAlign;
 
+  /* enforce a minimum latency of 2x the sleep_time */
+  if (spec->latency_time < (dsoundbuffer->min_sleep_time * 2 * 1000))
+    spec->latency_time = dsoundbuffer->min_sleep_time * 2 * 1000;
+
   /* Create directsound buffer with size based on our configured
    * buffer_size (which is 200 ms by default) */
   dsoundbuffer->buffer_size = gst_util_uint64_scale_int (wfx.nAvgBytesPerSec, spec->buffer_time, GST_MSECOND);
@@ -976,9 +980,14 @@ gst_directsound_read_proc (LPVOID lpParameter)
     // ###: why >= and not > ?
     // ###: what happens if this condition is true on the first iteration?
     //   capture totally busted?
-    if (len >= freeBufferSize) {
+    //if (len >= freeBufferSize) {
+    //  goto complete;
+    //}
+    if (freeBufferSize < 1)
       goto complete;
-    }
+
+    if (len > freeBufferSize)
+      len = freeBufferSize;
 
     /* lock it */
     GST_DSOUND_LOCK (dsoundbuffer);
