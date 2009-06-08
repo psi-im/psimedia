@@ -947,7 +947,7 @@ gst_directsound_read_proc (LPVOID lpParameter)
     }
 
     GST_LOG ("Current Capture Cursor: %u Current Read Offset: %d",
-        (unsigned int) dwCurrentPlayCursor,
+        (unsigned int) dwCurrentCaptureCursor,
         dsoundbuffer->buffer_circular_offset);
 
     /* calculate the free size of the circular buffer */
