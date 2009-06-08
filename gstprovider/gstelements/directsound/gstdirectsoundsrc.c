@@ -119,7 +119,7 @@ gst_directsound_src_class_init (GstDirectSoundSrcClass * klass)
 }
 
 static void
-gst_directsound_sink_init (GstDirectSoundSrc * dsoundsrc,
+gst_directsound_src_init (GstDirectSoundSrc * dsoundsrc,
     GstDirectSoundSrcClass * g_class)
 {
   dsoundsrc->dsoundbuffer = NULL;
@@ -127,7 +127,7 @@ gst_directsound_sink_init (GstDirectSoundSrc * dsoundsrc,
 }
 
 static gboolean
-gst_directsound_src_event (GstBaseSink * bsrc, GstEvent * event)
+gst_directsound_src_event (GstBaseSrc * bsrc, GstEvent * event)
 {
   HRESULT hr;
   DWORD dwStatus;
@@ -225,7 +225,7 @@ static void
 gst_directsound_src_set_property (GObject * object,
     guint prop_id, const GValue * value , GParamSpec * pspec)
 {
-  GstDirectSoundSrc * src = GST_DIRECTSOUND_SRC (object);
+  //GstDirectSoundSrc * src = GST_DIRECTSOUND_SRC (object);
 
   switch (prop_id) {
     /*case ARG_VOLUME:
@@ -242,7 +242,7 @@ static void
 gst_directsound_src_get_property (GObject * object,
     guint prop_id, GValue * value , GParamSpec * pspec)
 {
-  GstDirectSoundSrc * src = GST_DIRECTSOUND_SRC (object);
+  //GstDirectSoundSrc * src = GST_DIRECTSOUND_SRC (object);
 
   switch (prop_id) {
     /*case ARG_VOLUME:
