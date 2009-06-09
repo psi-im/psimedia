@@ -101,6 +101,8 @@ cb_enum (LPGUID lpGUID, LPCWSTR lpszDesc, LPCWSTR lpszDrvName, LPVOID lpContext)
     return TRUE;
   }
 
+  GST_DEBUG ("  device id=[%s] name=[%s]", dev->id, dev->name);
+
   *list = g_list_append (*list, dev);
 
   return TRUE;
@@ -140,6 +142,7 @@ GList *
 gst_directsound_playback_device_list ()
 {
     GList * out = NULL;
+    GST_DEBUG ("enumerating playback devices");
     if (FAILED (DirectSoundEnumerateW ((LPDSENUMCALLBACK) cb_enum, &out))) {
       if (out)
         gst_directsound_device_list_free (out);
@@ -152,6 +155,7 @@ GList *
 gst_directsound_capture_device_list ()
 {
     GList * out = NULL;
+    GST_DEBUG ("enumerating capture devices");
     if (FAILED (DirectSoundCaptureEnumerateW ((LPDSENUMCALLBACK) cb_enum, &out))) {
       if (out)
         gst_directsound_device_list_free (out);
