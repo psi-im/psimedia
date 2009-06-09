@@ -101,7 +101,7 @@ enum
 };
 
 GST_BOILERPLATE_FULL (GstDirectSoundSink, gst_directsound_sink,
-    GstBaseAudioSink, GST_TYPE_BASE_AUDIO_SINK
+    GstBaseAudioSink, GST_TYPE_BASE_AUDIO_SINK,
     gst_directsound_sink_init_interfaces);
 
 static gboolean
