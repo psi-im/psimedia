@@ -483,7 +483,7 @@ probe_get_values (GstPropertyProbe * probe, guint prop_id,
 
   //src = GST_DIRECTSOUND_SRC (probe);
 
-  list = gst_directsound_playback_device_list ();
+  list = gst_directsound_capture_device_list ();
 
   if (list == NULL) {
     GST_LOG_OBJECT (probe, "No devices found");
