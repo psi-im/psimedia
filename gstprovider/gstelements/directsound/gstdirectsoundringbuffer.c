@@ -298,7 +298,7 @@ gst_directsound_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * sp
   /* save number of bytes per sample */
   dsoundbuffer->bytes_per_sample = spec->bytes_per_sample;
 
-  /* fill the WAVEFORMATEX struture with spec params */
+  /* fill the WAVEFORMATEX structure with spec params */
   memset (&wfx, 0, sizeof (wfx));
   wfx.cbSize = sizeof (wfx);
   wfx.wFormatTag = WAVE_FORMAT_PCM;
@@ -852,9 +852,7 @@ gst_directsound_read_proc (LPVOID lpParameter)
   DWORD dwSizeBuffer1 = 0, dwSizeBuffer2 = 0;
   DWORD dwCurrentCaptureCursor = 0;
 
-  // ###: this variable is misnamed.  in the context of capture, it means
-  //  the amount of data captured and available for reading.
-  gint64 freeBufferSize = 0;
+  gint64 capturedBufferSize = 0;
 
   guint8 * writeptr = NULL;
   gint writeseg = 0;
@@ -961,12 +959,13 @@ gst_directsound_read_proc (LPVOID lpParameter)
         (unsigned int) dwCurrentCaptureCursor,
         dsoundbuffer->buffer_circular_offset);
 
-    /* calculate the free size of the circular buffer */
+    /* calculate the captured amount in the circular buffer */
     GST_DSOUND_LOCK (dsoundbuffer);
     if (dwCurrentCaptureCursor >= dsoundbuffer->buffer_circular_offset)
-      freeBufferSize = dwCurrentCaptureCursor - dsoundbuffer->buffer_circular_offset;
+      capturedBufferSize = dwCurrentCaptureCursor -
+          dsoundbuffer->buffer_circular_offset;
     else
-      freeBufferSize = dsoundbuffer->buffer_size -
+      capturedBufferSize = dsoundbuffer->buffer_size -
         (dsoundbuffer->buffer_circular_offset - dwCurrentCaptureCursor);
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
@@ -975,8 +974,11 @@ gst_directsound_read_proc (LPVOID lpParameter)
 
     len -= dsoundbuffer->segoffset;
 
-    GST_LOG ("Size of segment to read: %d Free buffer size: %lld",
-        len, freeBufferSize);
+    if (len > capturedBufferSize)
+      len = capturedBufferSize;
+
+    GST_LOG ("Size of segment to read: %d Captured buffer size: %lld",
+        len, capturedBufferSize);
 
     /* If we can't read from directsound because we don't have enough
      * captured data, then sleep for a little while to wait until data is
@@ -984,14 +986,11 @@ gst_directsound_read_proc (LPVOID lpParameter)
     // ###: why >= and not > ?
     // ###: what happens if this condition is true on the first iteration?
     //   capture totally busted?
-    //if (len >= freeBufferSize) {
+    //if (len >= capturedBufferSize) {
     //  goto complete;
     //}
-    if (freeBufferSize < 1)
+    if (len <= 0)
       goto complete;
-
-    if (len > freeBufferSize)
-      len = freeBufferSize;
 
     /* lock it */
     GST_DSOUND_LOCK (dsoundbuffer);
@@ -1017,17 +1016,17 @@ gst_directsound_read_proc (LPVOID lpParameter)
     }
 
     /* update tracking data */
-    dsoundbuffer->segoffset += dwSizeBuffer1 + (len - dwSizeBuffer1);
+    dsoundbuffer->segoffset += len;
 
-    dsoundbuffer->buffer_circular_offset += dwSizeBuffer1 + (len - dwSizeBuffer1);
+    dsoundbuffer->buffer_circular_offset += len;
     dsoundbuffer->buffer_circular_offset %= dsoundbuffer->buffer_size;
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
-    freeBufferSize -= dwSizeBuffer1 + (len - dwSizeBuffer1);
+    capturedBufferSize -= len;
 
     GST_LOG ("DirectSound Buffer1 Data Size: %u DirectSound Buffer2 Data Size: %u",
         (unsigned int) dwSizeBuffer1, (unsigned int) dwSizeBuffer2);
-    GST_LOG ("Free buffer size: %lld", freeBufferSize);
+    GST_LOG ("Captured buffer size remaining: %lld", capturedBufferSize);
 
     /* check if we wrote a whole segment */
     GST_DSOUND_LOCK (dsoundbuffer);
@@ -1052,7 +1051,7 @@ gst_directsound_read_proc (LPVOID lpParameter)
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
     /* it's extremely important to sleep in without the lock! */
-    if (len >= freeBufferSize || flushing || error)
+    if (len >= capturedBufferSize || flushing || error)
       Sleep (dsoundbuffer->min_sleep_time);
   }
   while(should_run);

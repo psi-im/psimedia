@@ -50,7 +50,7 @@ static GstStaticPadTemplate directsoundsrc_src_factory =
         "width = (int) {8, 16}, "
         "depth = (int) {8, 16}, "
         "rate = (int) [ 1, MAX ], " 
-        "channels = (int) [ 1, 2 ]"));
+        "channels = (int) 1"));
 
 static void gst_directsound_src_base_init (gpointer g_class);
 static void gst_directsound_src_class_init (GstDirectSoundSrcClass * klass);
