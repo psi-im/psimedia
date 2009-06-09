@@ -494,7 +494,7 @@ probe_get_values (GstPropertyProbe * probe, guint prop_id,
   g_value_init (&value, G_TYPE_STRING);
   for (l = list; l != NULL; l = l->next) {
     dev = (gst_directsound_device *) l->data;
-    GST_LOG_OBJECT (probe, "Found device: %s", dev->id);
+    GST_LOG_OBJECT (probe, "Found device: id=[%s] name=[%s]", dev->id, dev->name);
     g_value_take_string (&value, dev->id);
     dev->id = NULL;
     gst_directsound_device_free (dev);
