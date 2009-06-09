@@ -32,11 +32,7 @@
 #define PIPELINE_DEBUG
 
 // rates lower than 22050 (e.g. 16000) might not work with echo-cancel
-#ifdef Q_OS_WIN
-#define DEFAULT_FIXED_RATE 16000
-#else
 #define DEFAULT_FIXED_RATE 22050
-#endif
 
 // in milliseconds
 #define DEFAULT_LATENCY 20
@@ -190,7 +186,6 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 	if(!e)
 		return 0;
 
-#ifndef Q_OS_WIN
 	// explicitly set audio devices to be low-latency
 	if(/*type == PDevice::AudioIn ||*/ type == PDevice::AudioOut)
 	{
@@ -202,7 +197,6 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 			//g_object_set(G_OBJECT(e), "buffer-time", 2 * lt, NULL);
 		}
 	}
-#endif
 
 	GstElement *bin = gst_bin_new(NULL);
 
