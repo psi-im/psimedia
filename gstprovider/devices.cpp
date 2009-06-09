@@ -94,8 +94,6 @@ static bool element_should_use_probe(const QString &element_name)
 		element_name == "v4l2src" ||
 		element_name == "osxaudiosrc" ||
 		element_name == "osxaudiosink" ||
-		element_name == "directsoundsrc" ||
-		element_name == "directsoundsink" ||
 		element_name == "ksvideosrc")
 	{
 		return false;
