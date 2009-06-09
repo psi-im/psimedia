@@ -63,7 +63,7 @@ string_to_guid (const gchar * str)
     return NULL;
 
   out = g_malloc (sizeof (GUID));
-  ret = CLSIDFromString ((LPCOLESTR) wstr, out);
+  ret = CLSIDFromString ((LPOLESTR) wstr, out);
   g_free (wstr);
   if (ret != NOERROR) {
     g_free (out);
@@ -140,7 +140,7 @@ GList *
 gst_directsound_playback_device_list ()
 {
     GList * out = NULL;
-    if (FAILED (DirectSoundEnumerateW ((LPDSENUMCALLBACK)cb_enum, &out)) {
+    if (FAILED (DirectSoundEnumerateW ((LPDSENUMCALLBACK) cb_enum, &out))) {
       if (out)
         gst_directsound_device_list_free (out);
       return NULL;
@@ -152,7 +152,7 @@ GList *
 gst_directsound_capture_device_list ()
 {
     GList * out = NULL;
-    if (FAILED (DirectSoundCaptureEnumerateW ((LPDSENUMCALLBACK)cb_enum, &out)) {
+    if (FAILED (DirectSoundCaptureEnumerateW ((LPDSENUMCALLBACK) cb_enum, &out))) {
       if (out)
         gst_directsound_device_list_free (out);
       return NULL;
