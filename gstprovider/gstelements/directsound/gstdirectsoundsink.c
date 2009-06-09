@@ -52,6 +52,8 @@
 
 #include "gstdirectsoundsink.h"
 
+#include <gst/interfaces/propertyprobe.h>
+
 #define GST_CAT_DEFAULT directsound
 
 /* elementfactory information */
@@ -241,7 +243,7 @@ gst_directsound_sink_init (GstDirectSoundSink * dsoundsink,
 {
   dsoundsink->dsoundbuffer = NULL;
   dsoundsink->volume = 1.0;
-  dsoundsink->device = NULL;
+  dsoundsink->device_id = NULL;
   dsoundsink->device_name = NULL;
 }
 

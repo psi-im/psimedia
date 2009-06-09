@@ -31,7 +31,6 @@
 
 #include "gstdirectsoundringbuffer.h"
 
-#include <gst/interfaces/propertyprobe.h>
 #include "gstdirectsoundsink.h"
 #include "gstdirectsoundsrc.h"
 

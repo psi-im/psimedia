@@ -124,6 +124,8 @@ gst_directsound_src_init (GstDirectSoundSrc * dsoundsrc,
 {
   dsoundsrc->dsoundbuffer = NULL;
   dsoundsrc->volume = 1.0;
+  dsoundsink->device_id = NULL;
+  dsoundsink->device_name = NULL;
 }
 
 static gboolean
