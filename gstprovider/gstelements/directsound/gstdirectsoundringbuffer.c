@@ -38,6 +38,7 @@
 #define MAX_LOST_RETRIES 10
 #define DIRECTSOUND_ERROR_DEVICE_RECONFIGURED 0x88780096
 #define DIRECTSOUND_ERROR_DEVICE_NO_DRIVER    0x88780078
+#define CAPTURE_PADDING 1024
 
 static void gst_directsound_ring_buffer_class_init (
     GstDirectSoundRingBufferClass * klass);
@@ -974,8 +975,16 @@ gst_directsound_read_proc (LPVOID lpParameter)
 
     len -= dsoundbuffer->segoffset;
 
-    if (len > capturedBufferSize)
-      len = capturedBufferSize;
+    // FIXME: it seems that at least under vmware, the cursor position is
+    //   reported too early.  that is, data is still being written to
+    //   the circular buffer before the cursor is actually at the position
+    //   being reported.  we'll work around this by leaving some bytes in
+    //   the buffer at all times.
+    if (capturedBufferSize <= CAPTURE_PADDING)
+      goto complete;
+
+    if (len > capturedBufferSize - CAPTURE_PADDING)
+      len = capturedBufferSize - CAPTURE_PADDING;
 
     GST_LOG ("Size of segment to read: %d Captured buffer size: %lld",
         len, capturedBufferSize);
