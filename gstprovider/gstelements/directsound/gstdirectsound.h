@@ -45,6 +45,24 @@ GST_DEBUG_CATEGORY_EXTERN (directsound);
 
 G_BEGIN_DECLS
 
+typedef struct
+{
+  gchar * id;
+  gchar * name;
+} gst_directsound_device;
+
+gst_directsound_device * gst_directsound_device_alloc ();
+void gst_directsound_device_free (gst_directsound_device * dev);
+void gst_directsound_device_free_func (gpointer data,
+    gpointer user_data);
+
+GList * gst_directsound_playback_device_list ();
+GList * gst_directsound_capture_device_list ();
+void gst_directsound_device_list_free (GList * list);
+
+/* if non-null, use g_free to free the guid */
+LPGUID gst_directsound_get_device_guid (const gchar * id);
+
 void gst_directsound_set_volume (LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume);
 
 G_END_DECLS

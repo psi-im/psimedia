@@ -163,27 +163,47 @@ static gboolean
 gst_directsound_ring_buffer_open_device (GstRingBuffer * buf)
 {
   HRESULT hr;
+  gchar * device_id;
+  LPGUID lpGuid = NULL;
   GstDirectSoundRingBuffer * dsoundbuffer = GST_DIRECTSOUND_RING_BUFFER (buf);
 
   GST_DEBUG ("Opening DirectSound Device");
 
   if (dsoundbuffer->is_src) {
-    if (FAILED (hr = DirectSoundCaptureCreate8 (NULL, &dsoundbuffer->pDSC8, NULL))) {
+    device_id = ((GstDirectSoundSrc *)(dsoundbuffer->element))->device_id;
+    if (device_id)
+      lpGuid = gst_directsound_get_device_guid (device_id);
+
+    if (FAILED (hr = DirectSoundCaptureCreate8 (lpGuid, &dsoundbuffer->pDSC8, NULL))) {
       GST_ELEMENT_ERROR (dsoundbuffer->element, RESOURCE, FAILED,
         ("%ls.", DXGetErrorDescription9W(hr)),
         ("Failed to create directsound device. (%X)", (unsigned int) hr));
       dsoundbuffer->pDSC8 = NULL;
+      if (lpGuid)
+        g_free (lpGuid);
       return FALSE;
     }
+
+    if (lpGuid)
+      g_free (lpGuid);
   }
   else {
-    if (FAILED (hr = DirectSoundCreate8 (NULL, &dsoundbuffer->pDS8, NULL))) {
+    device_id = ((GstDirectSoundSink *)(dsoundbuffer->element))->device_id;
+    if (device_id)
+      lpGuid = gst_directsound_get_device_guid (device_id);
+
+    if (FAILED (hr = DirectSoundCreate8 (lpGuid, &dsoundbuffer->pDS8, NULL))) {
       GST_ELEMENT_ERROR (dsoundbuffer->element, RESOURCE, FAILED,
         ("%ls.", DXGetErrorDescription9W(hr)),
         ("Failed to create directsound device. (%X)", (unsigned int) hr));
       dsoundbuffer->pDS8 = NULL;
+      if (lpGuid)
+        g_free (lpGuid);
       return FALSE;
     }
+
+    if (lpGuid)
+      g_free (lpGuid);
 
     if (FAILED (hr = IDirectSound8_SetCooperativeLevel (dsoundbuffer->pDS8,
                 GetDesktopWindow (), DSSCL_PRIORITY))) {

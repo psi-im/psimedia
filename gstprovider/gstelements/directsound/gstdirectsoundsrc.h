@@ -59,6 +59,9 @@ struct _GstDirectSoundSrc
 
   /* current volume */
   gdouble volume;
+
+  gchar * device_id;
+  gchar * device_name;
 };
 
 struct _GstDirectSoundSrcClass

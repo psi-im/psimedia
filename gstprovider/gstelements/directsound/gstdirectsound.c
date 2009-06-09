@@ -41,6 +41,64 @@ GST_DEBUG_CATEGORY (directsound);
 
 #define GST_CAT_DEFAULT directsound
 
+gst_directsound_device *
+gst_directsound_device_alloc ()
+{
+  gst_directsound_device * dev;
+  dev = g_malloc (sizeof (gst_directsound_device));
+  dev->id = NULL;
+  dev->name = NULL;
+  return dev;
+}
+
+void
+gst_directsound_device_free (gst_directsound_device * dev)
+{
+  if (!dev)
+    return;
+
+  if (dev->id)
+    g_free (dev->id);
+  if (dev->name)
+    g_free (dev->name);
+
+  g_free (dev);
+}
+
+void
+gst_directsound_device_free_func (gpointer data, gpointer user_data)
+{
+  gst_directsound_device_free ((gst_directsound_device *) data);
+}
+
+GList *
+gst_directsound_playback_device_list ()
+{
+  // TODO
+  return NULL;
+}
+
+GList *
+gst_directsound_capture_device_list ()
+{
+  // TODO
+  return NULL;
+}
+
+void
+gst_directsound_device_list_free (GList * list)
+{
+  g_list_foreach (list, gst_directsound_device_free_func, NULL);
+  g_list_free (list);
+}
+
+LPGUID
+gst_directsound_get_device_guid (const gchar * id)
+{
+  // TODO
+  return NULL;
+}
+
 void
 gst_directsound_set_volume (LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume)
 {

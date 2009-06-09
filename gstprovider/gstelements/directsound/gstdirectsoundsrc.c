@@ -223,7 +223,7 @@ gst_directsound_sink_set_volume (GstDirectSoundSink * dsoundsink)
 
 static void
 gst_directsound_src_set_property (GObject * object,
-    guint prop_id, const GValue * value , GParamSpec * pspec)
+    guint prop_id, const GValue * value, GParamSpec * pspec)
 {
   //GstDirectSoundSrc * src = GST_DIRECTSOUND_SRC (object);
 
@@ -240,7 +240,7 @@ gst_directsound_src_set_property (GObject * object,
 
 static void
 gst_directsound_src_get_property (GObject * object,
-    guint prop_id, GValue * value , GParamSpec * pspec)
+    guint prop_id, GValue * value, GParamSpec * pspec)
 {
   //GstDirectSoundSrc * src = GST_DIRECTSOUND_SRC (object);
 
