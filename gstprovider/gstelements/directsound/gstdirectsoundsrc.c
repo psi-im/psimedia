@@ -56,6 +56,7 @@ static void gst_directsound_src_base_init (gpointer g_class);
 static void gst_directsound_src_class_init (GstDirectSoundSrcClass * klass);
 static void gst_directsound_src_init (GstDirectSoundSrc * dsoundsrc,
     GstDirectSoundSrcClass * g_class);
+static void gst_directsound_src_dispose (GObject * object);
 
 static gboolean gst_directsound_src_event (GstBaseSrc * bsrc,
     GstEvent * event);
@@ -103,6 +104,7 @@ gst_directsound_src_class_init (GstDirectSoundSrcClass * klass)
 
   parent_class = g_type_class_peek_parent (klass);
 
+  gobject_class->dispose = gst_directsound_src_dispose;
   gobject_class->set_property =
       GST_DEBUG_FUNCPTR (gst_directsound_src_set_property);
   gobject_class->get_property =
@@ -124,8 +126,27 @@ gst_directsound_src_init (GstDirectSoundSrc * dsoundsrc,
 {
   dsoundsrc->dsoundbuffer = NULL;
   dsoundsrc->volume = 1.0;
-  dsoundsink->device_id = NULL;
-  dsoundsink->device_name = NULL;
+  dsoundsrc->device_id = NULL;
+  dsoundsrc->device_name = NULL;
+}
+
+static void
+gst_directsound_src_dispose (GObject * object)
+{
+  GstDirectSoundSrc * self = GST_DIRECTSOUND_SINK (object);
+  GST_DEBUG_OBJECT (object, G_STRFUNC);
+
+  if (self->device_id) {
+    g_free (self->device_id);
+    self->device_id = NULL;
+  }
+
+  if (self->device_name) {
+    g_free (self->device_name);
+    self->device_name = NULL;
+  }
+
+  G_OBJECT_CLASS (parent_class)->dispose (object);
 }
 
 static gboolean
