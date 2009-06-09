@@ -133,7 +133,7 @@ gst_directsound_src_init (GstDirectSoundSrc * dsoundsrc,
 static void
 gst_directsound_src_dispose (GObject * object)
 {
-  GstDirectSoundSrc * self = GST_DIRECTSOUND_SINK (object);
+  GstDirectSoundSrc * self = GST_DIRECTSOUND_SRC (object);
   GST_DEBUG_OBJECT (object, G_STRFUNC);
 
   if (self->device_id) {
