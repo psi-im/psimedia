@@ -35,11 +35,76 @@
 
 #include "gstdirectsound.h"
 
+#include <objbase.h>
 #include <math.h>
 
 GST_DEBUG_CATEGORY (directsound);
 
 #define GST_CAT_DEFAULT directsound
+
+static gchar *
+guid_to_string (LPGUID in)
+{
+  WCHAR buffer[256];
+  if (StringFromGUID2 (in, buffer, sizeof buffer / sizeof buffer[0]) == 0)
+    return NULL;
+  return g_utf16_to_utf8 ((const gunichar2 *) buffer, -1, NULL, NULL, NULL);
+}
+
+static LPGUID
+string_to_guid (const gchar * str)
+{
+  HRESULT ret;
+  gunichar2 * wstr;
+  LPGUID out;
+
+  wstr = g_utf8_to_utf16 (str, -1, NULL, NULL, NULL);
+  if (!wstr)
+    return NULL;
+
+  out = g_malloc (sizeof (GUID));
+  ret = CLSIDFromString ((LPCOLESTR) wstr, out);
+  g_free (wstr);
+  if (ret != NOERROR) {
+    g_free (out);
+    return NULL;
+  }
+
+  return out;
+}
+
+static BOOL CALLBACK
+cb_enum (LPGUID lpGUID, LPCWSTR lpszDesc, LPCWSTR lpszDrvName, LPVOID lpContext)
+{
+  GList ** list;
+  gst_directsound_device * dev;
+
+  list = (GList **) lpContext;
+  dev = gst_directsound_device_alloc ();
+
+  if (lpGUID == NULL) {
+    /* default device */
+    dev->id = g_strdup ("");
+  }
+  else {
+    dev->id = guid_to_string (lpGUID);
+    if (!dev->id) {
+      gst_directsound_device_free (dev);
+      return TRUE;
+    }
+  }
+
+  dev->name = g_utf16_to_utf8 ((const gunichar2 *) lpszDesc, -1, NULL, NULL,
+      NULL);
+  if (!dev->name) {
+    gst_directsound_device_free (dev);
+    return TRUE;
+  }
+
+  *list = g_list_append (*list, dev);
+
+  return TRUE;
+}
 
 gst_directsound_device *
 gst_directsound_device_alloc ()
@@ -74,15 +139,25 @@ gst_directsound_device_free_func (gpointer data, gpointer user_data)
 GList *
 gst_directsound_playback_device_list ()
 {
-  // TODO
-  return NULL;
+    GList * out = NULL;
+    if (FAILED (DirectSoundEnumerateW ((LPDSENUMCALLBACK)cb_enum, &out)) {
+      if (out)
+        gst_directsound_device_list_free (out);
+      return NULL;
+    }
+    return out;
 }
 
 GList *
 gst_directsound_capture_device_list ()
 {
-  // TODO
-  return NULL;
+    GList * out = NULL;
+    if (FAILED (DirectSoundCaptureEnumerateW ((LPDSENUMCALLBACK)cb_enum, &out)) {
+      if (out)
+        gst_directsound_device_list_free (out);
+      return NULL;
+    }
+    return out;
 }
 
 void
@@ -95,8 +170,7 @@ gst_directsound_device_list_free (GList * list)
 LPGUID
 gst_directsound_get_device_guid (const gchar * id)
 {
-  // TODO
-  return NULL;
+  return string_to_guid (id);
 }
 
 void

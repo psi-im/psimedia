@@ -32,7 +32,8 @@ windows {
 			-lksuser \
 			-lamstrmid \
 			-ldsound \
-			-ldxerr9
+			-ldxerr9 \
+			-lole32
 	}
 }
 
