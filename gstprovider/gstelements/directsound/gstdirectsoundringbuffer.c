@@ -38,7 +38,6 @@
 #define MAX_LOST_RETRIES 10
 #define DIRECTSOUND_ERROR_DEVICE_RECONFIGURED 0x88780096
 #define DIRECTSOUND_ERROR_DEVICE_NO_DRIVER    0x88780078
-#define CAPTURE_PADDING 1024
 
 static void gst_directsound_ring_buffer_class_init (
     GstDirectSoundRingBufferClass * klass);
@@ -852,6 +851,7 @@ gst_directsound_read_proc (LPVOID lpParameter)
   LPVOID pLockedBuffer1 = NULL, pLockedBuffer2 = NULL;
   DWORD dwSizeBuffer1 = 0, dwSizeBuffer2 = 0;
   DWORD dwCurrentCaptureCursor = 0;
+  DWORD dwCurrentReadCursor = 0;
 
   gint64 capturedBufferSize = 0;
 
@@ -922,7 +922,7 @@ gst_directsound_read_proc (LPVOID lpParameter)
     /* get current capture cursor and read cursor positions */
     GST_DSOUND_LOCK (dsoundbuffer);
     hr = IDirectSoundCaptureBuffer8_GetCurrentPosition (dsoundbuffer->pDSCB8,
-        &dwCurrentCaptureCursor, NULL);
+        &dwCurrentCaptureCursor, &dwCurrentReadCursor);
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
     if (G_UNLIKELY (FAILED(hr))) {
@@ -956,18 +956,18 @@ gst_directsound_read_proc (LPVOID lpParameter)
       }
     }
 
-    GST_LOG ("Current Capture Cursor: %u Current Read Offset: %d",
-        (unsigned int) dwCurrentCaptureCursor,
-        dsoundbuffer->buffer_circular_offset);
+    GST_LOG ("Current Read Start: %u Current Read End: %d",
+        dsoundbuffer->buffer_circular_offset,
+        (unsigned int) dwCurrentReadCursor);
 
     /* calculate the captured amount in the circular buffer */
     GST_DSOUND_LOCK (dsoundbuffer);
-    if (dwCurrentCaptureCursor >= dsoundbuffer->buffer_circular_offset)
-      capturedBufferSize = dwCurrentCaptureCursor -
+    if (dwCurrentReadCursor >= dsoundbuffer->buffer_circular_offset)
+      capturedBufferSize = dwCurrentReadCursor -
           dsoundbuffer->buffer_circular_offset;
     else
       capturedBufferSize = dsoundbuffer->buffer_size -
-        (dsoundbuffer->buffer_circular_offset - dwCurrentCaptureCursor);
+        (dsoundbuffer->buffer_circular_offset - dwCurrentReadCursor);
     GST_DSOUND_UNLOCK (dsoundbuffer);
 
     if (!gst_ring_buffer_prepare_read (buf, &writeseg, &writeptr, &len))
@@ -975,16 +975,8 @@ gst_directsound_read_proc (LPVOID lpParameter)
 
     len -= dsoundbuffer->segoffset;
 
-    // FIXME: it seems that at least under vmware, the cursor position is
-    //   reported too early.  that is, data is still being written to
-    //   the circular buffer before the cursor is actually at the position
-    //   being reported.  we'll work around this by leaving some bytes in
-    //   the buffer at all times.
-    if (capturedBufferSize <= CAPTURE_PADDING)
-      goto complete;
-
-    if (len > capturedBufferSize - CAPTURE_PADDING)
-      len = capturedBufferSize - CAPTURE_PADDING;
+    if (len > capturedBufferSize)
+      len = capturedBufferSize;
 
     GST_LOG ("Size of segment to read: %d Captured buffer size: %lld",
         len, capturedBufferSize);
