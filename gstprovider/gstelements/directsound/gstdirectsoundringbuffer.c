@@ -32,6 +32,7 @@
 #include "gstdirectsoundringbuffer.h"
 
 #include "gstdirectsoundsink.h"
+#include "gstdirectsoundsrc.h"
 
 #define GST_CAT_DEFAULT directsound
 
