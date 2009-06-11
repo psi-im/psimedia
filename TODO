@@ -10,13 +10,13 @@ backend:
 gstreamer:
   + cleanup osxaudio, make src work (#564948, accepted)
   + rewrite osxvideo (#153684, submitted)
+  + rewrite directsound
+  + enumeration in directsound
+  ? make speexdsp/speexechoprobe work properly (mostly works..)
   GstBus doesn't work with non-default GMainContext (#562170, patch)
   frame-accurate looping
     oggdemux/theoradec doesn't play last frame (#568014, submitted)
     theoraenc screws up when looped (#562163, unresolved)
   enumeration in ksvideosrc (oleavr working on this)
-  make speexdsp/speexechoprobe work properly
-  enumeration in directsound
-  rewrite directsound
   v4l2src that supports only image/jpeg fails if independently set to READY
     before changing to PAUSED.  see devices.cpp
