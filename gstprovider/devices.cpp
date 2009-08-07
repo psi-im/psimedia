@@ -79,7 +79,7 @@ static QList<GstDeviceProbeValue> device_probe(GstElement *e)
 
 static bool element_should_use_probe(const QString &element_name)
 {
-	// we can enumerate devices in two ways.  one is via gst propery
+	// we can enumerate devices in two ways.  one is via gst property
 	//   probing and the other is through our own DeviceEnum code.
 	//   since gst property probing is "the future", we'll take a
 	//   probe-by-default approach, and only use DeviceEnum for specific
