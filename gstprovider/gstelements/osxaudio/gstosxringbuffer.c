@@ -43,13 +43,12 @@
  */
 
 #include <CoreAudio/CoreAudio.h>
+#include <CoreServices/CoreServices.h>
 #include <gst/gst.h>
 #include <gst/audio/multichannel.h>
 #include "gstosxringbuffer.h"
 #include "gstosxaudiosink.h"
 #include "gstosxaudiosrc.h"
-
-#define UNUSED(x) (void)x;
 
 GST_DEBUG_CATEGORY_STATIC (osx_audio_debug);
 #define GST_CAT_DEFAULT osx_audio_debug
@@ -67,22 +66,19 @@ static gboolean gst_osx_ring_buffer_start (GstRingBuffer * buf);
 static gboolean gst_osx_ring_buffer_pause (GstRingBuffer * buf);
 static gboolean gst_osx_ring_buffer_stop (GstRingBuffer * buf);
 static guint gst_osx_ring_buffer_delay (GstRingBuffer * buf);
-static GstRingBufferClass * ring_parent_class = NULL;
+static GstRingBufferClass *ring_parent_class = NULL;
 
 static OSStatus gst_osx_ring_buffer_render_notify (GstOsxRingBuffer * osxbuf,
     AudioUnitRenderActionFlags * ioActionFlags,
     const AudioTimeStamp * inTimeStamp, unsigned int inBusNumber,
     unsigned int inNumberFrames, AudioBufferList * ioData);
 
-static AudioBufferList * buffer_list_alloc (int channels, int frames,
-    int bytesPerChannel, gboolean interleaved);
+static AudioBufferList *buffer_list_alloc (int channels, int size);
 static void buffer_list_free (AudioBufferList * list);
 
 static void
 gst_osx_ring_buffer_do_init (GType type)
 {
-  UNUSED (type);
-
   GST_DEBUG_CATEGORY_INIT (osx_audio_debug, "osxaudio", 0,
       "OSX Audio Elements");
 }
@@ -93,17 +89,15 @@ GST_BOILERPLATE_FULL (GstOsxRingBuffer, gst_osx_ring_buffer, GstRingBuffer,
 static void
 gst_osx_ring_buffer_base_init (gpointer g_class)
 {
-  UNUSED (g_class);
-
   /* Nothing to do right now */
 }
 
 static void
 gst_osx_ring_buffer_class_init (GstOsxRingBufferClass * klass)
 {
-  GObjectClass * gobject_class;
-  GstObjectClass * gstobject_class;
-  GstRingBufferClass * gstringbuffer_class;
+  GObjectClass *gobject_class;
+  GstObjectClass *gstobject_class;
+  GstRingBufferClass *gstringbuffer_class;
 
   gobject_class = (GObjectClass *) klass;
   gstobject_class = (GstObjectClass *) klass;
@@ -136,9 +130,6 @@ static void
 gst_osx_ring_buffer_init (GstOsxRingBuffer * ringbuffer,
     GstOsxRingBufferClass * g_class)
 {
-  UNUSED (ringbuffer);
-  UNUSED (g_class);
-
   /* Nothing to do right now */
 }
 
@@ -195,47 +186,37 @@ gst_osx_ring_buffer_create_audio_unit (GstOsxRingBuffer * osxbuf,
   if (input) {
     /* enable input */
     enableIO = 1;
-    status = AudioUnitSetProperty (unit,
-        kAudioOutputUnitProperty_EnableIO,
-        kAudioUnitScope_Input,
-        1, /* 1 = input element */
-        &enableIO,
-        sizeof (enableIO));
+    status = AudioUnitSetProperty (unit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1,   /* 1 = input element */
+        &enableIO, sizeof (enableIO));
 
     if (status) {
       CloseComponent (unit);
-      GST_WARNING_OBJECT (osxbuf, "Failed to enable input: %lx", status);
+      GST_WARNING_OBJECT (osxbuf, "Failed to enable input: %lx",
+          (gulong) status);
       return NULL;
     }
 
     /* disable output */
     enableIO = 0;
-    status = AudioUnitSetProperty (unit,
-        kAudioOutputUnitProperty_EnableIO,
-        kAudioUnitScope_Output,
-        0, /* 0 = output element */
-        &enableIO,
-        sizeof (enableIO));
+    status = AudioUnitSetProperty (unit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Output, 0,  /* 0 = output element */
+        &enableIO, sizeof (enableIO));
 
     if (status) {
       CloseComponent (unit);
-      GST_WARNING_OBJECT (osxbuf, "Failed to disable output: %lx", status);
+      GST_WARNING_OBJECT (osxbuf, "Failed to disable output: %lx",
+          (gulong) status);
       return NULL;
     }
   }
 
   /* Specify which device we're using. */
   GST_DEBUG_OBJECT (osxbuf, "Setting device to %d", (int) device_id);
-  status = AudioUnitSetProperty (unit,
-      kAudioOutputUnitProperty_CurrentDevice,
-      kAudioUnitScope_Global,
-      0, /* N/A for global */
-      &device_id,
-      sizeof (AudioDeviceID));
+  status = AudioUnitSetProperty (unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,       /* N/A for global */
+      &device_id, sizeof (AudioDeviceID));
 
   if (status) {
     CloseComponent (unit);
-    GST_WARNING_OBJECT (osxbuf, "Failed to set device: %lx", status);
+    GST_WARNING_OBJECT (osxbuf, "Failed to set device: %lx", (gulong) status);
     return NULL;
   }
 
@@ -247,9 +228,9 @@ gst_osx_ring_buffer_create_audio_unit (GstOsxRingBuffer * osxbuf,
 static gboolean
 gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
 {
-  GstOsxRingBuffer * osxbuf;
-  GstOsxAudioSink * sink;
-  GstOsxAudioSrc * src;
+  GstOsxRingBuffer *osxbuf;
+  GstOsxAudioSink *sink;
+  GstOsxAudioSrc *src;
   AudioStreamBasicDescription asbd_in;
   OSStatus status;
   UInt32 propertySize;
@@ -267,34 +248,18 @@ gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
     propertySize = sizeof (asbd_in);
     status = AudioUnitGetProperty (osxbuf->audiounit,
         kAudioUnitProperty_StreamFormat,
-        kAudioUnitScope_Input,
-        1,
-        &asbd_in, &propertySize);
+        kAudioUnitScope_Input, 1, &asbd_in, &propertySize);
 
     if (status) {
       CloseComponent (osxbuf->audiounit);
       osxbuf->audiounit = NULL;
       GST_WARNING_OBJECT (osxbuf, "Unable to obtain device properties: %lx",
-          status);
+          (gulong) status);
       return FALSE;
     }
 
-    GST_LOG_OBJECT (osxbuf, "Device format: %x, %f, %u, %x, %d, %d, %d, %d,"
-        " %d",
-        (unsigned int) asbd_in.mFormatID,
-        asbd_in.mSampleRate,
-        (unsigned int) asbd_in.mChannelsPerFrame,
-        (unsigned int) asbd_in.mFormatFlags,
-        (unsigned int) asbd_in.mBytesPerFrame,
-        (unsigned int) asbd_in.mBitsPerChannel,
-        (unsigned int) asbd_in.mBytesPerPacket,
-        (unsigned int) asbd_in.mFramesPerPacket,
-        (unsigned int) asbd_in.mReserved);
-
-    src->deviceRate = (int) asbd_in.mSampleRate;
     src->deviceChannels = asbd_in.mChannelsPerFrame;
-  }
-  else {
+  } else {
     sink = GST_OSX_AUDIO_SINK (GST_OBJECT_PARENT (buf));
 
     /* needed for the sink's volume control */
@@ -307,7 +272,7 @@ gst_osx_ring_buffer_open_device (GstRingBuffer * buf)
 static gboolean
 gst_osx_ring_buffer_close_device (GstRingBuffer * buf)
 {
-  GstOsxRingBuffer * osxbuf;
+  GstOsxRingBuffer *osxbuf;
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
   CloseComponent (osxbuf->audiounit);
@@ -317,8 +282,8 @@ gst_osx_ring_buffer_close_device (GstRingBuffer * buf)
 }
 
 static AudioChannelLabel
-gst_audio_channel_position_to_coreaudio_channel_label (
-    GstAudioChannelPosition position, int channel)
+gst_audio_channel_position_to_coreaudio_channel_label (GstAudioChannelPosition
+    position, int channel)
 {
   switch (position) {
     case GST_AUDIO_CHANNEL_POSITION_NONE:
@@ -356,9 +321,9 @@ static gboolean
 gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
 {
   /* Configure the output stream and allocate ringbuffer memory */
-  GstOsxRingBuffer * osxbuf;
+  GstOsxRingBuffer *osxbuf;
   AudioStreamBasicDescription format;
-  AudioChannelLayout * layout = NULL;
+  AudioChannelLayout *layout = NULL;
   OSStatus status;
   UInt32 propertySize;
   int layoutSize;
@@ -366,11 +331,9 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
   int i;
   AudioUnitScope scope;
   gboolean ret = FALSE;
-  GstStructure * structure;
-  GstAudioChannelPosition * positions;
+  GstStructure *structure;
+  GstAudioChannelPosition *positions;
   UInt32 frameSize;
-  int bytesPerSecond;
-  Boolean isWritable;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
@@ -387,22 +350,21 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
 
   /* Describe channels */
   layoutSize = sizeof (AudioChannelLayout) +
-      spec->channels * sizeof(AudioChannelDescription);
+      spec->channels * sizeof (AudioChannelDescription);
   layout = g_malloc (layoutSize);
 
   structure = gst_caps_get_structure (spec->caps, 0);
   positions = gst_audio_get_channel_positions (structure);
 
   layout->mChannelLayoutTag = kAudioChannelLayoutTag_UseChannelDescriptions;
-  layout->mChannelBitmap = 0; /* Not used */
+  layout->mChannelBitmap = 0;   /* Not used */
   layout->mNumberChannelDescriptions = spec->channels;
   for (i = 0; i < spec->channels; i++) {
     if (positions) {
       layout->mChannelDescriptions[i].mChannelLabel =
-          gst_audio_channel_position_to_coreaudio_channel_label (
-          positions[i], i);
-    }
-    else  {
+          gst_audio_channel_position_to_coreaudio_channel_label (positions[i],
+          i);
+    } else {
       /* Discrete channel numbers are ORed into this */
       layout->mChannelDescriptions[i].mChannelLabel =
           kAudioChannelLabel_Discrete_0 | i;
@@ -420,7 +382,7 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
     positions = NULL;
   }
 
-  GST_LOG_OBJECT (osxbuf, "Desired format: %x, %f, %u, %x, %d, %d, %d, %d, %d",
+  GST_LOG_OBJECT (osxbuf, "Format: %x, %f, %u, %x, %d, %d, %d, %d, %d",
       (unsigned int) format.mFormatID,
       format.mSampleRate,
       (unsigned int) format.mChannelsPerFrame,
@@ -428,97 +390,59 @@ gst_osx_ring_buffer_acquire (GstRingBuffer * buf, GstRingBufferSpec * spec)
       (unsigned int) format.mBytesPerFrame,
       (unsigned int) format.mBitsPerChannel,
       (unsigned int) format.mBytesPerPacket,
-      (unsigned int) format.mFramesPerPacket,
-      (unsigned int) format.mReserved);
+      (unsigned int) format.mFramesPerPacket, (unsigned int) format.mReserved);
 
   GST_DEBUG_OBJECT (osxbuf, "Setting format for AudioUnit");
 
-  scope = osxbuf->is_src ?
-      kAudioUnitScope_Output:kAudioUnitScope_Input;
+  scope = osxbuf->is_src ? kAudioUnitScope_Output : kAudioUnitScope_Input;
   element = osxbuf->is_src ? 1 : 0;
 
-  status = AudioUnitGetPropertyInfo (osxbuf->audiounit,
-      kAudioUnitProperty_StreamFormat,
-      scope, element,
-      &propertySize,
-      &isWritable);
-
-  if (status) {
-    GST_WARNING_OBJECT (osxbuf, "Failed to get stream format info: %lx",
-        status);
-    goto done;
-  }
-
+  propertySize = sizeof (format);
   status = AudioUnitSetProperty (osxbuf->audiounit,
-      kAudioUnitProperty_StreamFormat,
-      scope, element,
-      &format, propertySize);
+      kAudioUnitProperty_StreamFormat, scope, element, &format, propertySize);
 
   if (status) {
     GST_WARNING_OBJECT (osxbuf, "Failed to set audio description: %lx",
-        status);
+        (gulong) status);
     goto done;
   }
-
-  status = AudioUnitGetProperty (osxbuf->audiounit,
-      kAudioUnitProperty_StreamFormat,
-      scope, element,
-      &format, &propertySize);
-
-  if (status) {
-    GST_WARNING_OBJECT (osxbuf, "Failed to get audio description: %lx",
-        status);
-    goto done;
-  }
-
-  // afaik, if we set our own format then this will always be the same
-  /*GST_LOG_OBJECT (osxbuf, "Actual format: %x, %f, %u, %x, %d, %d, %d, %d, %d",
-      (unsigned int) format.mFormatID,
-      format.mSampleRate,
-      (unsigned int) format.mChannelsPerFrame,
-      (unsigned int) format.mFormatFlags,
-      (unsigned int) format.mBytesPerFrame,
-      (unsigned int) format.mBitsPerChannel,
-      (unsigned int) format.mBytesPerPacket,
-      (unsigned int) format.mFramesPerPacket,
-      (unsigned int) format.mReserved);
 
   status = AudioUnitSetProperty (osxbuf->audiounit,
       kAudioUnitProperty_AudioChannelLayout,
-      scope, element,
-      layout, layoutSize);
+      scope, element, layout, layoutSize);
   if (status) {
     GST_WARNING_OBJECT (osxbuf, "Failed to set output channel layout: %lx",
-        status);
+        (gulong) status);
     goto done;
-  }*/
+  }
+
+  spec->segsize =
+      (spec->latency_time * spec->rate / G_USEC_PER_SEC) *
+      spec->bytes_per_sample;
+  spec->segtotal = spec->buffer_time / spec->latency_time;
 
   /* create AudioBufferList needed for recording */
   if (osxbuf->is_src) {
     propertySize = sizeof (frameSize);
-    status = AudioUnitGetProperty (osxbuf->audiounit,
-        kAudioDevicePropertyBufferFrameSize,
-        kAudioUnitScope_Global,
-        0, /* N/A for global */
+    status = AudioUnitGetProperty (osxbuf->audiounit, kAudioDevicePropertyBufferFrameSize, kAudioUnitScope_Global, 0,   /* N/A for global */
         &frameSize, &propertySize);
 
     if (status) {
-      GST_WARNING_OBJECT (osxbuf, "Failed to get frame size: %lx", status);
+      GST_WARNING_OBJECT (osxbuf, "Failed to get frame size: %lx",
+          (gulong) status);
       goto done;
     }
 
     osxbuf->recBufferList = buffer_list_alloc (format.mChannelsPerFrame,
-        frameSize, format.mBitsPerChannel / 8, TRUE);
+        frameSize * format.mBytesPerFrame);
   }
-
-  bytesPerSecond = format.mBytesPerFrame * (int)format.mSampleRate;
-  spec->segsize = gst_util_uint64_scale_int (bytesPerSecond, spec->latency_time, 1000000);
-  spec->segtotal = gst_util_uint64_scale_int (bytesPerSecond, spec->buffer_time, 1000000) / spec->segsize;
 
   buf->data = gst_buffer_new_and_alloc (spec->segtotal * spec->segsize);
   memset (GST_BUFFER_DATA (buf->data), 0, GST_BUFFER_SIZE (buf->data));
 
-  status = AudioUnitInitialize(osxbuf->audiounit);
+  osxbuf->segoffset = 0;
+
+  status = AudioUnitInitialize (osxbuf->audiounit);
   if (status) {
     gst_buffer_unref (buf->data);
     buf->data = NULL;
@@ -545,7 +469,7 @@ done:
 static gboolean
 gst_osx_ring_buffer_release (GstRingBuffer * buf)
 {
-  GstOsxRingBuffer * osxbuf;
+  GstOsxRingBuffer *osxbuf;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
@@ -574,10 +498,7 @@ gst_osx_ring_buffer_remove_render_callback (GstOsxRingBuffer * osxbuf)
   input.inputProc = NULL;
   input.inputProcRefCon = NULL;
 
-  status = AudioUnitSetProperty (osxbuf->audiounit,
-      kAudioUnitProperty_SetRenderCallback,
-      kAudioUnitScope_Global,
-      0, /* N/A for global */
+  status = AudioUnitSetProperty (osxbuf->audiounit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Global, 0,    /* N/A for global */
       &input, sizeof (input));
 
   if (status) {
@@ -586,8 +507,7 @@ gst_osx_ring_buffer_remove_render_callback (GstOsxRingBuffer * osxbuf)
 
   /* Remove the RenderNotify too */
   status = AudioUnitRemoveRenderNotify (osxbuf->audiounit,
-      (AURenderCallback) gst_osx_ring_buffer_render_notify,
-      osxbuf);
+      (AURenderCallback) gst_osx_ring_buffer_render_notify, osxbuf);
 
   if (status) {
     GST_WARNING_OBJECT (osxbuf, "Failed to remove render notify callback");
@@ -603,22 +523,15 @@ gst_osx_ring_buffer_render_notify (GstOsxRingBuffer * osxbuf,
     AudioUnitRenderActionFlags * ioActionFlags,
     const AudioTimeStamp * inTimeStamp,
     unsigned int inBusNumber,
-    unsigned int inNumberFrames,
-    AudioBufferList * ioData)
+    unsigned int inNumberFrames, AudioBufferList * ioData)
 {
-  UNUSED (inTimeStamp);
-  UNUSED (inBusNumber);
-  UNUSED (inNumberFrames);
-  UNUSED (ioData);
-
   /* Before rendering a frame, we get the PreRender notification.
    * Here, we detach the RenderCallback if we've been paused.
    *
    * This is necessary (rather than just directly detaching it) to work
    * around some thread-safety issues in CoreAudio
    */
-  if ((*ioActionFlags) & kAudioUnitRenderAction_PreRender)
-  {
+  if ((*ioActionFlags) & kAudioUnitRenderAction_PreRender) {
     if (osxbuf->io_proc_needs_deactivation) {
       gst_osx_ring_buffer_remove_render_callback (osxbuf);
     }
@@ -631,14 +544,14 @@ static gboolean
 gst_osx_ring_buffer_start (GstRingBuffer * buf)
 {
   OSStatus status;
-  GstOsxRingBuffer * osxbuf;
+  GstOsxRingBuffer *osxbuf;
   AURenderCallbackStruct input;
   AudioUnitPropertyID callback_type;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
   GST_DEBUG ("osx ring buffer start ioproc: 0x%p device_id %lu",
-      osxbuf->element->io_proc, osxbuf->device_id);
+      osxbuf->element->io_proc, (gulong) osxbuf->device_id);
   if (!osxbuf->io_proc_active) {
     callback_type = osxbuf->is_src ?
         kAudioOutputUnitProperty_SetInputCallback :
@@ -647,21 +560,16 @@ gst_osx_ring_buffer_start (GstRingBuffer * buf)
     input.inputProc = (AURenderCallback) osxbuf->element->io_proc;
     input.inputProcRefCon = osxbuf;
 
-    status = AudioUnitSetProperty (osxbuf->audiounit,
-        callback_type,
-        kAudioUnitScope_Global,
-        0, /* N/A for global */
+    status = AudioUnitSetProperty (osxbuf->audiounit, callback_type, kAudioUnitScope_Global, 0, /* N/A for global */
         &input, sizeof (input));
 
     if (status) {
       GST_WARNING ("AudioUnitSetProperty returned %d", (int) status);
       return FALSE;
     }
-
     // ### does it make sense to do this notify stuff for input mode?
     status = AudioUnitAddRenderNotify (osxbuf->audiounit,
-        (AURenderCallback) gst_osx_ring_buffer_render_notify,
-        osxbuf);
+        (AURenderCallback) gst_osx_ring_buffer_render_notify, osxbuf);
 
     if (status) {
       GST_WARNING ("AudioUnitAddRenderNotify returned %d", (int) status);
@@ -670,8 +578,8 @@ gst_osx_ring_buffer_start (GstRingBuffer * buf)
 
     osxbuf->io_proc_active = TRUE;
   }
-  else
-    osxbuf->io_proc_needs_deactivation = FALSE;
+
+  osxbuf->io_proc_needs_deactivation = FALSE;
 
   status = AudioOutputUnitStart (osxbuf->audiounit);
   if (status) {
@@ -685,10 +593,10 @@ gst_osx_ring_buffer_start (GstRingBuffer * buf)
 static gboolean
 gst_osx_ring_buffer_pause (GstRingBuffer * buf)
 {
-  GstOsxRingBuffer * osxbuf = GST_OSX_RING_BUFFER (buf);
+  GstOsxRingBuffer *osxbuf = GST_OSX_RING_BUFFER (buf);
 
   GST_DEBUG ("osx ring buffer pause ioproc: 0x%p device_id %lu",
-      osxbuf->element->io_proc, osxbuf->device_id);
+      osxbuf->element->io_proc, (gulong) osxbuf->device_id);
   if (osxbuf->io_proc_active) {
     /* CoreAudio isn't threadsafe enough to do this here; we must deactivate
      * the render callback elsewhere. See:
@@ -704,12 +612,12 @@ static gboolean
 gst_osx_ring_buffer_stop (GstRingBuffer * buf)
 {
   OSErr status;
-  GstOsxRingBuffer * osxbuf;
+  GstOsxRingBuffer *osxbuf;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
   GST_DEBUG ("osx ring buffer stop ioproc: 0x%p device_id %lu",
-      osxbuf->element->io_proc, osxbuf->device_id);
+      osxbuf->element->io_proc, (gulong) osxbuf->device_id);
 
   status = AudioOutputUnitStop (osxbuf->audiounit);
   if (status)
@@ -727,18 +635,14 @@ gst_osx_ring_buffer_delay (GstRingBuffer * buf)
 {
   double latency;
   UInt32 size = sizeof (double);
-  GstOsxRingBuffer * osxbuf;
+  GstOsxRingBuffer *osxbuf;
   OSStatus status;
   guint samples;
 
   osxbuf = GST_OSX_RING_BUFFER (buf);
 
-  status = AudioUnitGetProperty (osxbuf->audiounit,
-      kAudioUnitProperty_Latency,
-      kAudioUnitScope_Global,
-      0, /* N/A for global */
-      &latency,
-      &size);
+  status = AudioUnitGetProperty (osxbuf->audiounit, kAudioUnitProperty_Latency, kAudioUnitScope_Global, 0,      /* N/A for global */
+      &latency, &size);
 
   if (status) {
     GST_WARNING_OBJECT (buf, "Failed to get latency: %d", (int) status);
@@ -746,38 +650,24 @@ gst_osx_ring_buffer_delay (GstRingBuffer * buf)
   }
 
   samples = latency * GST_RING_BUFFER (buf)->spec.rate;
-  GST_DEBUG_OBJECT (buf, "Got latency: %f seconds -> %d samples", latency, samples);
+  GST_DEBUG_OBJECT (buf, "Got latency: %f seconds -> %d samples", latency,
+      samples);
   return samples;
 }
 
 static AudioBufferList *
-buffer_list_alloc (int channels, int frames, int bytesPerChannel,
-    gboolean interleaved)
+buffer_list_alloc (int channels, int size)
 {
-  AudioBufferList * list;
-  int buffer_count;
-  int size, total_size;
+  AudioBufferList *list;
+  int total_size;
   int n;
 
-  if (interleaved)
-    buffer_count = 1;
-  else
-    buffer_count = channels;
-
-  total_size = sizeof (AudioBufferList) + buffer_count * sizeof (AudioBuffer);
+  total_size = sizeof (AudioBufferList) + 1 * sizeof (AudioBuffer);
   list = (AudioBufferList *) g_malloc (total_size);
 
-  list->mNumberBuffers = buffer_count;
-  for (n = 0; n < buffer_count; ++n) {
-    if (interleaved) {
-      list->mBuffers[n].mNumberChannels = channels;
-      size = bytesPerChannel * channels * frames;
-    }
-    else {
-      list->mBuffers[n].mNumberChannels = 1;
-      size = bytesPerChannel * frames;
-    }
-
+  list->mNumberBuffers = 1;
+  for (n = 0; n < (int) list->mNumberBuffers; ++n) {
+    list->mBuffers[n].mNumberChannels = channels;
     list->mBuffers[n].mDataByteSize = size;
     list->mBuffers[n].mData = g_malloc (size);
   }
@@ -790,7 +680,7 @@ buffer_list_free (AudioBufferList * list)
 {
   int n;
 
-  for (n = 0; n < (int)list->mNumberBuffers; ++n) {
+  for (n = 0; n < (int) list->mNumberBuffers; ++n) {
     if (list->mBuffers[n].mData)
       g_free (list->mBuffers[n].mData);
   }

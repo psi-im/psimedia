@@ -43,15 +43,15 @@
  */
 
 /**
- * SECTION:element-plugin
+ * SECTION:element-osxaudiosrc
+ *
+ * This element captures raw audio samples using the CoreAudio api.
  *
  * <refsect2>
  * <title>Example launch line</title>
- * <para>
- * <programlisting>
- * gst-launch -v -m osxaudiosrc ! fakesink
- * </programlisting>
- * </para>
+ * |[
+ * gst-launch osxaudiosrc ! wavenc ! filesink location=audio.wav
+ * ]|
  * </refsect2>
  */
 
@@ -64,8 +64,6 @@
 #include <CoreAudio/AudioHardware.h>
 #include "gstosxaudiosrc.h"
 #include "gstosxaudioelement.h"
-
-#define UNUSED(x) (void)x;
 
 GST_DEBUG_CATEGORY_STATIC (osx_audiosrc_debug);
 #define GST_CAT_DEFAULT osx_audiosrc_debug
@@ -89,8 +87,6 @@ enum
   ARG_DEVICE
 };
 
-// FIXME: for now, hardcode channels to 1 until someone cares to really test
-//   multichannel audio capture
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
@@ -99,9 +95,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
         "signed = (boolean) { TRUE }, "
         "width = (int) 32, "
         "depth = (int) 32, "
-        "rate = (int) [1, MAX], "
-        //"channels = (int) [1, MAX]")
-        "channels = (int) 1")
+        "rate = (int) [1, MAX], " "channels = (int) [1, MAX]")
     );
 
 static void gst_osx_audio_src_set_property (GObject * object, guint prop_id,
@@ -109,17 +103,16 @@ static void gst_osx_audio_src_set_property (GObject * object, guint prop_id,
 static void gst_osx_audio_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 
-static GstCaps * gst_osx_audio_src_get_caps (GstBaseSrc * src);
+static GstCaps *gst_osx_audio_src_get_caps (GstBaseSrc * src);
 
-static GstRingBuffer * gst_osx_audio_src_create_ringbuffer (
-    GstBaseAudioSrc * src);
+static GstRingBuffer *gst_osx_audio_src_create_ringbuffer (GstBaseAudioSrc *
+    src);
 static void gst_osx_audio_src_osxelement_init (gpointer g_iface,
     gpointer iface_data);
 static OSStatus gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
     AudioUnitRenderActionFlags * ioActionFlags,
-    const AudioTimeStamp * inTimeStamp,
-    UInt32 inBusNumber, UInt32 inNumberFrames,
-    AudioBufferList * bufferList);
+    const AudioTimeStamp * inTimeStamp, UInt32 inBusNumber,
+    UInt32 inNumberFrames, AudioBufferList * bufferList);
 static void gst_osx_audio_src_select_device (GstOsxAudioSrc * osxsrc);
 
 static void
@@ -155,10 +148,10 @@ gst_osx_audio_src_base_init (gpointer g_class)
 static void
 gst_osx_audio_src_class_init (GstOsxAudioSrcClass * klass)
 {
-  GObjectClass * gobject_class;
-  GstElementClass * gstelement_class;
-  GstBaseSrcClass * gstbasesrc_class;
-  GstBaseAudioSrcClass * gstbaseaudiosrc_class;
+  GObjectClass *gobject_class;
+  GstElementClass *gstelement_class;
+  GstBaseSrcClass *gstbasesrc_class;
+  GstBaseAudioSrcClass *gstbaseaudiosrc_class;
 
   gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
@@ -185,12 +178,9 @@ gst_osx_audio_src_class_init (GstOsxAudioSrcClass * klass)
 static void
 gst_osx_audio_src_init (GstOsxAudioSrc * src, GstOsxAudioSrcClass * gclass)
 {
-  UNUSED (gclass);
-
   gst_base_src_set_live (GST_BASE_SRC (src), TRUE);
 
   src->device_id = kAudioDeviceUnknown;
-  src->deviceRate = -1;
   src->deviceChannels = -1;
 }
 
@@ -198,7 +188,7 @@ static void
 gst_osx_audio_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstOsxAudioSrc * src = GST_OSX_AUDIO_SRC (object);
+  GstOsxAudioSrc *src = GST_OSX_AUDIO_SRC (object);
 
   switch (prop_id) {
     case ARG_DEVICE:
@@ -214,7 +204,7 @@ static void
 gst_osx_audio_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstOsxAudioSrc * src = GST_OSX_AUDIO_SRC (object);
+  GstOsxAudioSrc *src = GST_OSX_AUDIO_SRC (object);
 
   switch (prop_id) {
     case ARG_DEVICE:
@@ -229,56 +219,39 @@ gst_osx_audio_src_get_property (GObject * object, guint prop_id,
 static GstCaps *
 gst_osx_audio_src_get_caps (GstBaseSrc * src)
 {
-  GstElementClass * gstelement_class;
-  GstOsxAudioSrc * osxsrc;
-  GstPadTemplate * pad_template;
-  GstCaps * caps;
-  GstStructure * structure;
-  gint rate; //, cmin, cmax;
+  GstElementClass *gstelement_class;
+  GstOsxAudioSrc *osxsrc;
+  GstPadTemplate *pad_template;
+  GstCaps *caps;
+  gint min, max;
 
   gstelement_class = GST_ELEMENT_GET_CLASS (src);
   osxsrc = GST_OSX_AUDIO_SRC (src);
 
-  if (osxsrc->deviceRate == -1) {
-    /* -1 means we don't know the hardware sample rate yet.  for now, return
-     * template caps.
-     */
-    return NULL;
-  }
-
-#if 0
   if (osxsrc->deviceChannels == -1) {
     /* -1 means we don't know the number of channels yet.  for now, return
      * template caps.
      */
     return NULL;
   }
-#endif
 
-  rate = osxsrc->deviceRate;
+  max = osxsrc->deviceChannels;
+  if (max < 1)
+    max = 1;                    /* 0 channels means 1 channel? */
 
-#if 0
-  // FIXME: for now, hardcode channels to 1 until someone cares to really test
-  //   multichannel audio capture
-  //cmax = osxsrc->deviceChannels;
-  cmax = 1;
-  if (cmax < 1)
-    cmax = 1; /* 0 channels means 1 channel? */
-
-  cmin = MIN (1, cmax);
-#endif
+  min = MIN (1, max);
 
   pad_template = gst_element_class_get_pad_template (gstelement_class, "src");
   g_return_val_if_fail (pad_template != NULL, NULL);
 
   caps = gst_caps_copy (gst_pad_template_get_caps (pad_template));
 
-  structure = gst_caps_get_structure (caps, 0);
-  gst_structure_set (structure, "rate", G_TYPE_INT, rate, NULL);
-#if 0
-  gst_structure_set (structure, "channels", GST_TYPE_INT_RANGE, cmin, cmax,
-      NULL);
-#endif
+  if (min == max) {
+    gst_caps_set_simple (caps, "channels", G_TYPE_INT, max, NULL);
+  } else {
+    gst_caps_set_simple (caps, "channels", GST_TYPE_INT_RANGE, min, max,
+        NULL);
+  }
 
   return caps;
 }
@@ -286,8 +259,8 @@ gst_osx_audio_src_get_caps (GstBaseSrc * src)
 static GstRingBuffer *
 gst_osx_audio_src_create_ringbuffer (GstBaseAudioSrc * src)
 {
-  GstOsxAudioSrc * osxsrc;
-  GstOsxRingBuffer * ringbuffer;
+  GstOsxAudioSrc *osxsrc;
+  GstOsxRingBuffer *ringbuffer;
 
   osxsrc = GST_OSX_AUDIO_SRC (src);
 
@@ -310,17 +283,14 @@ static OSStatus
 gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
     AudioUnitRenderActionFlags * ioActionFlags,
     const AudioTimeStamp * inTimeStamp,
-    UInt32 inBusNumber, UInt32 inNumberFrames,
-    AudioBufferList * bufferList)
+    UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList * bufferList)
 {
   OSStatus status;
-  guint8 * writeptr;
+  guint8 *writeptr;
   gint writeseg;
   gint len;
   gint remaining;
   gint offset = 0;
-
-  UNUSED (bufferList);
 
   status = AudioUnitRender (buf->audiounit, ioActionFlags, inTimeStamp,
       inBusNumber, inNumberFrames, buf->recBufferList);
@@ -349,7 +319,7 @@ gst_osx_audio_src_io_proc (GstOsxRingBuffer * buf,
     offset += len;
     remaining -= len;
 
-    if ((gint)buf->segoffset == GST_RING_BUFFER (buf)->spec.segsize) {
+    if ((gint) buf->segoffset == GST_RING_BUFFER (buf)->spec.segsize) {
       /* we wrote one segment */
       gst_ring_buffer_advance (GST_RING_BUFFER (buf), 1);
 
@@ -363,8 +333,6 @@ static void
 gst_osx_audio_src_osxelement_init (gpointer g_iface, gpointer iface_data)
 {
   GstOsxAudioElementInterface *iface = (GstOsxAudioElementInterface *) g_iface;
-
-  UNUSED (iface_data);
 
   iface->io_proc = (AURenderCallback) gst_osx_audio_src_io_proc;
 }
@@ -380,15 +348,13 @@ gst_osx_audio_src_select_device (GstOsxAudioSrc * osxsrc)
      * default device */
     GST_DEBUG_OBJECT (osxsrc, "Selecting device for OSXAudioSrc");
     propertySize = sizeof (osxsrc->device_id);
-    status = AudioHardwareGetProperty (
-        kAudioHardwarePropertyDefaultInputDevice,
+    status = AudioHardwareGetProperty (kAudioHardwarePropertyDefaultInputDevice,
         &propertySize, &osxsrc->device_id);
 
     if (status) {
       GST_WARNING_OBJECT (osxsrc,
           "AudioHardwareGetProperty returned %d", (int) status);
-    }
-    else {
+    } else {
       GST_DEBUG_OBJECT (osxsrc, "AudioHardwareGetProperty returned 0");
     }
 
