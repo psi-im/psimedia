@@ -1,22 +1,24 @@
 api:
-  multi-user jingle (mingle) stuff
+  multi-user jingle stuff
 
 backend:
   pausing/holding
   support playing file from bytearray
   support recording
+  use pulsesrc/sink and AEC mode, no need for speexdsp on linux
+  consider adding windows/mac AEC support into device elements
+  switch to using official gst appsrc/sink
   use farsight
 
 gstreamer:
-  + cleanup osxaudio, make src work (#564948, accepted)
-  + rewrite osxvideo (#153684, submitted)
-  + rewrite directsound
-  + enumeration in directsound
-  ? make speexdsp/speexechoprobe work properly (mostly works..)
-  GstBus doesn't work with non-default GMainContext (#562170, patch)
-  frame-accurate looping
-    oggdemux/theoradec doesn't play last frame (#568014, submitted)
-    theoraenc screws up when looped (#562163, unresolved)
-  enumeration in ksvideosrc (oleavr working on this)
+  0.11: fix udpsink (#534243)
+  0.11: merge directsound (#584980)
+  0.11: ensure osxaudiosrc/sink stuff is merged (#602121)
+  0.11: ensure osxvideosrc stuff is merged
+  theoraenc screws up when looped (#562163, unresolved)
+  cleanup speexdsp/speexechoprobe and merge to gst
+  get all elements we depend on from gst-plugins-bad to graduate to -good
+  figure out windows video capture situation. is ksvideosrc the full answer?
+  ksvideosrc device enumeration
   v4l2src that supports only image/jpeg fails if independently set to READY
     before changing to PAUSED.  see devices.cpp
