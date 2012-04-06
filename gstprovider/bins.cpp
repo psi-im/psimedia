@@ -329,7 +329,7 @@ GstElement *bins_audioenc_create(const QString &codec, int id, int rate, int siz
 		g_object_set(G_OBJECT(audiortppay), "pt", id, NULL);
 
 	GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-	GstElement *audioresample = gst_element_factory_make("legacyresample", NULL);
+	GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
 
 	GstStructure *cs;
 	GstCaps *caps = gst_caps_new_empty();

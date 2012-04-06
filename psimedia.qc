@@ -21,28 +21,19 @@
  <dep type='pkg' name='gthread' pkgname='gthread-2.0' version='>=2.0'>
   <required/>
  </dep>
- <dep type='pkg' name='gstreamer' pkgname='gstreamer-0.10' version='>=0.10.22'>
+ <dep type='pkg' name='gstreamer' pkgname='gstreamer-0.10' version='>=0.10.24'>
   <required/>
  </dep>
- <dep type='pkg' name='gstreamer-base' pkgname='gstreamer-base-0.10' version='>=0.10.22'>
+ <dep type='pkg' name='gstreamer-base' pkgname='gstreamer-base-0.10' version='>=0.10.24'>
   <required/>
  </dep>
- <dep type='pkg' name='gstreamer-interfaces' pkgname='gstreamer-interfaces-0.10' version='>=0.10.22'>
+ <dep type='pkg' name='gstreamer-interfaces' pkgname='gstreamer-interfaces-0.10' version='>=0.10.24'>
   <required/>
  </dep>
- <dep type='pkg' name='gstreamer-audio' pkgname='gstreamer-audio-0.10' version='>=0.10.22'>
+ <dep type='pkg' name='gstreamer-audio' pkgname='gstreamer-audio-0.10' version='>=0.10.24'>
   <required/>
  </dep>
- <dep type='pkg' name='gstreamer-video' pkgname='gstreamer-video-0.10' version='>=0.10.22'>
-  <required/>
- </dep>
- <dep type='pkg' name='gstreamer-netbuffer' pkgname='gstreamer-netbuffer-0.10' version='>=0.10.22'>
-  <required/>
- </dep>
- <dep type='pkg' name='gstreamer-rtp' pkgname='gstreamer-rtp-0.10' version='>=0.10.22'>
-  <required/>
- </dep>
- <dep type='pkg' name='liboil' pkgname='liboil-0.3' version='>=0.3'>
+ <dep type='pkg' name='gstreamer-video' pkgname='gstreamer-video-0.10' version='>=0.10.24'>
   <required/>
  </dep>
  <dep type='pkg' name='speexdsp' pkgname='speexdsp' version='>=1.2rc1'>

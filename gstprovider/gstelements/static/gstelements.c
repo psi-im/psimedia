@@ -20,20 +20,12 @@
 
 #include "gstelements.h"
 
-#ifdef HAVE_RTPMANAGER
-void gstelements_rtpmanager_register();
-#endif
-
 #ifdef HAVE_VIDEOMAXRATE
 void gstelements_videomaxrate_register();
 #endif
 
 #ifdef HAVE_LIVEADDER
 void gstelements_liveadder_register();
-#endif
-
-#ifdef HAVE_AUDIORESAMPLE
-void gstelements_audioresample_register();
 #endif
 
 #ifdef HAVE_SPEEXDSP
@@ -58,20 +50,12 @@ void gstelements_osxvideo_register();
 
 void gstelements_register()
 {
-#ifdef HAVE_RTPMANAGER
-	gstelements_rtpmanager_register();
-#endif
-
 #ifdef HAVE_VIDEOMAXRATE
 	gstelements_videomaxrate_register();
 #endif
 
 #ifdef HAVE_LIVEADDER
 	gstelements_liveadder_register();
-#endif
-
-#ifdef HAVE_AUDIORESAMPLE
-	gstelements_audioresample_register();
 #endif
 
 #ifdef HAVE_SPEEXDSP

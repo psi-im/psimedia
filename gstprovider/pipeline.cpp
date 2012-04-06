@@ -205,7 +205,7 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 		gst_bin_add(GST_BIN(bin), e);
 
 		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-		GstElement *audioresample = gst_element_factory_make("legacyresample", NULL);
+		GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
 
 		GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
 		GstCaps *caps = gst_caps_new_empty();
@@ -284,7 +284,7 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 	else // AudioOut
 	{
 		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-		GstElement *audioresample = gst_element_factory_make("legacyresample", NULL);
+		GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
 		gst_bin_add(GST_BIN(bin), audioconvert);
 		gst_bin_add(GST_BIN(bin), audioresample);
 		gst_bin_add(GST_BIN(bin), e);

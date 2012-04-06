@@ -225,8 +225,7 @@ public:
 			<< "videomaxrate"
 			<< "videoscale"
 			<< "gstrtpjitterbuffer"
-			<< "liveadder"
-			<< "legacyresample";
+			<< "liveadder";
 
 #if defined(Q_OS_MAC)
 			reqelem
@@ -235,7 +234,6 @@ public:
 #elif defined(Q_OS_LINUX)
 			reqelem
 			<< "alsasrc" << "alsasink"
-			<< "v4lsrc"
 			<< "v4l2src";
 #elif defined(Q_OS_UNIX)
 			reqelem

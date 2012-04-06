@@ -4,17 +4,12 @@ CONFIG += staticlib create_prl
 TARGET = gstelements_static
 DESTDIR = lib
 
-CONFIG += rtpmanager videomaxrate liveadder audioresample speexdsp
+CONFIG += videomaxrate liveadder speexdsp
 windows:CONFIG += directsound winks
 mac:CONFIG += osxaudio osxvideo
 
 *-g++*:QMAKE_CFLAGS_WARN_ON = -Wall -Wdeclaration-after-statement #-Werror
 include(../../gstconf.pri)
-
-rtpmanager {
-	include(../rtpmanager.pri)
-	DEFINES += HAVE_RTPMANAGER
-}
 
 videomaxrate {
 	include(../videomaxrate.pri)
@@ -24,11 +19,6 @@ videomaxrate {
 liveadder {
 	include(../liveadder.pri)
 	DEFINES += HAVE_LIVEADDER
-}
-
-audioresample {
-	include(../audioresample.pri)
-	DEFINES += HAVE_AUDIORESAMPLE
 }
 
 speexdsp {
