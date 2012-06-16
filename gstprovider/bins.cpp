@@ -20,6 +20,7 @@
 
 #include "bins.h"
 
+#include <stdio.h>
 #include <QString>
 #include <QSize>
 #include <gst/gst.h>

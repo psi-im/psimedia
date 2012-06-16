@@ -21,7 +21,7 @@
 #ifndef PSI_GSTELEMENTS_H
 #define PSI_GSTELEMENTS_H
 
-#include <glib/gmacros.h>
+#include <glib.h>
 
 G_BEGIN_DECLS
 

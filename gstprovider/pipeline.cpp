@@ -20,6 +20,7 @@
 
 #include "pipeline.h"
 
+#include <stdio.h>
 #include <QList>
 #include <QSet>
 #include <gst/gst.h>

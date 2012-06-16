@@ -20,6 +20,7 @@
 
 #include "rtpworker.h"
 
+#include <stdio.h>
 #include <QStringList>
 #include <QTime>
 #include "devices.h"

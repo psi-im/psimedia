@@ -21,7 +21,7 @@
 #ifndef GSTCUSTOMELEMENTS_H
 #define GSTCUSTOMELEMENTS_H
 
-#include <glib/gthread.h>
+#include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstpushsrc.h>
 #include <gst/video/video.h>

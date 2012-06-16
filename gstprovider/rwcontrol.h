@@ -28,7 +28,7 @@
 #include <QMutex>
 #include <QWaitCondition>
 #include <QTimer>
-#include <glib/gmain.h>
+#include <glib.h>
 #include "psimediaprovider.h"
 #include "rtpworker.h"
 

@@ -22,7 +22,7 @@
 #define PSI_GSTTHREAD_H
 
 #include <QThread>
-#include <glib/gmain.h>
+#include <glib.h>
 
 namespace PsiMedia {
 
