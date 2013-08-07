@@ -67,7 +67,7 @@ QList<PAudioParams> modes_supportedAudio()
 		p.sampleSize = 16;
 		p.channels = 1;
 		list += p;
-	}
+	}*/
 	{
 		PAudioParams p;
 		p.codec = "speex";
@@ -75,7 +75,7 @@ QList<PAudioParams> modes_supportedAudio()
 		p.sampleSize = 16;
 		p.channels = 1;
 		list += p;
-	}*/
+	}
 	{
 		PAudioParams p;
 		p.codec = "speex";
