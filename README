@@ -1,41 +1,21 @@
-PsiMedia 1.0.3
---------------
-Date: June 10th, 2009
-Website: http://delta.affinix.com/psimedia/
-Mailing List: Delta Project <delta@lists.affinix.com>
+PsiMedia is a thick abstraction layer for providing audio and video RTP
+services to Psi-like IM clients.  The implementation is based on GStreamer.
 
+This library is free software: you can redistribute it and/or modify it under
+the terms of the GNU Lesser General Public License as published by the Free
+Software Foundation, either version 2.1 of the License, or (at your option)
+any later version. See the COPYING file for more information.
 
-License
--------
-  This library is licensed under the Lesser GNU General Public License.  See
-  the COPYING file for more information.
-
-
-Description
------------
-
-  PsiMedia is a thick abstraction layer for providing audio and video RTP
-  services to Psi-like IM clients.  The implementation is based on GStreamer.
-
-  Contents:
+Contents:
     psimedia/      API and plugin shim
     gstprovider/   provider plugin based on GStreamer
     demo/          demonstration GUI program
 
-  To build the plugin and demo program, run:
-    ./configure
-    make
+Old Website: http://delta.affinix.com/psimedia/ (outdated)
+Old Mailing List: Delta Project <delta@lists.affinix.com> (may be inactive)
 
-  There is no "make install".  The compiled plugin can be found under the
-  gstprovider directory.  An application that uses PsiMedia should have
-  instructions on what to do with the plugin.
+Current address: https://github.com/psi-plus/psimedia
 
-
-Building from SVN
-------------------
-First, install the 'qconf' program, at least version 1.4.  You can download
-the source here:
-  http://delta.affinix.com/qconf/
-
-Then, go into the PsiMedia source tree and type 'qconf'.  You should now have
-a configure program to execute, just like from a normal source package.
+If you find bugs or problems in the library you may report about them here:
+  http://code.google.com/p/psi-dev/wiki/issues?tm=3
+  http://code.google.com/p/psi-dev/issues/list
