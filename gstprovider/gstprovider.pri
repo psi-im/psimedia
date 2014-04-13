@@ -27,3 +27,8 @@ SOURCES += \
 	$$PWD/gstthread.cpp \
 	$$PWD/rwcontrol.cpp \
 	$$PWD/gstprovider.cpp
+
+unix {
+   QMAKE_CXXFLAGS += $$(CXXFLAGS)
+   QMAKE_LFLAGS += $$(LDFLAGS)
+}
