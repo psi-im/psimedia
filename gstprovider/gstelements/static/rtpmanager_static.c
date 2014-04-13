@@ -66,7 +66,7 @@ void gstelements_rtpmanager_register()
     "gstrtpmanager",
     "RTP session management plugin library",
     plugin_init,
-    "1.0.0",
+    "1.0.4",
     "LGPL",
     "my-application",
     "my-application",

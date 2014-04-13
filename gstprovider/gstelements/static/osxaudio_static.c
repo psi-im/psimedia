@@ -76,7 +76,7 @@ void gstelements_osxaudio_register()
     "osxaudio",
     "OSX (Mac OS X) audio support for GStreamer",
     plugin_init,
-    "1.0.0",
+    "1.0.4",
     "LGPL",
     "my-application",
     "my-application",
