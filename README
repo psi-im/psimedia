@@ -7,9 +7,9 @@ Software Foundation, either version 2.1 of the License, or (at your option)
 any later version. See the COPYING file for more information.
 
 Contents:
-    psimedia/      API and plugin shim
-    gstprovider/   provider plugin based on GStreamer
-    demo/          demonstration GUI program
+  psimedia/      API and plugin shim
+  gstprovider/   provider plugin based on GStreamer
+  demo/          demonstration GUI program
 
 Old Website: http://delta.affinix.com/psimedia/ (outdated)
 Old Mailing List: Delta Project <delta@lists.affinix.com> (may be inactive)
