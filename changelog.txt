@@ -1,4 +1,4 @@
-2014-xx-xx
+2014-04-14
 v1.0.4 Justin Karneges, Sergey Ilinyh (aka rion), Ivan Romanov, Boris Pek
   * Use properly parent objects so that moveToThread works.
   * Fix fix the license headers in some files.
