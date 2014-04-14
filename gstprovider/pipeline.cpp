@@ -354,6 +354,9 @@ public:
 		speexdsp(0),
 		tee(0),
 		adder(0),
+		audioconvert(0),
+		audioresample(0),
+		capsfilter(0),
 		speexprobe(0)
 	{
 		pipeline = context->pipeline->element();

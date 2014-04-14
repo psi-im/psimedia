@@ -49,6 +49,8 @@ public:
 	{
 		argc = 0;
 		argv = 0;
+		count = 0;
+		data = 0;
 	}
 
 	~CArgs()
@@ -287,6 +289,8 @@ public:
 	QWaitCondition w;
 
 	Private() :
+		gstSession(0),
+		success(false),
 		mainContext(0),
 		mainLoop(0)
 	{
