@@ -142,6 +142,7 @@ int main(int argc, char **argv)
 		if((err = snd_pcm_prepare(capture_handle)) < 0)
 		{
 			fprintf(stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror(err));
+			fclose(fout);
 			free(cbuf);
 			return 1;
 		}
@@ -156,6 +157,7 @@ int main(int argc, char **argv)
 			if((err = snd_pcm_readi(capture_handle, cbuf, count)) != count)
 			{
 				fprintf(stderr, "read from audio interface failed (%s)\n", snd_strerror(err));
+				fclose(fout);
 				free(cbuf);
 				return 1;
 			}
@@ -199,6 +201,7 @@ int main(int argc, char **argv)
 		if(!fout)
 		{
 			fprintf(stderr, "Error opening loop.raw for writing.\n");
+			fclose(fin);
 			return 1;
 		}
 
@@ -210,6 +213,8 @@ int main(int argc, char **argv)
 		if((err = snd_pcm_prepare(playback_handle)) < 0)
 		{
 			fprintf(stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror(err));
+			fclose(fin);
+			fclose(fout);
 			free(pbuf);
 			free(cbuf);
 			return 1;
@@ -260,6 +265,9 @@ int main(int argc, char **argv)
 				if((err = snd_pcm_prepare(capture_handle)) < 0)
 				{
 					fprintf(stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror(err));
+					if(fin)
+						fclose(fin);
+					fclose(fout);
 					free(pbuf);
 					free(cbuf);
 					return 1;
@@ -276,6 +284,9 @@ int main(int argc, char **argv)
 			if((err = snd_pcm_readi(capture_handle, cbuf, count)) != count)
 			{
 				fprintf(stderr, "read from audio interface failed (%s)\n", snd_strerror(err));
+				if(fin)
+					fclose(fin);
+				fclose(fout);
 				free(pbuf);
 				free(cbuf);
 				return 1;
