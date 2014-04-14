@@ -142,6 +142,7 @@ int main(int argc, char **argv)
 		if((err = snd_pcm_prepare(capture_handle)) < 0)
 		{
 			fprintf(stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror(err));
+			free(cbuf);
 			return 1;
 		}
 
@@ -155,6 +156,7 @@ int main(int argc, char **argv)
 			if((err = snd_pcm_readi(capture_handle, cbuf, count)) != count)
 			{
 				fprintf(stderr, "read from audio interface failed (%s)\n", snd_strerror(err));
+				free(cbuf);
 				return 1;
 			}
 
@@ -208,6 +210,8 @@ int main(int argc, char **argv)
 		if((err = snd_pcm_prepare(playback_handle)) < 0)
 		{
 			fprintf(stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror(err));
+			free(pbuf);
+			free(cbuf);
 			return 1;
 		}
 
@@ -256,6 +260,8 @@ int main(int argc, char **argv)
 				if((err = snd_pcm_prepare(capture_handle)) < 0)
 				{
 					fprintf(stderr, "cannot prepare audio interface for use (%s)\n", snd_strerror(err));
+					free(pbuf);
+					free(cbuf);
 					return 1;
 				}
 
@@ -270,6 +276,8 @@ int main(int argc, char **argv)
 			if((err = snd_pcm_readi(capture_handle, cbuf, count)) != count)
 			{
 				fprintf(stderr, "read from audio interface failed (%s)\n", snd_strerror(err));
+				free(pbuf);
+				free(cbuf);
 				return 1;
 			}
 
