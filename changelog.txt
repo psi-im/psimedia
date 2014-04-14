@@ -12,6 +12,7 @@ v1.0.4 Justin Karneges, Sergey Ilinyh (aka rion), Ivan Romanov, Boris Pek
   * Fix build in MS Windows.
   * Fix uvcvideo.
   * Fix non-latin audio device name on Mac OS X.
+  * Fix all errors and warnings found by cppcheck.
   * Use compiler options from the build environment.
   * Update documentation.
 
