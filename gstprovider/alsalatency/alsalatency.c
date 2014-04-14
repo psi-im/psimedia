@@ -233,6 +233,7 @@ int main(int argc, char **argv)
 					{
 						snd_pcm_close(playback_handle);
 						free(pbuf);
+						pbuf = 0;
 						fclose(fin);
 						fin = 0;
 						continue;
@@ -255,6 +256,7 @@ int main(int argc, char **argv)
 				{
 					snd_pcm_close(playback_handle);
 					free(pbuf);
+					pbuf = 0;
 					fclose(fin);
 					fin = 0;
 				}
