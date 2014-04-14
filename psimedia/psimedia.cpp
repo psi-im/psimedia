@@ -275,6 +275,9 @@ Device::~Device()
 
 Device & Device::operator=(const Device &other)
 {
+	if(this == &other)
+		return *this;
+
 	if(d)
 	{
 		if(other.d)
