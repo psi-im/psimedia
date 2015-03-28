@@ -1073,6 +1073,9 @@ public:
 class GstPlugin : public QObject, public Plugin
 {
 	Q_OBJECT
+#if QT_VERSION >= 0x050000
+	Q_PLUGIN_METADATA(IID "org.psi-im.GstPlugin")
+#endif
 	Q_INTERFACES(PsiMedia::Plugin)
 
 public:
@@ -1081,6 +1084,8 @@ public:
 
 }
 
+#if QT_VERSION < 0x050000
 Q_EXPORT_PLUGIN2(gstprovider, PsiMedia::GstPlugin)
+#endif
 
 #include "gstprovider.moc"

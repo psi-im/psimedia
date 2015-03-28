@@ -1,6 +1,10 @@
 CONFIG -= app_bundle
 QT += network
 
+greaterThan(QT_MAJOR_VERSION, 4) {
+  QT += widgets
+}
+
 CONFIG += debug
 
 include(../psimedia/psimedia.pri)

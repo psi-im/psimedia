@@ -833,7 +833,7 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
 void RtpWorker::show_frame_preview(int width, int height, const unsigned char *rgb32)
 {
 	QImage image(width, height, QImage::Format_RGB32);
-	memcpy(image.bits(), rgb32, image.numBytes());
+	memcpy(image.bits(), rgb32, image.byteCount());
 
 	Frame frame;
 	frame.image = image;
@@ -845,7 +845,7 @@ void RtpWorker::show_frame_preview(int width, int height, const unsigned char *r
 void RtpWorker::show_frame_output(int width, int height, const unsigned char *rgb32)
 {
 	QImage image(width, height, QImage::Format_RGB32);
-	memcpy(image.bits(), rgb32, image.numBytes());
+	memcpy(image.bits(), rgb32, image.byteCount());
 
 	Frame frame;
 	frame.image = image;

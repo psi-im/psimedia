@@ -477,7 +477,7 @@ public:
 	{
 		for(int n = 0; n < cb->count(); ++n)
 		{
-			if(qVariantValue<PsiMedia::AudioParams>(cb->itemData(n)) == params)
+			if(cb->itemData(n).value<PsiMedia::AudioParams>() == params)
 				return n;
 		}
 
@@ -488,7 +488,7 @@ public:
 	{
 		for(int n = 0; n < cb->count(); ++n)
 		{
-			if(qVariantValue<PsiMedia::VideoParams>(cb->itemData(n)) == params)
+			if(cb->itemData(n).value<PsiMedia::VideoParams>() == params)
 				return n;
 		}
 
@@ -500,9 +500,9 @@ protected:
 	{
 		config.audioOutDeviceId = ui.cb_audioOutDevice->itemData(ui.cb_audioOutDevice->currentIndex()).toString();
 		config.audioInDeviceId = ui.cb_audioInDevice->itemData(ui.cb_audioInDevice->currentIndex()).toString();
-		config.audioParams = qVariantValue<PsiMedia::AudioParams>(ui.cb_audioMode->itemData(ui.cb_audioMode->currentIndex()));
+		config.audioParams = ui.cb_audioMode->itemData(ui.cb_audioMode->currentIndex()).value<PsiMedia::AudioParams>();
 		config.videoInDeviceId = ui.cb_videoInDevice->itemData(ui.cb_videoInDevice->currentIndex()).toString();
-		config.videoParams = qVariantValue<PsiMedia::VideoParams>(ui.cb_videoMode->itemData(ui.cb_videoMode->currentIndex()));
+		config.videoParams = ui.cb_videoMode->itemData(ui.cb_videoMode->currentIndex()).value<PsiMedia::VideoParams>();
 		config.liveInput = ui.rb_sendLive->isChecked();
 		config.file = ui.le_file->text();
 		config.loopFile = ui.ck_loop->isChecked();
