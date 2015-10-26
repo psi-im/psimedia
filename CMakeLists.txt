@@ -54,6 +54,25 @@ if(ENABLE_DIRECTSOUND)
 endif()
 
 if(ENABLE_WINKS)
+  # check for external MEDIASUBTYPE_I420
+  include(CheckCSourceCompiles)
+  set(CMAKE_REQUIRED_LIBRARIES "-lstrmiids")
+  CHECK_C_SOURCE_COMPILES("
+#include <windows.h>
+#include <uuids.h>
+
+int main()
+{
+    GUID guid = MEDIASUBTYPE_I420;
+    return 0;
+}
+
+" HAVE_MEDIASUBTYPE_I420)
+
+  if(HAVE_MEDIASUBTYPE_I420)
+    add_definitions(-DHAVE_MEDIASUBTYPE_I420)
+  endif()
+
   add_definitions(-DHAVE_WINKS)
   add_subdirectory(gstprovider/gstelements/winks)
   list(APPEND PARTS $<TARGET_OBJECTS:winks>)

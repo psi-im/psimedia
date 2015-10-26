@@ -35,10 +35,12 @@ static const GUID MEDIASUBTYPE_FOURCC =
     0x38, 0x9B, 0x71}
 };
 
+#ifndef HAVE_MEDIASUBTYPE_I420
 extern const GUID MEDIASUBTYPE_I420 =
     { 0x30323449, 0x0000, 0x0010, {0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B,
     0x71}
 };
+#endif
 
 static GstStructure *
 ks_video_format_to_structure (GUID subtype_guid, GUID format_guid)
