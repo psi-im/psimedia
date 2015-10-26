@@ -21,6 +21,7 @@
 #ifndef PSIMEDIA_H
 #define PSIMEDIA_H
 
+#include <QMetaType>
 #include <QSize>
 #include <QStringList>
 #include <QSharedDataPointer>
@@ -501,5 +502,8 @@ private:
 };
 
 }
+
+Q_DECLARE_METATYPE(PsiMedia::AudioParams)
+Q_DECLARE_METATYPE(PsiMedia::VideoParams)
 
 #endif
