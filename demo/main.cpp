@@ -1344,17 +1344,17 @@ int main(int argc, char **argv)
 	if(pluginFile.isEmpty())
 	{
 #if defined(Q_OS_WIN)
-		pluginFile = findPlugin(".", "gstprovider");
+		pluginFile = findPlugin(".", "gstprovider"DEBUG_POSTFIX);
 		if(!pluginFile.isEmpty())
 			resourcePath = QCoreApplication::applicationDirPath() + "/gstreamer-0.10";
 #elif defined(Q_OS_MAC)
-		pluginFile = findPlugin("../plugins", "gstprovider");
+		pluginFile = findPlugin("../plugins", "gstprovider"DEBUG_POSTFIX);
 		if(!pluginFile.isEmpty())
 			resourcePath = QCoreApplication::applicationDirPath() + "/../Frameworks/gstreamer-0.10";
 #endif
 
 		if(pluginFile.isEmpty())
-			pluginFile = findPlugin("../gstprovider", "gstprovider");
+			pluginFile = findPlugin("../gstprovider", "gstprovider"DEBUG_POSTFIX);
 	}
 
 	PsiMedia::loadPlugin(pluginFile, resourcePath);
