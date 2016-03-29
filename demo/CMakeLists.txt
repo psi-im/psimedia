@@ -32,6 +32,7 @@ if(Qt5Core_FOUND)
   add_definitions(${Qt5Widgets_DEFINITIONS})
   add_definitions(${Qt5Network_DEFINITIONS})
 else()
+  set(QT4_BUILD ON)
   message("Qt5 not found, searching for Qt4")
   # Find Qt4
   find_package(Qt4 REQUIRED QtCore QtGui QtNetwork)
