@@ -32,7 +32,6 @@ if(Qt5Core_FOUND)
   add_definitions(${Qt5Widgets_DEFINITIONS})
   add_definitions(${Qt5Network_DEFINITIONS})
 else()
-  set(QT4_BUILD ON)
   message("Qt5 not found, searching for Qt4")
   # Find Qt4
   find_package(Qt4 REQUIRED QtCore QtGui QtNetwork)
@@ -53,7 +52,7 @@ set(HEADERS
 set(SOURCES main.cpp ../psimedia/psimedia.cpp)
 set(FORMS config.ui mainwin.ui)
 
-if(NOT QT4_BUILD)
+if(Qt5Core_FOUND)
     qt5_wrap_cpp(MOC_SOURCES ${HEADERS})
     qt5_wrap_ui(UI_SOURCES ${FORMS})
 else()
