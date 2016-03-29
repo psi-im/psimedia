@@ -1,8 +1,4 @@
-project(demo)
-
-cmake_minimum_required(VERSION 2.8.11)
-
-option(QT4_BUILD "Force building with Qt4 even if Qt5 is found" OFF)
+project(psimedia-demo)
 
 add_definitions(-DDEBUG_POSTFIX=\"\")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -18,11 +14,9 @@ if(NOT QT4_BUILD)
   find_package(Qt5Gui QUIET)
   find_package(Qt5Widgets QUIET)
   find_package(Qt5Network QUIET)
-endif(NOT QT4_BUILD)
+endif()
 
 if(Qt5Core_FOUND)
-  message("Qt5 found")
-
   include_directories(${Qt5Core_INCLUDE_DIRS})
   include_directories(${Qt5Gui_INCLUDE_DIRS})
   include_directories(${Qt5Widgets_INCLUDE_DIRS})
@@ -32,7 +26,6 @@ if(Qt5Core_FOUND)
   add_definitions(${Qt5Widgets_DEFINITIONS})
   add_definitions(${Qt5Network_DEFINITIONS})
 else()
-  message("Qt5 not found, searching for Qt4")
   # Find Qt4
   find_package(Qt4 REQUIRED QtCore QtGui QtNetwork)
 
@@ -40,7 +33,7 @@ else()
   include(${QT_USE_FILE})
 endif()
 
-include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/../psimedia)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../psimedia)
 
 set(HEADERS
     main.h
@@ -67,3 +60,6 @@ if(Qt5Core_FOUND)
 else()
   target_link_libraries(${PROJECT_NAME} ${QT_LIBRARIES})
 endif()
+
+install(TARGETS ${PROJECT_NAME}
+        RUNTIME DESTINATION ${BIN_INSTALL_DIR})

@@ -71,3 +71,5 @@ if(Qt5Core_FOUND)
 else()
   target_link_libraries(${PROJECT_NAME} ${QT_LIBRARIES})
 endif()
+
+install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${LIB_INSTALL_DIR})

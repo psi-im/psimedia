@@ -11,7 +11,13 @@ elseif(APPLE)
   set(CMAKE_DEBUG_POSTFIX "_debug")
 endif(WIN32)
 
+#add extra search paths for libraries and includes
+set(LIB_SUFFIX "" CACHE STRING "Define suffix of directory name (32/64)" )
+set(BIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE STRING "Directory where binary will install")
+set(LIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/psi/plugins" CACHE STRING "Directory where plugin will install")
+
 option(QT4_BUILD "Force building with Qt4 even if Qt5 is found" OFF)
+option(BUILD_DEMO "Build psimedia-demo" ON)
 
 option(ENABLE_VIDEOMAXRATE "" ON)
 option(ENABLE_LIVEADDER "" ON)
@@ -90,4 +96,7 @@ if(ENABLE_OSXVIDIO)
   list(APPEND PARTS $<TARGET_OBJECTS:osxvideo>)
 endif()
 
+if(BUILD_DEMO)
+  add_subdirectory(demo)
+endif()
 add_subdirectory(gstprovider)
