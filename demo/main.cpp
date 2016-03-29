@@ -1268,6 +1268,11 @@ int main(int argc, char **argv)
 
 		if(pluginFile.isEmpty())
 			pluginFile = findPlugin("../gstprovider", "gstprovider"DEBUG_POSTFIX);
+
+#ifdef PLUGIN_INSTALL_PATH
+		if(pluginFile.isEmpty())
+			pluginFile = findPlugin(PLUGIN_INSTALL_PATH, "gstprovider"DEBUG_POSTFIX);
+#endif
 	}
 
 	PsiMedia::loadPlugin(pluginFile, resourcePath);

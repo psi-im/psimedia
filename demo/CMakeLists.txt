@@ -35,6 +35,8 @@ endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../psimedia)
 
+add_definitions(-DPLUGIN_INSTALL_PATH=\"${LIB_INSTALL_DIR}\")
+
 set(HEADERS
     main.h
     ../psimedia/psimedia.h
