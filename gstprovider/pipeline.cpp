@@ -113,45 +113,34 @@ static GstStaticPadTemplate videosrcbin_template = GST_STATIC_PAD_TEMPLATE("src"
 		)
 	);
 
-static GstElement *filter_for_capture_size(const QSize &size)
+static GstCaps *filter_for_capture_size(const QSize &size)
 {
-	GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
-	GstCaps *caps = gst_caps_new_empty();
-
-	GstStructure *cs;
-	cs = gst_structure_new("video/x-raw",
-		"width", G_TYPE_INT, size.width(),
-		"height", G_TYPE_INT, size.height(), NULL);
-
-	gst_caps_append_structure(caps, cs);
-
-	cs = gst_structure_new("image/jpeg",
-		"width", G_TYPE_INT, size.width(),
-		"height", G_TYPE_INT, size.height(), NULL);
-
-	gst_caps_append_structure(caps, cs);
-
-	g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
-	gst_caps_unref(caps);
-
-	return capsfilter;
+	return gst_caps_new_full (
+	gst_structure_new("video/x-raw",
+			"width", G_TYPE_INT, size.width(),
+			"height", G_TYPE_INT, size.height(), NULL),
+	gst_structure_new("image/jpeg",
+			"width", G_TYPE_INT, size.width(),
+			"height", G_TYPE_INT, size.height(), NULL),
+	NULL
+	);
 }
 
-static GstElement *filter_for_desired_size(const QSize &size)
+static GstCaps *filter_for_desired_size(const QSize &size)
 {
-	QList<int> widths;
-	widths << 160 << 320 << 640 << 800 << 1024;
-	for(int n = 0; n < widths.count(); ++n)
-	{
-		if(widths[n] < size.width())
-		{
-			widths.removeAt(n);
-			--n; // adjust position
-		}
-	}
+//	QList<int> widths;
+//	widths << 160 << 320 << 640 << 800 << 1024;
+//	for(int n = 0; n < widths.count(); ++n)
+//	{
+//		if(widths[n] < size.width())
+//		{
+//			widths.removeAt(n);
+//			--n; // adjust position
+//		}
+//	}
 
-	GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
-	GstCaps *caps = gst_caps_new_empty();
+//	GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
+//	GstCaps *caps = gst_caps_new_empty();
 
 // 	for(int n = 0; n < widths.count(); ++n)
 // 	{
@@ -166,18 +155,11 @@ static GstElement *filter_for_desired_size(const QSize &size)
 // 			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
 // 		gst_caps_append_structure(caps, cs);
 // 	}
-        caps = gst_caps_from_string("video/x-raw,width=320,"
-			"height=240,framerate=30/1");
-        g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
+        return gst_caps_new_simple("video/x-raw",
+		                           "width", G_TYPE_INT, 320,
+		                           "height", G_TYPE_INT, 240,
+		                           "framerate", GST_TYPE_FRACTION, 30, 1, NULL);
 
-	GstStructure *cs = gst_structure_new_empty("image/jpeg");
-
-	gst_caps_append_structure(caps, cs);
-
-	g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
-	gst_caps_unref(caps);
-
-	return capsfilter;
 }
 
 static GstElement *make_devicebin(const QString &id, PDevice::Type type, const QSize &desiredSize)
@@ -242,7 +224,7 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 	}
 	else if(type == PDevice::VideoIn)
 	{
-		GstElement *capsfilter = 0;
+		GstCaps *capsfilter = 0;
 
 #ifdef Q_OS_MAC
 		// FIXME: hardcode resolution because filter_for_desired_size
@@ -264,9 +246,6 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 
 		gst_bin_add(GST_BIN(bin), e);
 
-		if(capsfilter)
-			gst_bin_add(GST_BIN(bin), capsfilter);
-
 		GstElement *decodebin = gst_element_factory_make("decodebin", NULL);
 		gst_bin_add(GST_BIN(bin), decodebin);
 
@@ -278,10 +257,12 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 			"pad-added",
 			G_CALLBACK(videosrcbin_pad_added), pad);
 
-		if(capsfilter)
-			gst_element_link_many(e, capsfilter, decodebin, NULL);
-		else
+		if(capsfilter) {
+			gst_element_link_filtered (e, decodebin, capsfilter);
+			gst_caps_unref(capsfilter);
+		} else {
 			gst_element_link(e, decodebin);
+		}
 	}
 	else // AudioOut
 	{
