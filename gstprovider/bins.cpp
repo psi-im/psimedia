@@ -232,11 +232,9 @@ GstElement *bins_videoprep_create(const QSize &size, int fps, bool is_live)
 		ratefilter = gst_element_factory_make("capsfilter", NULL);
 
 		GstCaps *caps = gst_caps_new_empty();
-		GstStructure *cs = gst_structure_new("video/x-raw-yuv",
+		GstStructure *cs = gst_structure_new("video/x-raw",
 			"framerate", GST_TYPE_FRACTION, fps, 1, NULL);
-		gst_caps_append_structure(caps, cs);
-		cs = gst_structure_new("video/x-raw-rgb",
-			"framerate", GST_TYPE_FRACTION, fps, 1, NULL);
+
 		gst_caps_append_structure(caps, cs);
 
 		g_object_set(G_OBJECT(ratefilter), "caps", caps, NULL);
@@ -251,13 +249,10 @@ GstElement *bins_videoprep_create(const QSize &size, int fps, bool is_live)
 		scalefilter = gst_element_factory_make("capsfilter", NULL);
 
 		GstCaps *caps = gst_caps_new_empty();
-		GstStructure *cs = gst_structure_new("video/x-raw-yuv",
+		GstStructure *cs = gst_structure_new("video/x-raw",
 			"width", G_TYPE_INT, size.width(),
 			"height", G_TYPE_INT, size.height(), NULL);
-		gst_caps_append_structure(caps, cs);
-		cs = gst_structure_new("video/x-raw-rgb",
-			"width", G_TYPE_INT, size.width(),
-			"height", G_TYPE_INT, size.height(), NULL);
+
 		gst_caps_append_structure(caps, cs);
 
 		g_object_set(G_OBJECT(scalefilter), "caps", caps, NULL);
@@ -334,23 +329,15 @@ GstElement *bins_audioenc_create(const QString &codec, int id, int rate, int siz
 
 	GstStructure *cs;
 	GstCaps *caps = gst_caps_new_empty();
-	if(codec == "vorbis")
-	{
-		cs = gst_structure_new("audio/x-raw-float",
-			"rate", G_TYPE_INT, rate,
-			"width", G_TYPE_INT, size,
-			"channels", G_TYPE_INT, channels, NULL);
-		gst_caps_append_structure(caps, cs);
-	}
-	else
-	{
-		cs = gst_structure_new("audio/x-raw-int",
-			"rate", G_TYPE_INT, rate,
-			"width", G_TYPE_INT, size,
-			"channels", G_TYPE_INT, channels, NULL);
-		gst_caps_append_structure(caps, cs);
-		printf("rate=%d,width=%d,channels=%d\n", rate, size, channels);
-	}
+
+	cs = gst_structure_new("audio/x-raw",
+		"rate", G_TYPE_INT, rate,
+		"width", G_TYPE_INT, size,
+		"channels", G_TYPE_INT, channels, NULL);
+
+	gst_caps_append_structure(caps, cs);
+	printf("rate=%d,width=%d,channels=%d\n", rate, size, channels);
+
 	GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
 	g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 	gst_caps_unref(caps);
@@ -391,7 +378,7 @@ GstElement *bins_videoenc_create(const QString &codec, int id, int maxkbps)
 	if(codec == "theora")
 		g_object_set(G_OBJECT(videoenc), "bitrate", maxkbps, NULL);
 
-	GstElement *videoconvert = gst_element_factory_make("ffmpegcolorspace", NULL);
+	GstElement *videoconvert = gst_element_factory_make("videoconvert", NULL);
 
 	gst_bin_add(GST_BIN(bin), videoconvert);
 	gst_bin_add(GST_BIN(bin), videoenc);

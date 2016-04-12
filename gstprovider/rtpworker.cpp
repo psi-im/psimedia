@@ -39,8 +39,7 @@ static GstStaticPadTemplate raw_audio_src_template = GST_STATIC_PAD_TEMPLATE("sr
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-int; "
-		"audio/x-raw-float"
+		"audio/x-raw"
 		)
 	);
 
@@ -48,8 +47,7 @@ static GstStaticPadTemplate raw_audio_sink_template = GST_STATIC_PAD_TEMPLATE("s
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"audio/x-raw-int; "
-		"audio/x-raw-float"
+		"audio/x-raw"
 		)
 	);
 
@@ -57,8 +55,7 @@ static GstStaticPadTemplate raw_video_sink_template = GST_STATIC_PAD_TEMPLATE("s
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		"video/x-raw-yuv; "
-		"video/x-raw-rgb"
+		"video/x-raw"
 		)
 	);
 
@@ -138,24 +135,24 @@ static void dump_pipeline(GstElement *in, int indent = 0)
 {
 	GstIterator *it = gst_bin_iterate_elements(GST_BIN(in));
 	gboolean done = FALSE;
-	void *item;
+	GstElement *e;
 	while(!done)
 	{
-		switch(gst_iterator_next(it, &item))
+		switch(gst_iterator_next(it, (GValue*)&e))
 		{
 			case GST_ITERATOR_OK:
 			{
-				GstElement *e = (GstElement *)item;
+				//GstElement *e = (GstElement *)item;
 				for(int n = 0; n < indent; ++n)
 					printf(" ");
-				if(GST_IS_BIN(item))
+				if(GST_IS_BIN(e))
 				{
 					printf("%s:\n", gst_element_get_name(e));
 					dump_pipeline(e, indent + 2);
 				}
 				else
 					printf("%s\n", gst_element_get_name(e));
-				gst_object_unref(item);
+				gst_object_unref(e);
 				break;
 			}
 			case GST_ITERATOR_RESYNC:
@@ -665,7 +662,7 @@ void RtpWorker::fileDemux_pad_added(GstElement *element, GstPad *pad)
 	g_free(name);
 #endif
 
-	GstCaps *caps = gst_pad_get_caps(pad);
+	GstCaps *caps = gst_pad_query_caps(pad, NULL);
 #ifdef RTPWORKER_DEBUG
 	gchar *gstr = gst_caps_to_string(caps);
 	QString capsString = QString::fromUtf8(gstr);
@@ -1390,7 +1387,7 @@ bool RtpWorker::startRecv()
 		if(!videodec)
 			goto fail1;
 
-		GstElement *videoconvert = gst_element_factory_make("ffmpegcolorspace", NULL);
+		GstElement *videoconvert = gst_element_factory_make("videoconvert", NULL);
 		GstElement *videosink = gst_element_factory_make("appvideosink", NULL);
 		GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videosink;
 		appVideoSink->appdata = this;
@@ -1613,7 +1610,7 @@ bool RtpWorker::addVideoChain()
 	GstElement *videotee = gst_element_factory_make("tee", NULL);
 
 	GstElement *playqueue = gst_element_factory_make("queue", NULL);
-	GstElement *videoconvertplay = gst_element_factory_make("ffmpegcolorspace", NULL);
+	GstElement *videoconvertplay = gst_element_factory_make("videoconvert", NULL);
 	GstElement *videoplaysink = gst_element_factory_make("appvideosink", NULL);
 	GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videoplaysink;
 	appVideoSink->appdata = this;
@@ -1681,7 +1678,7 @@ bool RtpWorker::getCaps()
 	if(audiortppay)
 	{
 		GstPad *pad = gst_element_get_static_pad(audiortppay, "src");
-		GstCaps *caps = gst_pad_get_negotiated_caps(pad);
+		GstCaps *caps = gst_pad_get_current_caps(pad);
 		if(!caps)
 		{
 #ifdef RTPWORKER_DEBUG
@@ -1730,7 +1727,7 @@ bool RtpWorker::getCaps()
 	if(videortppay)
 	{
 		GstPad *pad = gst_element_get_static_pad(videortppay, "src");
-		GstCaps *caps = gst_pad_get_negotiated_caps(pad);
+		GstCaps *caps = gst_pad_get_current_caps(pad);
 		if(!caps)
 		{
 #ifdef RTPWORKER_DEBUG
@@ -1802,6 +1799,7 @@ bool RtpWorker::updateTheoraConfig()
 				continue;
 
 			GstCaps *caps = gst_caps_new_empty();
+
 			gst_caps_append_structure(caps, cs);
 			g_object_set(G_OBJECT(videortpsrc), "caps", caps, NULL);
 			gst_caps_unref(caps);

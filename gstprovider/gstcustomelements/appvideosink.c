@@ -31,9 +31,9 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE("sink",
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
 #if G_BYTE_ORDER == G_LITTLE_ENDIAN
-		GST_VIDEO_CAPS_BGRx
+		GST_VIDEO_CAPS_MAKE ("BGRx")
 #else
-		GST_VIDEO_CAPS_xRGB
+		GST_VIDEO_CAPS_MAKE ("xRGB")
 #endif
 		)
 	);

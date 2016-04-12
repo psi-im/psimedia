@@ -23,17 +23,20 @@
 #include <QSize>
 #include <QStringList>
 #include <gst/gst.h>
+#if 0
 #include <gst/interfaces/propertyprobe.h>
+#endif
 #include "deviceenum/deviceenum.h"
 
 namespace PsiMedia {
-
+#if 0
 class GstDeviceProbeValue
 {
 public:
 	QString id;
 	QString name;
 };
+
 
 static QList<GstDeviceProbeValue> device_probe(GstElement *e)
 {
@@ -103,6 +106,7 @@ static bool element_should_use_probe(const QString &element_name)
 		return true;
 }
 
+
 static QList<DeviceEnum::Item> device_enum(const QString &driver, PDevice::Type type)
 {
 	if(type == PDevice::AudioOut)
@@ -127,7 +131,7 @@ static QString id_part_escape(const QString &in)
 	}
 	return out;
 }
-
+#endif
 static QString id_part_unescape(const QString &in)
 {
 	QString out;
@@ -151,12 +155,12 @@ static QString id_part_unescape(const QString &in)
 	}
 	return out;
 }
-
+#if 0
 static QString resolution_to_string(const QSize &size)
 {
 	return QString::number(size.width()) + 'x' + QString::number(size.height());
 }
-
+#endif
 static QSize string_to_resolution(const QString &in)
 {
 	int at = in.indexOf('x');
@@ -177,7 +181,7 @@ static QSize string_to_resolution(const QString &in)
 
 	return QSize(w, h);
 }
-
+#if 0
 static QString encode_id(const QStringList &in)
 {
 	QStringList list = in;
@@ -185,7 +189,7 @@ static QString encode_id(const QStringList &in)
 		list[n] = id_part_escape(list[n]);
 	return list.join(",");
 }
-
+#endif
 static QStringList decode_id(const QString &in)
 {
 	QStringList list = in.split(',');
@@ -249,7 +253,7 @@ static QString element_name_for_driver(const QString &driver, PDevice::Type type
 
 	return element_name;
 }
-
+#if 0
 // check to see that the necessary sources/sinks are available
 static QStringList check_supported_drivers(const QStringList &drivers, PDevice::Type type)
 {
@@ -260,7 +264,7 @@ static QStringList check_supported_drivers(const QStringList &drivers, PDevice::
 		if(element_name.isEmpty())
 			continue;
 
-		GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), NULL);
+		GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), NULL); // why not gst_element_factory_find?
 		if(e)
 		{
 			out += driver;
@@ -269,7 +273,7 @@ static QStringList check_supported_drivers(const QStringList &drivers, PDevice::
 	}
 	return out;
 }
-
+#endif
 static GstElement *make_element_with_device(const QString &element_name, const QString &device_id)
 {
 	GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), NULL);
@@ -297,7 +301,7 @@ static GstElement *make_element_with_device(const QString &element_name, const Q
 
 	return e;
 }
-
+#if 0
 static bool test_video(const QString &element_name, const QString &device_id)
 {
 	GstElement *e = make_element_with_device(element_name, device_id);
@@ -340,11 +344,12 @@ static bool test_element(const QString &element_name)
 	return true;
 }
 
+
 static QList<GstDevice> devices_for_drivers(const QStringList &drivers, PDevice::Type type)
 {
 	QList<GstDevice> out;
 
-	QStringList supportedDrivers = check_supported_drivers(drivers, type);
+	QStringList supportedDrivers = check_supported_drivers(drivers, type); // filtered `drivers`
 	foreach(const QString &driver, supportedDrivers)
 	{
 		QString element_name = element_name_for_driver(driver, type);
@@ -413,9 +418,51 @@ static QList<GstDevice> devices_for_drivers(const QStringList &drivers, PDevice:
 
 	return out;
 }
+#endif
+
+GList *devices_glist(PDevice::Type type)
+{
+	// below is very stupid usage of device monitor just for compatibility reasons
+
+	GstDeviceMonitor *monitor;
+	monitor = gst_device_monitor_new();
+
+	if (type == PDevice::AudioOut) {
+		gst_device_monitor_add_filter (monitor, "Audio/Sink", NULL);
+	} else if (type == PDevice::AudioIn) {
+		gst_device_monitor_add_filter (monitor, "Audio/Source", NULL);
+	} else { // VideoIn
+		GstCaps *caps;
+
+		caps = gst_caps_new_empty_simple ("video/x-raw");
+		gst_device_monitor_add_filter (monitor, "Video/Source", caps);
+		caps = gst_caps_new_empty_simple ("image/jpeg");
+		gst_device_monitor_add_filter (monitor, "Video/Source", caps);
+		gst_caps_unref (caps);
+	}
+
+	return gst_device_monitor_get_devices(monitor);
+}
 
 QList<GstDevice> devices_list(PDevice::Type type)
 {
+	QList<GstDevice> ret;
+	GList *devs = devices_glist(type);
+	GList *dev = devs;
+	for (; dev != NULL; dev = dev->next) {
+		::GstDevice *gdev = (::GstDevice*)(dev->data);
+		PsiMedia::GstDevice d;
+		gchar *name = gst_device_get_display_name(gdev);
+		d.name = QString::fromUtf8(name);
+		d.id = d.name;
+		d.isDefault = false; // TODO
+		ret.append(d);
+		g_free(name);
+	}
+	g_list_free(devs);
+	return ret;
+
+#if 0
 	QStringList drivers;
 	if(type == PDevice::AudioOut)
 	{
@@ -451,10 +498,23 @@ QList<GstDevice> devices_list(PDevice::Type type)
 	}
 
 	return devices_for_drivers(drivers, type);
+#endif
 }
 
 GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *captureSize)
 {
+	GList *devs = devices_glist(type);
+	GList *dev = devs;
+	for (; dev != NULL; dev = dev->next) {
+		gchar *name = gst_device_get_display_name((::GstDevice*)dev->data);
+		if (QString::fromUtf8(name) == id) {
+			return gst_device_create_element((::GstDevice*)dev->data, NULL);
+		}
+		g_free(name);
+	}
+	g_list_free(devs);
+
+#if 0
 	QStringList parts = decode_id(id);
 	if(parts.count() < 2)
 		return 0;
@@ -487,6 +547,7 @@ GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *ca
 		*captureSize = string_to_resolution(parts[2]);
 
 	return e;
+#endif
 }
 
 }

@@ -105,7 +105,7 @@ gboolean my_foreach_func(GQuark field_id, const GValue *value, gpointer user_dat
 
 GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &media)
 {
-	GstStructure *out = gst_structure_empty_new("application/x-rtp");
+	GstStructure *out = gst_structure_new_empty("application/x-rtp");
 
 	{
 		GValue gv;
