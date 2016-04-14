@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <QStringList>
 #include <QTime>
+
 #include "devices.h"
 #include "payloadinfo.h"
 #include "pipeline.h"
@@ -553,25 +554,37 @@ gboolean RtpWorker::cb_bus_call(GstBus *bus, GstMessage *msg, gpointer data)
 	return ((RtpWorker *)data)->bus_call(bus, msg);
 }
 
-void RtpWorker::cb_show_frame_preview(int width, int height, const unsigned char *rgb32, gpointer data)
+GstFlowReturn RtpWorker::cb_show_frame_preview(GstAppSink *appsink, gpointer data)
 {
-	((RtpWorker *)data)->show_frame_preview(width, height, rgb32);
+	return ((RtpWorker *)data)->show_frame_preview(appsink);
 }
 
-void RtpWorker::cb_show_frame_output(int width, int height, const unsigned char *rgb32, gpointer data)
+GstFlowReturn RtpWorker::cb_show_frame_output(GstAppSink *appsink, gpointer data)
 {
-	((RtpWorker *)data)->show_frame_output(width, height, rgb32);
+	return ((RtpWorker *)data)->show_frame_output(appsink);
 }
 
-void RtpWorker::cb_packet_ready_rtp_audio(const unsigned char *buf, int size, gpointer data)
+GstFlowReturn RtpWorker::cb_packet_ready_rtp_audio(GstAppSink *appsink, gpointer data)
 {
-	((RtpWorker *)data)->packet_ready_rtp_audio(buf, size);
+	return ((RtpWorker *)data)->packet_ready_rtp_audio(appsink);
 }
 
-void RtpWorker::cb_packet_ready_rtp_video(const unsigned char *buf, int size, gpointer data)
+GstFlowReturn RtpWorker::cb_packet_ready_rtp_video(GstAppSink *appsink, gpointer data)
 {
-	((RtpWorker *)data)->packet_ready_rtp_video(buf, size);
+	return ((RtpWorker *)data)->packet_ready_rtp_video(appsink);
 }
+
+GstFlowReturn RtpWorker::cb_packet_ready_preroll_stub(GstAppSink *appsink, gpointer data)
+{
+	qDebug("RtpWorker::cb_packet_ready_preroll_stub");
+	return GST_FLOW_OK;
+}
+
+void RtpWorker::cb_packet_ready_eos_stub(GstAppSink *appsink, gpointer data)
+{
+	qDebug("RtpWorker::cb_packet_ready_eos_stub");
+}
+
 
 gboolean RtpWorker::cb_fileReady(gpointer data)
 {
@@ -827,33 +840,42 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
 	return TRUE;
 }
 
-void RtpWorker::show_frame_preview(int width, int height, const unsigned char *rgb32)
+GstFlowReturn RtpWorker::show_frame_preview(GstAppSink *appsink)
 {
-	QImage image(width, height, QImage::Format_RGB32);
-	memcpy(image.bits(), rgb32, image.byteCount());
-
-	Frame frame;
-	frame.image = image;
+	Frame frame = Frame::pullFromSink(appsink);
+	if (frame.image.isNull()) {
+		return GST_FLOW_ERROR;
+	}
 
 	if(cb_previewFrame)
 		cb_previewFrame(frame, app);
+
+	return GST_FLOW_OK;
 }
 
-void RtpWorker::show_frame_output(int width, int height, const unsigned char *rgb32)
+GstFlowReturn RtpWorker::show_frame_output(GstAppSink *appsink)
 {
-	QImage image(width, height, QImage::Format_RGB32);
-	memcpy(image.bits(), rgb32, image.byteCount());
-
-	Frame frame;
-	frame.image = image;
+	Frame frame = Frame::pullFromSink(appsink);
+	if (frame.image.isNull()) {
+		return GST_FLOW_ERROR;
+	}
 
 	if(cb_outputFrame)
 		cb_outputFrame(frame, app);
+
+	return GST_FLOW_OK;
 }
 
-void RtpWorker::packet_ready_rtp_audio(const unsigned char *buf, int size)
+GstFlowReturn RtpWorker::packet_ready_rtp_audio(GstAppSink *appsink)
 {
-	QByteArray ba((const char *)buf, size);
+	GstSample *sample = gst_app_sink_pull_sample(appsink);
+	GstBuffer *buffer = gst_sample_get_buffer(sample);
+	int sz = gst_buffer_get_size(buffer);
+	QByteArray ba;
+	ba.resize(sz);
+	gst_buffer_extract(buffer, 0, ba.data(), sz);
+	gst_sample_unref(sample);
+
 	PRtpPacket packet;
 	packet.rawValue = ba;
 	packet.portOffset = 0;
@@ -865,11 +887,20 @@ void RtpWorker::packet_ready_rtp_audio(const unsigned char *buf, int size)
 	QMutexLocker locker(&rtpaudioout_mutex);
 	if(cb_rtpAudioOut && rtpaudioout)
 		cb_rtpAudioOut(packet, app);
+
+	return GST_FLOW_OK;
 }
 
-void RtpWorker::packet_ready_rtp_video(const unsigned char *buf, int size)
+GstFlowReturn RtpWorker::packet_ready_rtp_video(GstAppSink *appsink)
 {
-	QByteArray ba((const char *)buf, size);
+	GstSample *sample = gst_app_sink_pull_sample(appsink);
+	GstBuffer *buffer = gst_sample_get_buffer(sample);
+	int sz = gst_buffer_get_size(buffer);
+	QByteArray ba;
+	ba.resize(sz);
+	gst_buffer_extract(buffer, 0, ba.data(), sz);
+	gst_sample_unref(sample);
+
 	PRtpPacket packet;
 	packet.rawValue = ba;
 	packet.portOffset = 0;
@@ -881,6 +912,8 @@ void RtpWorker::packet_ready_rtp_video(const unsigned char *buf, int size)
 	QMutexLocker locker(&rtpvideoout_mutex);
 	if(cb_rtpVideoOut && rtpvideoout)
 		cb_rtpVideoOut(packet, app);
+
+	return GST_FLOW_OK;
 }
 
 gboolean RtpWorker::fileReady()
@@ -1388,10 +1421,14 @@ bool RtpWorker::startRecv()
 			goto fail1;
 
 		GstElement *videoconvert = gst_element_factory_make("videoconvert", NULL);
-		GstElement *videosink = gst_element_factory_make("appvideosink", NULL);
-		GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videosink;
-		appVideoSink->appdata = this;
-		appVideoSink->show_frame = cb_show_frame_output;
+		GstElement *videosink = gst_element_factory_make("appsink", NULL); // was appvideosink
+		GstAppSink *appVideoSink = (GstAppSink *)videosink;
+
+		GstAppSinkCallbacks sinkVideoCb;
+		sinkVideoCb.new_sample = cb_show_frame_output;
+		sinkVideoCb.eos = cb_packet_ready_eos_stub; // TODO
+		sinkVideoCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
+		gst_app_sink_set_callbacks(appVideoSink, &sinkVideoCb, this, NULL);
 
 		gst_bin_add(GST_BIN(recvbin), videortpsrc);
 		gst_bin_add(GST_BIN(recvbin), videodec);
@@ -1522,12 +1559,17 @@ bool RtpWorker::addAudioChain(int rate)
 		g_object_set(G_OBJECT(volumein), "volume", vol, NULL);
 	}
 
-	GstElement *audiortpsink = gst_element_factory_make("apprtpsink", NULL);
-	GstAppRtpSink *appRtpSink = (GstAppRtpSink *)audiortpsink;
+	GstElement *audiortpsink = gst_element_factory_make("appsink", NULL);
+	GstAppSink *appRtpSink = (GstAppSink *)audiortpsink;
+
 	if(!fileDemux)
 		g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, NULL);
-	appRtpSink->appdata = this;
-	appRtpSink->packet_ready = cb_packet_ready_rtp_audio;
+
+	GstAppSinkCallbacks sinkCb;
+	sinkCb.new_sample = cb_packet_ready_rtp_audio;
+	sinkCb.eos = cb_packet_ready_eos_stub; // TODO
+	sinkCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
+	gst_app_sink_set_callbacks(appRtpSink, &sinkCb, this, NULL);
 
 	GstElement *queue = 0;
 	if(fileDemux)
@@ -1611,18 +1653,28 @@ bool RtpWorker::addVideoChain()
 
 	GstElement *playqueue = gst_element_factory_make("queue", NULL);
 	GstElement *videoconvertplay = gst_element_factory_make("videoconvert", NULL);
-	GstElement *videoplaysink = gst_element_factory_make("appvideosink", NULL);
-	GstAppVideoSink *appVideoSink = (GstAppVideoSink *)videoplaysink;
-	appVideoSink->appdata = this;
-	appVideoSink->show_frame = cb_show_frame_preview;
+	GstElement *videoplaysink = gst_element_factory_make("appsink", NULL); // was appvideosink
+	GstAppSink *appVideoSink = (GstAppSink *)videoplaysink;
+
+	GstAppSinkCallbacks sinkPreviewCb;
+	sinkPreviewCb.new_sample = cb_show_frame_preview;
+	sinkPreviewCb.eos = cb_packet_ready_eos_stub; // TODO
+	sinkPreviewCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
+	gst_app_sink_set_callbacks(appVideoSink, &sinkPreviewCb, this, NULL);
+
 
 	GstElement *rtpqueue = gst_element_factory_make("queue", NULL);
-	GstElement *videortpsink = gst_element_factory_make("apprtpsink", NULL);
-	GstAppRtpSink *appRtpSink = (GstAppRtpSink *)videortpsink;
+	GstElement *videortpsink = gst_element_factory_make("appsink", NULL); // was apprtpsink
+	GstAppSink *appRtpSink = (GstAppSink *)videortpsink;
 	if(!fileDemux)
 		g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, NULL);
-	appRtpSink->appdata = this;
-	appRtpSink->packet_ready = cb_packet_ready_rtp_video;
+
+	GstAppSinkCallbacks sinkCb;
+	sinkCb.new_sample = cb_packet_ready_rtp_video;
+	sinkCb.eos = cb_packet_ready_eos_stub; // TODO
+	sinkCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
+	gst_app_sink_set_callbacks(appRtpSink, &sinkCb, this, NULL);
+
 
 	GstElement *queue = 0;
 	if(fileDemux)
@@ -1810,6 +1862,29 @@ bool RtpWorker::updateTheoraConfig()
 	}
 
 	return false;
+}
+
+RtpWorker::Frame RtpWorker::Frame::pullFromSink(GstAppSink *appsink)
+{
+	Frame frame;
+	int width, height;
+	GstSample *sample = gst_app_sink_pull_sample(appsink);
+	GstCaps *caps = gst_sample_get_caps(sample);
+	GstBuffer *buffer = gst_sample_get_buffer(sample);
+	//QString strCaps = gst_caps_to_string(caps);
+	//qDebug() << "strCAPS=" << strCaps;
+	GstStructure *capsStruct = gst_caps_get_structure(caps,0);
+	gst_structure_get_int(capsStruct,"width",&width);
+	gst_structure_get_int(capsStruct,"height",&height);
+
+	if ((gsize)(width * height * 4) == gst_buffer_get_size(buffer)) {
+		QImage image(width, height, QImage::Format_RGB32);
+		gst_buffer_extract(buffer, 0, image.bits(), image.byteCount());
+		frame.image = image;
+	}
+	gst_sample_unref(sample);
+
+	return frame;
 }
 
 }

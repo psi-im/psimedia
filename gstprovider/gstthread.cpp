@@ -222,7 +222,8 @@ public:
 			<< "videorate"
 			<< "videoscale"
 			<< "rtpjitterbuffer"
-			<< "liveadder";
+			<< "liveadder"
+		    << "appsink";
 
 #if defined(Q_OS_MAC)
 			reqelem
