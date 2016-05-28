@@ -230,9 +230,11 @@ public:
 			<< "liveadder";
 
 #if defined(Q_OS_MAC)
-			reqelem
-			<< "osxaudiosrc" << "osxaudiosink"
-			<< "osxvideosrc";
+		reqelem
+			<< "osxaudiosrc" << "osxaudiosink";
+# ifdef HAVE_OSXVIDIO
+		reqelem << "osxvideosrc";
+# endif
 #elif defined(Q_OS_LINUX)
 			reqelem
 			<< "alsasrc" << "alsasink"
