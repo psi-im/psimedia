@@ -32,7 +32,7 @@ endif()
 # Mac OS specific features
 if(APPLE)
   option(ENABLE_OSXAUDIO "" ON)
-  option(ENABLE_OSXVIDIO "" ON)
+  option(ENABLE_OSXVIDIO "" OFF)
 endif()
 
 if(ENABLE_VIDEOMAXRATE)
