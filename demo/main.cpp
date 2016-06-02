@@ -1263,7 +1263,7 @@ int main(int argc, char **argv)
 #elif defined(Q_OS_MAC)
 		pluginFile = findPlugin("../plugins", "gstprovider"DEBUG_POSTFIX);
 		if(!pluginFile.isEmpty())
-			resourcePath = QCoreApplication::applicationDirPath() + "/../Frameworks/gstreamer-0.10";
+			resourcePath = QCoreApplication::applicationDirPath() + "/../Plugins/gstreamer-0.10";
 #endif
 
 		if(pluginFile.isEmpty())
