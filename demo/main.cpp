@@ -1262,8 +1262,9 @@ int main(int argc, char **argv)
 			resourcePath = QCoreApplication::applicationDirPath() + "/gstreamer-0.10";
 #elif defined(Q_OS_MAC)
 		pluginFile = findPlugin("../PlugIns", "gstprovider"DEBUG_POSTFIX);
+		// codesign can't sign gstreamer-0.10 folder
 		if(!pluginFile.isEmpty())
-			resourcePath = QCoreApplication::applicationDirPath() + "/../PlugIns/gstreamer-0.10";
+			resourcePath = QCoreApplication::applicationDirPath() + "/../PlugIns/gstreamer";
 #endif
 
 		if(pluginFile.isEmpty())
