@@ -1261,9 +1261,9 @@ int main(int argc, char **argv)
 		if(!pluginFile.isEmpty())
 			resourcePath = QCoreApplication::applicationDirPath() + "/gstreamer-0.10";
 #elif defined(Q_OS_MAC)
-		pluginFile = findPlugin("../plugins", "gstprovider"DEBUG_POSTFIX);
+		pluginFile = findPlugin("../PlugIns", "gstprovider"DEBUG_POSTFIX);
 		if(!pluginFile.isEmpty())
-			resourcePath = QCoreApplication::applicationDirPath() + "/../Plugins/gstreamer-0.10";
+			resourcePath = QCoreApplication::applicationDirPath() + "/../PlugIns/gstreamer-0.10";
 #endif
 
 		if(pluginFile.isEmpty())
