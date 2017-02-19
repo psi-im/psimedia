@@ -2,6 +2,8 @@
 
 PsiMedia is a thick abstraction layer for providing audio and video RTP services to Psi-like IM clients. The implementation is based on GStreamer.
 
+For more information, see [this article](http://jblog.andbit.net/2008/07/03/introducing-psimedia/).
+
 ## License
 
 This library is licensed under the Lesser GNU General Public License. See the COPYING file for more information.
