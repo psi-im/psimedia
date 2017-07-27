@@ -20,6 +20,8 @@
 
 #include "psimedia_p.h"
 
+#include <QMetaMethod>
+
 namespace PsiMedia {
 
 static AudioParams importAudioParams(const PAudioParams &pp)
@@ -711,11 +713,11 @@ void RtpChannel::write(const RtpPacket &rtp)
 	}
 }
 
-void RtpChannel::connectNotify(const char *signal)
+void RtpChannel::connectNotify(const QMetaMethod &signal)
 {
 	int oldtotal = d->readyReadListeners;
 
-	if(QLatin1String(signal) == QMetaObject::normalizedSignature(SIGNAL(readyRead())).data())
+	if(signal == QMetaMethod::fromSignal(&RtpChannel::readyRead))
 		++d->readyReadListeners;
 
 	int total = d->readyReadListeners;
@@ -726,11 +728,11 @@ void RtpChannel::connectNotify(const char *signal)
 	}
 }
 
-void RtpChannel::disconnectNotify(const char *signal)
+void RtpChannel::disconnectNotify(const QMetaMethod &signal)
 {
 	int oldtotal = d->readyReadListeners;
 
-	if(QLatin1String(signal) == QMetaObject::normalizedSignature(SIGNAL(readyRead())).data())
+	if(signal == QMetaMethod::fromSignal(&RtpChannel::readyRead))
 		--d->readyReadListeners;
 
 	int total = d->readyReadListeners;

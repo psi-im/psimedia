@@ -30,6 +30,8 @@
 #include <QWidget>
 #endif
 
+class QMetaMethod;
+
 namespace PsiMedia {
 
 class RtpSession;
@@ -235,13 +237,13 @@ signals:
 	void packetsWritten(int count);
 
 protected:
-	virtual void connectNotify(const char *signal);
-	virtual void disconnectNotify(const char *signal);
+	virtual void connectNotify(const QMetaMethod &signal) Q_DECL_OVERRIDE;
+	virtual void disconnectNotify(const QMetaMethod &signal) Q_DECL_OVERRIDE;
 
 private:
 	RtpChannel();
 	~RtpChannel();
-	Q_DISABLE_COPY(RtpChannel);
+	Q_DISABLE_COPY(RtpChannel)
 
 	friend class RtpSession;
 	friend class RtpSessionPrivate;
@@ -495,7 +497,7 @@ signals:
 	void error();
 
 private:
-	Q_DISABLE_COPY(RtpSession);
+	Q_DISABLE_COPY(RtpSession)
 
 	friend class RtpSessionPrivate;
 	RtpSessionPrivate *d;

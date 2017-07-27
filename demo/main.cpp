@@ -1257,22 +1257,22 @@ int main(int argc, char **argv)
 	if(pluginFile.isEmpty())
 	{
 #if defined(Q_OS_WIN)
-		pluginFile = findPlugin(".", "gstprovider"DEBUG_POSTFIX);
+		pluginFile = findPlugin(".", "gstprovider" DEBUG_POSTFIX);
 		if(!pluginFile.isEmpty())
 			resourcePath = QCoreApplication::applicationDirPath() + "/gstreamer-0.10";
 #elif defined(Q_OS_MAC)
-		pluginFile = findPlugin("../PlugIns", "gstprovider"DEBUG_POSTFIX);
+		pluginFile = findPlugin("../PlugIns", "gstprovider" DEBUG_POSTFIX);
 		// codesign can't sign gstreamer-0.10 folder
 		if(!pluginFile.isEmpty())
 			resourcePath = QCoreApplication::applicationDirPath() + "/../PlugIns/gstreamer";
 #endif
 
 		if(pluginFile.isEmpty())
-			pluginFile = findPlugin("../gstprovider", "gstprovider"DEBUG_POSTFIX);
+			pluginFile = findPlugin("../gstprovider", "gstprovider" DEBUG_POSTFIX);
 
 #ifdef PLUGIN_INSTALL_PATH
 		if(pluginFile.isEmpty())
-			pluginFile = findPlugin(PLUGIN_INSTALL_PATH, "gstprovider"DEBUG_POSTFIX);
+			pluginFile = findPlugin(PLUGIN_INSTALL_PATH, "gstprovider" DEBUG_POSTFIX);
 #endif
 	}
 
