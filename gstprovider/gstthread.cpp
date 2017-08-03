@@ -159,10 +159,6 @@ public:
 	{
 		args.set(QCoreApplication::instance()->arguments());
 
-		// make sure glib threads are available
-		if(!g_thread_supported())
-			g_thread_init(NULL);
-
 		// ignore "system" plugins
 		if(!pluginPath.isEmpty())
 		{
@@ -190,9 +186,9 @@ public:
 		version.sprintf("%d.%d.%d%s", major, minor, micro,
 			!nano_str.isEmpty() ? qPrintable(nano_str) : "");
 
-		int need_maj = 0;
-		int need_min = 10;
-		int need_mic = 22;
+		int need_maj = 1;
+		int need_min = 4;
+		int need_mic = 0;
 		if(compare_gst_version(major, minor, micro, need_maj, need_min, need_mic) < 0)
 		{
 			printf("Need GStreamer version %d.%d.%d\n", need_maj, need_min, need_mic);
@@ -204,8 +200,8 @@ public:
 		if(!pluginPath.isEmpty())
 			loadPlugins(pluginPath);
 
-		gstcustomelements_register();
-		gstelements_register();
+		//gstcustomelements_register();
+		//gstelements_register();
 
 		QStringList reqelem = QStringList()
 			<< "speexenc" << "speexdec"
@@ -222,12 +218,12 @@ public:
 			<< "audioresample"
 			<< "volume"
 			<< "level"
-			<< "ffmpegcolorspace"
+			<< "videoconvert"
 			<< "videorate"
-			<< "videomaxrate"
 			<< "videoscale"
-			<< "gstrtpjitterbuffer"
-			<< "liveadder";
+			<< "rtpjitterbuffer"
+			<< "liveadder"
+		    << "appsink";
 
 #if defined(Q_OS_MAC)
 		reqelem

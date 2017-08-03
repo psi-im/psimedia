@@ -26,6 +26,7 @@
 #include <QImage>
 #include <QMutex>
 #include <gst/gst.h>
+#include <gst/app/gstappsink.h>
 #include "psimediaprovider.h"
 #include "gstcustomelements/gstcustomelements.h"
 
@@ -45,6 +46,8 @@ public:
 	{
 	public:
 		QImage image;
+
+		static Frame pullFromSink(GstAppSink *appsink);
 	};
 
 	void *app; // for callbacks
@@ -156,10 +159,12 @@ private:
 	static void cb_fileDemux_pad_added(GstElement *element, GstPad *pad, gpointer data);
 	static void cb_fileDemux_pad_removed(GstElement *element, GstPad *pad, gpointer data);
 	static gboolean cb_bus_call(GstBus *bus, GstMessage *msg, gpointer data);
-	static void cb_show_frame_preview(int width, int height, const unsigned char *rgb32, gpointer data);
-	static void cb_show_frame_output(int width, int height, const unsigned char *rgb32, gpointer data);
-	static void cb_packet_ready_rtp_audio(const unsigned char *buf, int size, gpointer data);
-	static void cb_packet_ready_rtp_video(const unsigned char *buf, int size, gpointer data);
+	static GstFlowReturn cb_show_frame_preview(GstAppSink *appsink, gpointer data);
+	static GstFlowReturn cb_show_frame_output(GstAppSink *appsink, gpointer data);
+	static GstFlowReturn cb_packet_ready_rtp_audio(GstAppSink *appsink, gpointer data);
+	static GstFlowReturn cb_packet_ready_rtp_video(GstAppSink *appsink, gpointer data);
+	static GstFlowReturn cb_packet_ready_preroll_stub(GstAppSink *appsink, gpointer data);
+	static void cb_packet_ready_eos_stub(GstAppSink *appsink, gpointer data);
 	static gboolean cb_fileReady(gpointer data);
 
 	gboolean doStart();
@@ -169,10 +174,10 @@ private:
 	void fileDemux_pad_added(GstElement *element, GstPad *pad);
 	void fileDemux_pad_removed(GstElement *element, GstPad *pad);
 	gboolean bus_call(GstBus *bus, GstMessage *msg);
-	void show_frame_preview(int width, int height, const unsigned char *rgb32);
-	void show_frame_output(int width, int height, const unsigned char *rgb32);
-	void packet_ready_rtp_audio(const unsigned char *buf, int size);
-	void packet_ready_rtp_video(const unsigned char *buf, int size);
+	GstFlowReturn show_frame_preview(GstAppSink *appsink);
+	GstFlowReturn show_frame_output(GstAppSink *appsink);
+	GstFlowReturn packet_ready_rtp_audio(GstAppSink *appsink);
+	GstFlowReturn packet_ready_rtp_video(GstAppSink *appsink);
 	gboolean fileReady();
 
 	bool setupSendRecv();
