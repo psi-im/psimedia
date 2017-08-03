@@ -340,7 +340,8 @@ public:
 	RwControlFrame frame;
 
 	RwControlFrameMessage() :
-		RwControlMessage(RwControlMessage::Frame)
+		RwControlMessage(RwControlMessage::Frame),
+		frame()
 	{
 	}
 };

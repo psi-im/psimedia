@@ -60,7 +60,7 @@ void gstelements_osxvideo_register()
     "osxvideo",
     "OSX native video input/output plugin",
     plugin_init,
-    "1.0.0",
+    "1.0.4",
     "LGPL",
     "my-application",
     "my-application",

@@ -28,7 +28,9 @@
 
 G_BEGIN_DECLS
 
+#ifndef HAVE_MEDIASUBTYPE_I420
 DEFINE_GUID(MEDIASUBTYPE_I420, 0x30323449, 0x0000, 0x0010, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71);
+#endif
 
 typedef struct _KsVideoMediaType KsVideoMediaType;
 

@@ -1556,7 +1556,7 @@ void gstelements_liveadder_register()
     "liveadder",
     "Adds multiple live discontinuous streams",
     plugin_init,
-    "1.0.0",
+    "1.0.4",
     "LGPL",
     "my-application",
     "my-application",

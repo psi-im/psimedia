@@ -57,7 +57,7 @@ void gstelements_directsound_register()
     "directsound",
     "Direct Sound plugin library",
     plugin_init,
-    "1.0.0",
+    "1.0.4",
     "LGPL",
     "my-application",
     "my-application",

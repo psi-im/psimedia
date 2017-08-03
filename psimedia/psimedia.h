@@ -21,6 +21,7 @@
 #ifndef PSIMEDIA_H
 #define PSIMEDIA_H
 
+#include <QMetaType>
 #include <QSize>
 #include <QStringList>
 #include <QSharedDataPointer>
@@ -28,6 +29,8 @@
 #ifdef QT_GUI_LIB
 #include <QWidget>
 #endif
+
+class QMetaMethod;
 
 namespace PsiMedia {
 
@@ -234,13 +237,13 @@ signals:
 	void packetsWritten(int count);
 
 protected:
-	virtual void connectNotify(const char *signal);
-	virtual void disconnectNotify(const char *signal);
+	virtual void connectNotify(const QMetaMethod &signal) Q_DECL_OVERRIDE;
+	virtual void disconnectNotify(const QMetaMethod &signal) Q_DECL_OVERRIDE;
 
 private:
 	RtpChannel();
 	~RtpChannel();
-	Q_DISABLE_COPY(RtpChannel);
+	Q_DISABLE_COPY(RtpChannel)
 
 	friend class RtpSession;
 	friend class RtpSessionPrivate;
@@ -494,12 +497,15 @@ signals:
 	void error();
 
 private:
-	Q_DISABLE_COPY(RtpSession);
+	Q_DISABLE_COPY(RtpSession)
 
 	friend class RtpSessionPrivate;
 	RtpSessionPrivate *d;
 };
 
 }
+
+Q_DECLARE_METATYPE(PsiMedia::AudioParams)
+Q_DECLARE_METATYPE(PsiMedia::VideoParams)
 
 #endif

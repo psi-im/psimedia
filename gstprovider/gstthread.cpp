@@ -49,6 +49,8 @@ public:
 	{
 		argc = 0;
 		argv = 0;
+		count = 0;
+		data = 0;
 	}
 
 	~CArgs()
@@ -228,9 +230,11 @@ public:
 			<< "liveadder";
 
 #if defined(Q_OS_MAC)
-			reqelem
-			<< "osxaudiosrc" << "osxaudiosink"
-			<< "osxvideosrc";
+		reqelem
+			<< "osxaudiosrc" << "osxaudiosink";
+# ifdef HAVE_OSXVIDIO
+		reqelem << "osxvideosrc";
+# endif
 #elif defined(Q_OS_LINUX)
 			reqelem
 			<< "alsasrc" << "alsasink"
@@ -287,6 +291,8 @@ public:
 	QWaitCondition w;
 
 	Private() :
+		gstSession(0),
+		success(false),
 		mainContext(0),
 		mainLoop(0)
 	{

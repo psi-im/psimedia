@@ -861,7 +861,7 @@ void gstelements_audioresample_register()
     "legacyresample",
     "Resamples audio",
     plugin_init,
-    "1.0.0",
+    "1.0.4",
     "LGPL",
     "my-application",
     "my-application",

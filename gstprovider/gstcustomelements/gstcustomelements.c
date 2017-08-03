@@ -51,7 +51,7 @@ void gstcustomelements_register()
 		"my-private-plugins",
 		"Private elements of my application",
 		register_elements,
-		"1.0.0",
+		"1.0.4",
 		"LGPL",
 		"my-application",
 		"my-application",

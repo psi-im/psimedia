@@ -1,7 +1,19 @@
 CONFIG -= app_bundle
 QT += network
 
+greaterThan(QT_MAJOR_VERSION, 4) {
+  QT += widgets
+}
+
 CONFIG += debug
+
+CONFIG(debug, debug|release) {
+  mac: DEFINES += DEBUG_POSTFIX=\\\"_debug\\\"
+  else:windows: DEFINES += DEBUG_POSTFIX=\\\"d\\\"
+  else: DEFINES += DEBUG_POSTFIX=\\\"\\\"
+}else {
+  DEFINES += DEBUG_POSTFIX=\\\"\\\"
+}
 
 include(../psimedia/psimedia.pri)
 INCLUDEPATH += ../psimedia
@@ -11,5 +23,6 @@ INCLUDEPATH += ../psimedia
 #include(../gstprovider/gstprovider.pri)
 
 SOURCES += main.cpp
+HEADERS += main.h
 
 FORMS += mainwin.ui config.ui

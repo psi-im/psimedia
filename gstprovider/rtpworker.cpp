@@ -90,6 +90,8 @@ public:
 		calls(-1),
 		sizes_at(0)
 	{
+		for(int k = 0; k < 30; ++k)
+			sizes[k] = 0;
 	}
 
 	void print_stats(int current_size)
@@ -189,12 +191,14 @@ static bool send_clock_is_shared = false;
 //static bool recv_clock_is_shared = false;
 
 RtpWorker::RtpWorker(GMainContext *mainContext) :
+	app(0),
 	loopFile(false),
 	maxbitrate(-1),
 	canTransmitAudio(false),
 	canTransmitVideo(false),
 	outputVolume(100),
 	inputVolume(100),
+	error(0),
 	cb_started(0),
 	cb_updated(0),
 	cb_stopped(0),
@@ -206,6 +210,7 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
 	cb_outputFrame(0),
 	cb_rtpAudioOut(0),
 	cb_rtpVideoOut(0),
+	cb_recordData(0),
 	mainContext_(mainContext),
 	timer(0),
 	pd_audiosrc(0),
@@ -213,8 +218,13 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
 	pd_audiosink(0),
 	sendbin(0),
 	recvbin(0),
+	fileDemux(0),
+	audiosrc(0),
+	videosrc(0),
 	audiortpsrc(0),
 	videortpsrc(0),
+	audiortppay(0),
+	videortppay(0),
 	volumein(0),
 	volumeout(0),
 	rtpaudioout(false),
@@ -823,7 +833,7 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
 void RtpWorker::show_frame_preview(int width, int height, const unsigned char *rgb32)
 {
 	QImage image(width, height, QImage::Format_RGB32);
-	memcpy(image.bits(), rgb32, image.numBytes());
+	memcpy(image.bits(), rgb32, image.byteCount());
 
 	Frame frame;
 	frame.image = image;
@@ -835,7 +845,7 @@ void RtpWorker::show_frame_preview(int width, int height, const unsigned char *r
 void RtpWorker::show_frame_output(int width, int height, const unsigned char *rgb32)
 {
 	QImage image(width, height, QImage::Format_RGB32);
-	memcpy(image.bits(), rgb32, image.numBytes());
+	memcpy(image.bits(), rgb32, image.byteCount());
 
 	Frame frame;
 	frame.image = image;
@@ -970,6 +980,11 @@ bool RtpWorker::setupSendRecv()
 
 bool RtpWorker::startSend()
 {
+  return startSend(16000);
+}
+
+bool RtpWorker::startSend(int rate)
+{
 	// file source
 	if(!infile.isEmpty() || !indata.isEmpty())
 	{
@@ -1056,7 +1071,7 @@ bool RtpWorker::startSend()
 
 	if(audiosrc)
 	{
-		if(!addAudioChain())
+		if(!addAudioChain(rate))
 		{
 			delete pd_audiosrc;
 			pd_audiosrc = 0;
@@ -1193,14 +1208,21 @@ bool RtpWorker::startRecv()
 
 	// TODO: support more than speex
 	int speex_at = -1;
+	int samplerate = -1;
 	for(int n = 0; n < remoteAudioPayloadInfo.count(); ++n)
 	{
 		const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
-		if(ri.name.toUpper() == "SPEEX" && ri.clockrate == 16000)
+		if(ri.name.toUpper() == "SPEEX")
 		{
-			speex_at = n;
-			break;
+			if (ri.clockrate > samplerate) {
+			  speex_at = n;
+			  samplerate = ri.clockrate;
+			}
 		}
+	}
+	if (samplerate != 16000) {
+	  cleanup();
+	  startSend(samplerate);
 	}
 
 	// TODO: support more than theora
@@ -1461,9 +1483,13 @@ fail1:
 
 bool RtpWorker::addAudioChain()
 {
+  return addAudioChain(16000);
+}
+
+bool RtpWorker::addAudioChain(int rate)
+{
 	// TODO: support other codecs.  for now, we only support speex 16khz
 	QString codec = "speex";
-	int rate = 16000;
 	int size = 16;
 	int channels = 1;
 	//QString codec = localAudioParams[0].codec;
@@ -1479,7 +1505,7 @@ bool RtpWorker::addAudioChain()
 	for(int n = 0; n < remoteAudioPayloadInfo.count(); ++n)
 	{
 		const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
-		if(ri.name.toUpper() == "SPEEX" && ri.clockrate == 16000)
+		if(ri.name.toUpper() == "SPEEX" && ri.clockrate == rate)
 		{
 			pt = ri.id;
 			break;
@@ -1684,7 +1710,20 @@ bool RtpWorker::getCaps()
 
 		gst_caps_unref(caps);
 
-		localAudioPayloadInfo = QList<PPayloadInfo>() << pi;
+		PPayloadInfo speexnb;
+		speexnb.id = 97;
+		speexnb.name = "SPEEX";
+		speexnb.clockrate = 8000;
+		speexnb.channels = 1;
+		speexnb.ptime = pi.ptime;
+		speexnb.maxptime = pi.maxptime;
+		
+		QList<PPayloadInfo> ppil;
+		ppil << pi;
+		ppil << speexnb;
+		
+		
+		localAudioPayloadInfo = ppil;
 		canTransmitAudio = true;
 	}
 

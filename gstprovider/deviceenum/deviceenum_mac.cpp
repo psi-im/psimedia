@@ -58,7 +58,7 @@ static QList<Item> get_audio_items(int type)
 		size = sizeof(name);
 		if(AudioDeviceGetProperty(devices[i], 0, 0, kAudioDevicePropertyDeviceName, &size, name) != 0)
 			continue;
-		QString qname = QString::fromLatin1(name);
+		QString qname = QString::fromUtf8(name);
 
 		// Query the input streams
 		if(AudioDeviceGetPropertyInfo(devices[i], 0, 1, kAudioDevicePropertyStreams, &size, NULL) != 0)

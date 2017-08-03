@@ -157,19 +157,22 @@ static GstElement *filter_for_desired_size(const QSize &size)
 	GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
 	GstCaps *caps = gst_caps_new_empty();
 
-	for(int n = 0; n < widths.count(); ++n)
-	{
-		GstStructure *cs;
-		cs = gst_structure_new("video/x-raw-yuv",
-			"width", GST_TYPE_INT_RANGE, 1, widths[n],
-			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
-		gst_caps_append_structure(caps, cs);
-
-		cs = gst_structure_new("video/x-raw-rgb",
-			"width", GST_TYPE_INT_RANGE, 1, widths[n],
-			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
-		gst_caps_append_structure(caps, cs);
-	}
+// 	for(int n = 0; n < widths.count(); ++n)
+// 	{
+// 		GstStructure *cs;
+// 		cs = gst_structure_new("video/x-raw-yuv",
+// 			"width", GST_TYPE_INT_RANGE, 1, widths[n],
+// 			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
+// 		gst_caps_append_structure(caps, cs);
+// 
+// 		cs = gst_structure_new("video/x-raw-rgb",
+// 			"width", GST_TYPE_INT_RANGE, 1, widths[n],
+// 			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
+// 		gst_caps_append_structure(caps, cs);
+// 	}
+        caps = gst_caps_from_string("video/x-raw-yuv , width=[320] , "
+			"height=[240] , framerate=[30/1]");
+        g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 
 	GstStructure *cs = gst_structure_new("image/jpeg", NULL);
 	gst_caps_append_structure(caps, cs);
@@ -351,6 +354,9 @@ public:
 		speexdsp(0),
 		tee(0),
 		adder(0),
+		audioconvert(0),
+		audioresample(0),
+		capsfilter(0),
 		speexprobe(0)
 	{
 		pipeline = context->pipeline->element();

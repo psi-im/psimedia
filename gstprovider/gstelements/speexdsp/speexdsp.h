@@ -27,6 +27,7 @@
 #ifndef __GST_SPEEX_DSP_H__
 #define __GST_SPEEX_DSP_H__
 
+#include <stdint.h>
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <speex/speex_echo.h>

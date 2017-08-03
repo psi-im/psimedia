@@ -42,7 +42,7 @@ void gstelements_videomaxrate_register()
     "videomaxrate",
     "Drop extra frames",
     plugin_init,
-    "1.0.0",
+    "1.0.4",
     "LGPL",
     "my-application",
     "my-application",

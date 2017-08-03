@@ -1007,7 +1007,7 @@ void gstelements_winks_register()
     "winks",
     "Windows kernel streaming plugin",
     plugin_init,
-    "1.0.0",
+    "1.0.4",
     "LGPL",
     "my-application",
     "my-application",
