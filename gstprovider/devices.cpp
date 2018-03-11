@@ -420,9 +420,105 @@ static QList<GstDevice> devices_for_drivers(const QStringList &drivers, PDevice:
 }
 #endif
 
+// copied from gstreamer itself
+static gchar *
+get_launch_line (::GstDevice * device)
+{
+  static const char *const ignored_propnames[] =
+      { "name", "parent", "direction", "template", "caps", NULL };
+  GString *launch_line;
+  GstElement *element;
+  GstElement *pureelement;
+  GParamSpec **properties, *property;
+  GValue value = G_VALUE_INIT;
+  GValue pvalue = G_VALUE_INIT;
+  guint i, number_of_properties;
+  GstElementFactory *factory;
+
+  element = gst_device_create_element (device, NULL);
+
+  if (!element)
+    return NULL;
+
+  factory = gst_element_get_factory (element);
+  if (!factory) {
+    gst_object_unref (element);
+    return NULL;
+  }
+
+  if (!gst_plugin_feature_get_name (factory)) {
+    gst_object_unref (element);
+    return NULL;
+  }
+
+  launch_line = g_string_new (gst_plugin_feature_get_name (factory));
+
+  pureelement = gst_element_factory_create (factory, NULL);
+
+  /* get paramspecs and show non-default properties */
+  properties =
+      g_object_class_list_properties (G_OBJECT_GET_CLASS (element),
+      &number_of_properties);
+  if (properties) {
+    for (i = 0; i < number_of_properties; i++) {
+      gint j;
+      gboolean ignore = FALSE;
+      property = properties[i];
+
+      /* skip some properties */
+      if ((property->flags & G_PARAM_READWRITE) != G_PARAM_READWRITE)
+        continue;
+
+      for (j = 0; ignored_propnames[j]; j++)
+        if (!g_strcmp0 (ignored_propnames[j], property->name))
+          ignore = TRUE;
+
+      if (ignore)
+        continue;
+
+      /* Can't use _param_value_defaults () because sub-classes modify the
+       * values already.
+       */
+
+      g_value_init (&value, property->value_type);
+      g_value_init (&pvalue, property->value_type);
+      g_object_get_property (G_OBJECT (element), property->name, &value);
+      g_object_get_property (G_OBJECT (pureelement), property->name, &pvalue);
+      if (gst_value_compare (&value, &pvalue) != GST_VALUE_EQUAL) {
+        gchar *valuestr = gst_value_serialize (&value);
+
+        if (!valuestr) {
+          GST_WARNING ("Could not serialize property %s:%s",
+              GST_OBJECT_NAME (element), property->name);
+          g_free (valuestr);
+          goto next;
+        }
+
+        g_string_append_printf (launch_line, " %s=%s",
+            property->name, valuestr);
+        g_free (valuestr);
+
+      }
+
+    next:
+      g_value_unset (&value);
+      g_value_unset (&pvalue);
+    }
+    g_free (properties);
+  }
+
+  gst_object_unref (element);
+  gst_object_unref (pureelement);
+
+  return g_string_free (launch_line, FALSE);
+}
+
+
 GList *devices_glist(PDevice::Type type)
 {
 	// below is very stupid usage of device monitor just for compatibility reasons
+    // has to be reimplemented like in an example from
+    // https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer/html/gstreamer-GstDeviceMonitor.html
 
 	GstDeviceMonitor *monitor;
 	monitor = gst_device_monitor_new();
@@ -450,14 +546,30 @@ QList<GstDevice> devices_list(PDevice::Type type)
 	GList *devs = devices_glist(type);
 	GList *dev = devs;
 	for (; dev != NULL; dev = dev->next) {
-		::GstDevice *gdev = (::GstDevice*)(dev->data);
-		PsiMedia::GstDevice d;
+        PsiMedia::GstDevice d;
+
+        ::GstDevice *gdev = (::GstDevice*)(dev->data);
+        gchar *ll = get_launch_line(gdev);
+        if (ll) {
+            auto e = gst_parse_launch(ll, NULL);
+            if (e) {
+                d.id = QString::fromUtf8(ll);
+                gst_object_unref(e);
+            }
+            g_free(ll);
+        }
+
+        if (d.id.isEmpty() || (type == PDevice::AudioIn && d.id.endsWith(QLatin1String(".monitor"))))
+            continue;
+
+
 		gchar *name = gst_device_get_display_name(gdev);
-		d.name = QString::fromUtf8(name);
-		d.id = d.name;
+        d.name = QString::fromUtf8(name);
+        g_free(name);
+
 		d.isDefault = false; // TODO
+        qDebug("found dev: %s (%s)", qPrintable(d.name), qPrintable(d.id));
 		ret.append(d);
-		g_free(name);
 	}
 	g_list_free(devs);
 	return ret;
@@ -503,16 +615,8 @@ QList<GstDevice> devices_list(PDevice::Type type)
 
 GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *captureSize)
 {
-	GList *devs = devices_glist(type);
-	GList *dev = devs;
-	for (; dev != NULL; dev = dev->next) {
-		gchar *name = gst_device_get_display_name((::GstDevice*)dev->data);
-		if (QString::fromUtf8(name) == id) {
-			return gst_device_create_element((::GstDevice*)dev->data, NULL);
-		}
-		g_free(name);
-	}
-	g_list_free(devs);
+    return gst_parse_launch(id.toLatin1().data(), NULL);
+
 
 #if 0
 	QStringList parts = decode_id(id);

@@ -396,7 +396,7 @@ ConfigDlg::ConfigDlg(const Configuration &_config, QWidget *parent) :
 	foreach(const PsiMedia::AudioParams &params, snap.supportedAudioModes)
 	{
 		QString codec = params.codec();
-		if(codec == "vorbis" || codec == "speex")
+		if(codec == "vorbis" || codec == "opus")
 			codec[0] = codec[0].toUpper();
 		else
 			codec = codec.toUpper();
@@ -857,7 +857,9 @@ void MainWin::start_send()
 
 		if(!config.videoInDeviceId.isEmpty())
 		{
-			producer.setVideoInputDevice(config.videoInDeviceId);
+            qDebug("Video input device is disabled till finished with audio");
+			//producer.setVideoInputDevice(config.videoInDeviceId); // FIXME
+
 			transmitVideo = true;
 		}
 		else

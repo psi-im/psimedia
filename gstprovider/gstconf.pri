@@ -35,7 +35,7 @@ windows {
 			-lgstaudio-0.10-0 \
 			-lgstrtp-0.10-0 \
 			-lgstnetbuffer-0.10-0 \
-			-lspeexdsp-1 \
+			-lopus \
 			-lsetupapi \
 			-lksuser \
 			-lamstrmid \

@@ -26,8 +26,8 @@
 #include <QCoreApplication>
 #include <QMutex>
 #include <QWaitCondition>
-#include <QApplication>
-#include <QStyle>
+#include <QCoreApplication>
+//#include <QStyle>
 #include <QIcon>
 #include <gst/gst.h>
 #include "gstcustomelements/gstcustomelements.h"
@@ -95,7 +95,7 @@ private:
 static void loadPlugins(const QString &pluginPath, bool print = false)
 {
 	if(print)
-		printf("Loading plugins in [%s]\n", qPrintable(pluginPath));
+		qDebug("Loading plugins in [%s]\n", qPrintable(pluginPath));
 	QDir dir(pluginPath);
 	QStringList entryList = dir.entryList(QDir::Files);
 	foreach(QString entry, entryList)
@@ -110,7 +110,7 @@ static void loadPlugins(const QString &pluginPath, bool print = false)
 		{
 			if(print)
 			{
-				printf("**FAIL**: %s: %s\n", qPrintable(entry),
+				qDebug("**FAIL**: %s: %s\n", qPrintable(entry),
 					err->message);
 			}
 			g_error_free(err);
@@ -118,14 +118,14 @@ static void loadPlugins(const QString &pluginPath, bool print = false)
 		}
 		if(print)
 		{
-			printf("   OK   : %s name=[%s]\n", qPrintable(entry),
+			qDebug("   OK   : %s name=[%s]\n", qPrintable(entry),
 				gst_plugin_get_name(plugin));
 		}
 		gst_object_unref(plugin);
 	}
 
 	if(print)
-		printf("\n");
+		qDebug("\n");
 }
 
 static int compare_gst_version(int a1, int a2, int a3, int b1, int b2, int b3)
@@ -191,7 +191,7 @@ public:
 		int need_mic = 0;
 		if(compare_gst_version(major, minor, micro, need_maj, need_min, need_mic) < 0)
 		{
-			printf("Need GStreamer version %d.%d.%d\n", need_maj, need_min, need_mic);
+			qDebug("Need GStreamer version %d.%d.%d\n", need_maj, need_min, need_mic);
 			success = false;
 			return;
 		}
@@ -204,10 +204,10 @@ public:
 		//gstelements_register();
 
 		QStringList reqelem = QStringList()
-			<< "speexenc" << "speexdec"
+			<< "opusenc" << "opusdec"
 			<< "vorbisenc" << "vorbisdec"
 			<< "theoraenc" << "theoradec"
-			<< "rtpspeexpay" << "rtpspeexdepay"
+			<< "rtpopuspay" << "rtpopusdepay"
 			<< "rtpvorbispay" << "rtpvorbisdepay"
 			<< "rtptheorapay" << "rtptheoradepay"
 			<< "filesrc"
@@ -233,7 +233,7 @@ public:
 # endif
 #elif defined(Q_OS_LINUX)
 			reqelem
-			<< "alsasrc" << "alsasink"
+			<< "pulsesrc" << "pulsesink"
 			<< "v4l2src";
 #elif defined(Q_OS_UNIX)
 			reqelem
@@ -249,7 +249,7 @@ public:
 			GstElement *e = gst_element_factory_make(name.toLatin1().data(), NULL);
 			if(!e)
 			{
-				printf("Unable to load element '%s'.\n", qPrintable(name));
+				qDebug("Unable to load element '%s'.\n", qPrintable(name));
 				success = false;
 				return;
 			}
@@ -320,9 +320,9 @@ GstThread::GstThread(QObject *parent) :
 	//   it could be a bug in QCleanlooksStyle or QGtkStyle, which
 	//   may conflict with separate Gtk initialization that may
 	//   occur through gstreamer plugin loading.
-	{
-		QIcon icon = QApplication::style()->standardIcon(QStyle::SP_MessageBoxCritical, 0, 0);
-	}
+	//{
+	//	QIcon icon = QApplication::style()->standardIcon(QStyle::SP_MessageBoxCritical, 0, 0);
+	//}
 }
 
 GstThread::~GstThread()
@@ -367,7 +367,7 @@ GMainContext *GstThread::mainContext()
 
 void GstThread::run()
 {
-	//printf("GStreamer thread started\n");
+	//qDebug("GStreamer thread started\n");
 
 	// this will be unlocked as soon as the mainloop runs
 	d->m.lock();
@@ -382,13 +382,13 @@ void GstThread::run()
 		d->gstSession = 0;
 		d->w.wakeOne();
 		d->m.unlock();
-		//printf("GStreamer thread completed (error)\n");
+		//qDebug("GStreamer thread completed (error)\n");
 		return;
 	}
 
 	d->success = true;
 
-	//printf("Using GStreamer version %s\n", qPrintable(d->gstSession->version));
+	//qDebug("Using GStreamer version %s\n", qPrintable(d->gstSession->version));
 
 	d->mainContext = g_main_context_new();
 	d->mainLoop = g_main_loop_new(d->mainContext, FALSE);
@@ -410,7 +410,7 @@ void GstThread::run()
 	d->gstSession = 0;
 
 	d->w.wakeOne();
-	//printf("GStreamer thread completed\n");
+	//qDebug("GStreamer thread completed\n");
 }
 
 }

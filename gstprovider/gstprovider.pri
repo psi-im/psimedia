@@ -1,4 +1,4 @@
-CONFIG += link_prl depend_prl
+CONFIG += link_prl
 
 #LIBS += -L$$PWD/gstelements/static/lib -lgstelements_static
 

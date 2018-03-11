@@ -91,14 +91,14 @@ static void videosrcbin_pad_added(GstElement *element, GstPad *pad, gpointer dat
 	GstPad *gpad = (GstPad *)data;
 
 	//gchar *name = gst_pad_get_name(pad);
-	//printf("videosrcbin pad-added: %s\n", name);
+	//qDebug("videosrcbin pad-added: %s\n", name);
 	//g_free(name);
 
 	//GstCaps *caps = gst_pad_get_caps(pad);
 	//gchar *gstr = gst_caps_to_string(caps);
 	//QString capsString = QString::fromUtf8(gstr);
 	//g_free(gstr);
-	//printf("  caps: [%s]\n", qPrintable(capsString));
+	//qDebug("  caps: [%s]\n", qPrintable(capsString));
 
 	gst_ghost_pad_set_target(GST_GHOST_PAD(gpad), pad);
 
@@ -181,46 +181,11 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 		}
 	}
 
-	GstElement *bin = gst_bin_new(NULL);
+	GstElement *bin = gst_bin_new(NULL); // FIXME not necessary for audio?
 
 	if(type == PDevice::AudioIn)
 	{
-		gst_bin_add(GST_BIN(bin), e);
-
-		GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-		GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
-
-		GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
-		GstCaps *caps = gst_caps_new_empty();
-		int rate = get_fixed_rate();
-		GstStructure *cs;
-		if(rate > 0)
-		{
-			cs = gst_structure_new("audio/x-raw",
-				"rate", G_TYPE_INT, rate,
-				"width", G_TYPE_INT, 16,
-				"channels", G_TYPE_INT, 1, NULL);
-		}
-		else
-		{
-			cs = gst_structure_new("audio/x-raw",
-				"width", G_TYPE_INT, 16,
-				"channels", G_TYPE_INT, 1, NULL);
-		}
-
-		gst_caps_append_structure(caps, cs);
-		g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
-		gst_caps_unref(caps);
-
-		gst_bin_add(GST_BIN(bin), audioconvert);
-		gst_bin_add(GST_BIN(bin), audioresample);
-		gst_bin_add(GST_BIN(bin), capsfilter);
-
-		gst_element_link_many(e, audioconvert, audioresample, capsfilter, NULL);
-
-		GstPad *pad = gst_element_get_static_pad(capsfilter, "src");
-		gst_element_add_pad(bin, gst_ghost_pad_new("src", pad));
-		gst_object_unref(GST_OBJECT(pad));
+        return e;
 	}
 	else if(type == PDevice::VideoIn)
 	{
@@ -285,8 +250,7 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 //----------------------------------------------------------------------------
 // PipelineContext
 //----------------------------------------------------------------------------
-static GstElement *g_speexdsp = 0;
-static GstElement *g_speexprobe = 0;
+static GstElement *g_opusdsp = 0;
 
 class PipelineDevice;
 
@@ -309,13 +273,13 @@ public:
 	QString id;
 	PDevice::Type type;
 	GstElement *pipeline;
-	GstElement *bin;
+	GstElement *device_bin;
 	bool activated;
 
 	QSet<PipelineDeviceContextPrivate*> contexts;
 
 	// for srcs
-	GstElement *speexdsp;
+	GstElement *opusenc;
 	GstElement *tee;
 
 	// for sinks (audio only, video sinks are always unshared)
@@ -330,53 +294,32 @@ public:
 		id(_id),
 		type(_type),
 		activated(false),
-		speexdsp(0),
+	    opusenc(0),
 		tee(0),
 		adder(0),
 		audioconvert(0),
 		audioresample(0),
-		capsfilter(0),
-		speexprobe(0)
+		capsfilter(0)
 	{
 		pipeline = context->pipeline->element();
 
-		bin = make_devicebin(id, type, context->opts.videoSize);
-		if(!bin)
+		device_bin = make_devicebin(id, type, context->opts.videoSize);
+        if(!device_bin) {
+            qDebug("Failed to create device");
 			return;
+        }
 
 		// TODO: use context->opts.fps?
 
 		if(type == PDevice::AudioIn || type == PDevice::VideoIn)
 		{
-			if(type == PDevice::AudioIn && !g_speexdsp)
-			{
-				speexdsp = gst_element_factory_make("speexdsp", NULL);
-				if(speexdsp)
-				{
-#ifdef PIPELINE_DEBUG
-					printf("using speexdsp\n");
-#endif
-					g_speexdsp = speexdsp;
-				}
-			}
-
-			if(speexdsp)
-			{
-				//gst_element_set_locked_state(speexdsp, TRUE);
-				gst_bin_add(GST_BIN(pipeline), speexdsp);
-			}
-
 			tee = gst_element_factory_make("tee", NULL);
 			//gst_element_set_locked_state(tee, TRUE);
 			gst_bin_add(GST_BIN(pipeline), tee);
 
 			//gst_element_set_locked_state(bin, TRUE);
-			gst_bin_add(GST_BIN(pipeline), bin);
-
-			if(speexdsp)
-				gst_element_link_many(bin, speexdsp, tee, NULL);
-			else
-				gst_element_link(bin, tee);
+			gst_bin_add(GST_BIN(pipeline), device_bin);
+            gst_element_link(device_bin, tee);
 		}
 		else // AudioOut
 		{
@@ -409,19 +352,9 @@ public:
 			g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
 			gst_caps_unref(caps);
 
-			if(!g_speexprobe && QString::fromLatin1(qgetenv("PSI_NO_ECHO_CANCEL")) != "1")
-			{
-				speexprobe = gst_element_factory_make("speexechoprobe", NULL);
-				if(speexprobe) {
-					printf("using speexechoprobe\n");
-					g_speexprobe = speexprobe;
-					QString latency_tune = qgetenv("PSI_AUDIO_LTUNE");
-					if(!latency_tune.isEmpty())
-						g_object_set(G_OBJECT(speexprobe), "latency-tune", latency_tune.toInt(), NULL);
-				}
-			}
+			// get element to ous decoder here? REVIEW
 
-			gst_bin_add(GST_BIN(pipeline), bin);
+			gst_bin_add(GST_BIN(pipeline), device_bin);
 #ifdef USE_LIVEADDER
 			gst_bin_add(GST_BIN(pipeline), adder);
 			gst_bin_add(GST_BIN(pipeline), audioconvert);
@@ -429,53 +362,39 @@ public:
 #endif
 			gst_bin_add(GST_BIN(pipeline), capsfilter);
 
-			if(speexprobe)
-				gst_bin_add(GST_BIN(pipeline), speexprobe);
-
 #ifdef USE_LIVEADDER
 			gst_element_link_many(adder, audioconvert, audioresample, capsfilter, NULL);
 #endif
 
-			if(speexprobe)
-				gst_element_link_many(capsfilter, speexprobe, bin, NULL);
-			else
-				gst_element_link(capsfilter, bin);
+			gst_element_link(capsfilter, device_bin);
 
 #ifndef USE_LIVEADDER
 			// HACK
 			adder = capsfilter;
 #endif
-
-			/*gst_element_set_state(bin, GST_STATE_PLAYING);
-			if(speexprobe)
-				gst_element_set_state(speexprobe, GST_STATE_PLAYING);
-			gst_element_set_state(capsfilter, GST_STATE_PLAYING);
-			gst_element_set_state(audioresample, GST_STATE_PLAYING);
-			gst_element_set_state(audioconvert, GST_STATE_PLAYING);
-			gst_element_set_state(adder, GST_STATE_PLAYING);*/
-
 			// sink starts out activated
 			activated = true;
 		}
 
 		addRef(context);
+
 	}
 
 	~PipelineDevice()
 	{
 		Q_ASSERT(contexts.isEmpty());
 
-		if(!bin)
+		if(!device_bin)
 			return;
 
 		if(type == PDevice::AudioIn || type == PDevice::VideoIn)
 		{
-			gst_bin_remove(GST_BIN(pipeline), bin);
+			gst_bin_remove(GST_BIN(pipeline), device_bin);
 
-			if(speexdsp)
+			if(opusenc)
 			{
-				gst_bin_remove(GST_BIN(pipeline), speexdsp);
-				g_speexdsp = 0;
+				gst_bin_remove(GST_BIN(pipeline), opusenc);
+				g_opusdsp = 0;
 			}
 
 			if(tee)
@@ -492,11 +411,9 @@ public:
 #endif
 
 				gst_element_set_state(capsfilter, GST_STATE_NULL);
-				if(speexprobe)
-					gst_element_set_state(speexprobe, GST_STATE_NULL);
 			}
 
-			gst_element_set_state(bin, GST_STATE_NULL);
+			gst_element_set_state(device_bin, GST_STATE_NULL);
 
 			if(adder)
 			{
@@ -512,15 +429,10 @@ public:
 				gst_element_get_state(capsfilter, NULL, NULL, GST_CLOCK_TIME_NONE);
 				gst_bin_remove(GST_BIN(pipeline), capsfilter);
 
-				if(speexprobe)
-				{
-					gst_element_get_state(speexprobe, NULL, NULL, GST_CLOCK_TIME_NONE);
-					gst_bin_remove(GST_BIN(pipeline), speexprobe);
-					g_speexprobe = 0;
-				}
+				// deinit opus decoder? REVIEW
 			}
 
-			gst_bin_remove(GST_BIN(pipeline), bin);
+			gst_bin_remove(GST_BIN(pipeline), device_bin);
 		}
 	}
 
@@ -627,7 +539,7 @@ public:
 				gst_element_set_state(bin, GST_STATE_NULL);
 				gst_element_get_state(bin, NULL, NULL, GST_CLOCK_TIME_NONE);
 
-				//printf("set to null\n");
+				//qDebug("set to null\n");
 				if(speexdsp)
 				{
 					gst_element_set_state(speexdsp, GST_STATE_NULL);
@@ -705,7 +617,8 @@ public:
 	{
 		if(!activated)
 		{
-			gst_element_set_state(pipeline, GST_STATE_PLAYING);
+			GstStateChangeReturn ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
+            //qDebug("gst_element_set_state pipline GST_STATE_PLAYING => %d", ret);
 			//gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 			activated = true;
 		}
@@ -778,7 +691,7 @@ PipelineDeviceContext *PipelineDeviceContext::create(PipelineContext *pipeline, 
 	if(!dev)
 	{
 		dev = new PipelineDevice(id, type, that->d);
-		if(!dev->bin)
+		if(!dev->device_bin)
 		{
 			delete dev;
 			delete that;
@@ -799,7 +712,7 @@ PipelineDeviceContext *PipelineDeviceContext::create(PipelineContext *pipeline, 
 	that->d->device = dev;
 
 #ifdef PIPELINE_DEBUG
-	printf("Readying %s:[%s], refs=%d\n", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
+	qDebug("Readying %s:[%s], refs=%d\n", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
 #endif
 	return that;
 }
@@ -812,7 +725,7 @@ PipelineDeviceContext::~PipelineDeviceContext()
 	{
 		dev->removeRef(d);
 #ifdef PIPELINE_DEBUG
-		printf("Releasing %s:[%s], refs=%d\n", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
+		qDebug("Releasing %s:[%s], refs=%d\n", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
 #endif
 		if(dev->refs == 0)
 		{

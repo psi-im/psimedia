@@ -240,9 +240,6 @@ PPayloadInfo structureToPayloadInfo(GstStructure *structure, QString *media)
 		out.channels = n;
 	}
 
-	// TODO: vbr, cng, mode?
-	// see: http://tools.ietf.org/html/draft-ietf-avt-rtp-speex-05
-
 	// note: if we ever change away from the whitelist approach, be sure
 	//   not to grab the earlier static fields (e.g. clock-rate) as
 	//   dynamic parameters

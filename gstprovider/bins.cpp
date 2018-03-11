@@ -42,8 +42,12 @@ static int get_rtp_latency()
 static GstElement *audio_codec_to_enc_element(const QString &name)
 {
 	QString ename;
-	if(name == "speex")
-		ename = "speexenc";
+    if(name == "opus") {
+        auto e = gst_element_factory_make("opusenc", "opus-encoder");
+        gst_util_set_object_arg(G_OBJECT(e), "audio-type", "voice");
+        gst_util_set_object_arg(G_OBJECT(e), "bitrate-type", "vbr");
+        return e;
+    }
 	else if(name == "vorbis")
 		ename = "vorbisenc";
 	else if(name == "pcmu")
@@ -57,8 +61,8 @@ static GstElement *audio_codec_to_enc_element(const QString &name)
 static GstElement *audio_codec_to_dec_element(const QString &name)
 {
 	QString ename;
-	if(name == "speex")
-		ename = "speexdec";
+	if(name == "opus")
+		ename = "opusdec";
 	else if(name == "vorbis")
 		ename = "vorbisdec";
 	else if(name == "pcmu")
@@ -72,8 +76,8 @@ static GstElement *audio_codec_to_dec_element(const QString &name)
 static GstElement *audio_codec_to_rtppay_element(const QString &name)
 {
 	QString ename;
-	if(name == "speex")
-		ename = "rtpspeexpay";
+	if(name == "opus")
+		ename = "rtpopuspay";
 	else if(name == "vorbis")
 		ename = "rtpvorbispay";
 	else if(name == "pcmu")
@@ -87,8 +91,8 @@ static GstElement *audio_codec_to_rtppay_element(const QString &name)
 static GstElement *audio_codec_to_rtpdepay_element(const QString &name)
 {
 	QString ename;
-	if(name == "speex")
-		ename = "rtpspeexdepay";
+	if(name == "opus")
+		ename = "rtpopusdepay";
 	else if(name == "vorbis")
 		ename = "rtpvorbisdepay";
 	else if(name == "pcmu")
@@ -223,11 +227,7 @@ GstElement *bins_videoprep_create(const QSize &size, int fps, bool is_live)
 	GstElement *ratefilter = 0;
 	if(fps != -1)
 	{
-		// use videomaxrate for live sources
-		if(is_live)
-			videorate = gst_element_factory_make("videomaxrate", NULL);
-		else
-			videorate = gst_element_factory_make("videorate", NULL);
+		videorate = gst_element_factory_make("videorate", NULL);
 
 		ratefilter = gst_element_factory_make("capsfilter", NULL);
 
@@ -314,6 +314,7 @@ GstElement *bins_videoprep_create(const QSize &size, int fps, bool is_live)
 
 GstElement *bins_audioenc_create(const QString &codec, int id, int rate, int size, int channels)
 {
+    bool variableRate = (codec == QLatin1String("opus")); // opus supports variable bitrate and resampling on its own
 	GstElement *bin = gst_bin_new("audioencbin");
 
 	GstElement *audioenc = 0;
@@ -325,30 +326,45 @@ GstElement *bins_audioenc_create(const QString &codec, int id, int rate, int siz
 		g_object_set(G_OBJECT(audiortppay), "pt", id, NULL);
 
 	GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-	GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
+    GstElement *audioresample = nullptr;
+    if (!variableRate) {
+        // suppose variadic-rate encoder have internal resampler (like opus)
+        audioresample = gst_element_factory_make("audioresample", NULL);
+    }
 
-	GstStructure *cs;
-	GstCaps *caps = gst_caps_new_empty();
+    GstStructure *cs;
+    GstCaps *caps = gst_caps_new_empty();
+    if (variableRate) {
+        // there is much sense to change rate if variadic-rate codec can do internal resampling.
+        // also width could be taken from internal codec's caps. just any width.
+        cs = gst_structure_new("audio/x-raw",
+            "channels", G_TYPE_INT, channels, NULL);
+        qDebug("channels=%d\n", rate, size, channels);
+    } else {
+        cs = gst_structure_new("audio/x-raw",
+            "rate", G_TYPE_INT, rate,
+            "width", G_TYPE_INT, size,
+            "channels", G_TYPE_INT, channels, NULL);
+        qDebug("rate=%d,width=%d,channels=%d\n", rate, size, channels);
+    }
+    gst_caps_append_structure(caps, cs);
+    GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
+    g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
+    gst_caps_unref(caps);
 
-	cs = gst_structure_new("audio/x-raw",
-		"rate", G_TYPE_INT, rate,
-		"width", G_TYPE_INT, size,
-		"channels", G_TYPE_INT, channels, NULL);
-
-	gst_caps_append_structure(caps, cs);
-	printf("rate=%d,width=%d,channels=%d\n", rate, size, channels);
-
-	GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
-	g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
-	gst_caps_unref(caps);
 
 	gst_bin_add(GST_BIN(bin), audioconvert);
-	gst_bin_add(GST_BIN(bin), audioresample);
-	gst_bin_add(GST_BIN(bin), capsfilter);
+    if (audioresample) {
+        gst_bin_add(GST_BIN(bin), audioresample);
+    }
+    gst_bin_add(GST_BIN(bin), capsfilter);
 	gst_bin_add(GST_BIN(bin), audioenc);
 	gst_bin_add(GST_BIN(bin), audiortppay);
 
-	gst_element_link_many(audioconvert, audioresample, capsfilter, audioenc, audiortppay, NULL);
+    if (audioresample)
+        gst_element_link_many(audioconvert, audioresample, capsfilter, audioenc, audiortppay, NULL);
+    else
+        gst_element_link_many(audioconvert, capsfilter, audioenc, audiortppay, NULL);
 
 	GstPad *pad;
 
@@ -408,7 +424,7 @@ GstElement *bins_audiodec_create(const QString &codec)
 	if(!audio_codec_get_recv_elements(codec, &audiodec, &audiortpdepay))
 		return 0;
 
-	GstElement *audiortpjitterbuffer = gst_element_factory_make("gstrtpjitterbuffer", NULL);
+	GstElement *audiortpjitterbuffer = gst_element_factory_make("rtpjitterbuffer", NULL);
 
 	gst_bin_add(GST_BIN(bin), audiortpjitterbuffer);
 	gst_bin_add(GST_BIN(bin), audiortpdepay);

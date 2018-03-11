@@ -54,7 +54,7 @@ static bool have_h263p()
 	return have_codec("ffenc_h263p", "ffdec_h263", "rtph263ppay", "rtph263pdepay");
 }*/
 
-// speex, theora, and vorbis are guaranteed to exist
+// opus, theora, and vorbis are guaranteed to exist
 
 QList<PAudioParams> modes_supportedAudio()
 {
@@ -70,7 +70,7 @@ QList<PAudioParams> modes_supportedAudio()
 	}*/
 	{
 		PAudioParams p;
-		p.codec = "speex";
+		p.codec = "opus";
 		p.sampleRate = 8000;
 		p.sampleSize = 16;
 		p.channels = 1;
@@ -78,7 +78,7 @@ QList<PAudioParams> modes_supportedAudio()
 	}
 	{
 		PAudioParams p;
-		p.codec = "speex";
+		p.codec = "opus";
 		p.sampleRate = 16000;
 		p.sampleSize = 16;
 		p.channels = 1;
@@ -86,7 +86,7 @@ QList<PAudioParams> modes_supportedAudio()
 	}
 	/*{
 		PAudioParams p;
-		p.codec = "speex";
+		p.codec = "opus";
 		p.sampleRate = 32000;
 		p.sampleSize = 16;
 		p.channels = 1;

@@ -185,6 +185,8 @@ public:
 
 HINT_SIGNALS:
 	HINT_METHOD(finished())
+    // TODO one day this should be converted to something more dynamic.
+    // For example we attach a camera and now we want to enable video button.
 };
 
 class RtpChannelContext : public QObjectInterface
