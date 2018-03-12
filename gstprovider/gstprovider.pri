@@ -1,11 +1,6 @@
 CONFIG += link_prl
 
-#LIBS += -L$$PWD/gstelements/static/lib -lgstelements_static
-
 include(gstconf.pri)
-
-include(deviceenum/deviceenum.pri)
-#include(gstcustomelements/gstcustomelements.pri)
 
 HEADERS += \
 	$$PWD/devices.h \

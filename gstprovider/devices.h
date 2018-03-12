@@ -33,6 +33,7 @@ namespace PsiMedia {
 class GstDevice
 {
 public:
+    PDevice::Type type;
 	QString name;
 	bool isDefault;
 	QString id;

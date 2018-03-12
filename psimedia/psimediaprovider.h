@@ -67,9 +67,9 @@ class PDevice
 public:
 	enum Type
 	{
-		AudioOut,
-		AudioIn,
-		VideoIn
+		AudioOut, // output hw to play stuff
+		AudioIn,  // input hw to get audio packets from
+		VideoIn   // video hw to get video packets from
 	};
 
 	Type type;
