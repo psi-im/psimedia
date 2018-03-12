@@ -36,7 +36,4 @@
  <dep type='pkg' name='gstreamer-app' pkgname='gstreamer-app-1.0' version='>=1.4'>
   <required/>
  </dep>
- <dep type='pkg' name='speexdsp' pkgname='speexdsp' version='>=1.2rc1'>
-  <required/>
- </dep>
 </qconf>
