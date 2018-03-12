@@ -1177,9 +1177,9 @@ bool RtpWorker::startSend(int rate)
 			gst_element_link(videosrc, sendbin);
 			//pd_videosrc->activate();
 		}
-
-        GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(spipeline), GST_DEBUG_GRAPH_SHOW_ALL, "psimedia_send");
-
+#ifdef RTPWORKER_DEBUG
+        GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(spipeline), GST_DEBUG_GRAPH_SHOW_ALL, "psimedia_send_inactive");
+#endif
 
 		/*if(shared_clock && recv_clock_is_shared)
 		{
@@ -1191,8 +1191,8 @@ bool RtpWorker::startSend(int rate)
 		//gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
 		send_pipelineContext->activate();
 
-		// 6 seconds ought to be enough time to init
-		int ret = gst_element_get_state(spipeline, NULL, NULL, 6 * GST_SECOND);
+		// 10 seconds ought to be enough time to init (video devices probing may take considerable time)
+		int ret = gst_element_get_state(spipeline, NULL, NULL, 10 * GST_SECOND);
 		//gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
 		if(ret != GST_STATE_CHANGE_SUCCESS && ret != GST_STATE_CHANGE_NO_PREROLL)
 		{
@@ -1228,6 +1228,8 @@ bool RtpWorker::startSend(int rate)
 
         qDebug("Dumping send pipeline");
 		dump_pipeline(spipeline);
+        GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(spipeline), GST_DEBUG_GRAPH_SHOW_ALL, "psimedia_send_active");
+
 #endif
 
 		if(!getCaps())

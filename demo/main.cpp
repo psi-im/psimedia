@@ -858,7 +858,7 @@ void MainWin::start_send()
 		if(!config.videoInDeviceId.isEmpty())
 		{
             qDebug("Video input device is disabled till finished with audio");
-			//producer.setVideoInputDevice(config.videoInDeviceId); // FIXME
+			producer.setVideoInputDevice(config.videoInDeviceId); // FIXME
 
 			transmitVideo = true;
 		}

@@ -456,7 +456,7 @@ GstElement *bins_videodec_create(const QString &codec)
 	if(!video_codec_get_recv_elements(codec, &videodec, &videortpdepay))
 		return 0;
 
-	GstElement *videortpjitterbuffer = gst_element_factory_make("gstrtpjitterbuffer", NULL);
+	GstElement *videortpjitterbuffer = gst_element_factory_make("rtpjitterbuffer", NULL);
 
 	gst_bin_add(GST_BIN(bin), videortpjitterbuffer);
 	gst_bin_add(GST_BIN(bin), videortpdepay);
