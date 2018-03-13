@@ -147,6 +147,7 @@ class DeviceMonitor
 {
     GstDeviceMonitor *_monitor = nullptr;
     QList<GstDevice> _devices;
+    PlatformDeviceMonitor *_platform = nullptr;
 
     static gboolean onChangeGstCB(GstBus * bus, GstMessage * message, gpointer user_data)
     {
@@ -183,6 +184,7 @@ class DeviceMonitor
 
     void updateDevList()
     {
+        QSet<QString> ids;
         _devices.clear();
         GList *devs = gst_device_monitor_get_devices(_monitor);
         GList *dev = devs;
@@ -227,15 +229,31 @@ class DeviceMonitor
                 videoSrcFirst = false;
             }
 
-            qDebug("found dev: %s (%s)", qPrintable(d.name), qPrintable(d.id));
             _devices.append(d);
+            ids.insert(d.id);
         }
         g_list_free(devs);
+
+        if (_platform) {
+            auto l = _platform->getDevices();
+            for (auto const &d: l) {
+                if (!ids.contains(d.id)) {
+                    _devices.append(d);
+                }
+            }
+        }
+
+        for (auto const &d: _devices) {
+            qDebug("found dev: %s (%s)", qPrintable(d.name), qPrintable(d.id));
+        }
     }
 
 public:
     DeviceMonitor()
     {
+#if defined(Q_OS_LINUX)
+        _platform = new PlatformDeviceMonitor;
+#endif
         _monitor = gst_device_monitor_new();
 
         GstBus *bus = gst_device_monitor_get_bus (_monitor);

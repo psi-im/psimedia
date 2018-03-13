@@ -3,7 +3,7 @@
  <profile>psimedia.pro</profile>
  <noprefix/>
  <moddir>qcm</moddir>
- <dep type='qt4'>
+ <dep type='qt5'>
   <required/>
  </dep>
  <dep type='buildmodeapp'>
