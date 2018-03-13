@@ -233,7 +233,6 @@ public:
 # endif
 #elif defined(Q_OS_LINUX)
 			reqelem
-			<< "pulsesrc" << "pulsesink"
 			<< "v4l2src";
 #elif defined(Q_OS_UNIX)
 			reqelem
