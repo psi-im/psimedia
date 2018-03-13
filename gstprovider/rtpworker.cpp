@@ -478,6 +478,21 @@ static GstBuffer* makeGstBuffer(const PRtpPacket &packet)
     return nullptr;
 }
 
+GstAppSink* RtpWorker::makeVideoPlayAppSink(const gchar *name)
+{
+    GstElement *videoplaysink = gst_element_factory_make("appsink", name); // was appvideosink
+	GstAppSink *appVideoSink = (GstAppSink *)videoplaysink;
+
+    GstCaps *videoplaycaps;
+    videoplaycaps = gst_caps_new_simple ("video/x-raw",
+         "format", G_TYPE_STRING, "BGRx",
+         NULL);
+    gst_app_sink_set_caps (appVideoSink, videoplaycaps);
+    gst_caps_unref(videoplaycaps);
+
+    return appVideoSink;
+}
+
 void RtpWorker::rtpAudioIn(const PRtpPacket &packet)
 {
 	QMutexLocker locker(&audiortpsrc_mutex);
@@ -1437,8 +1452,7 @@ bool RtpWorker::startRecv()
 			goto fail1;
 
 		GstElement *videoconvert = gst_element_factory_make("videoconvert", NULL);
-		GstElement *videosink = gst_element_factory_make("appsink", NULL); // was appvideosink
-		GstAppSink *appVideoSink = (GstAppSink *)videosink;
+		GstAppSink *appVideoSink = makeVideoPlayAppSink("netviedeoplay");
 
 		GstAppSinkCallbacks sinkVideoCb;
 		sinkVideoCb.new_sample = cb_show_frame_output;
@@ -1449,9 +1463,9 @@ bool RtpWorker::startRecv()
 		gst_bin_add(GST_BIN(recvbin), videortpsrc);
 		gst_bin_add(GST_BIN(recvbin), videodec);
 		gst_bin_add(GST_BIN(recvbin), videoconvert);
-		gst_bin_add(GST_BIN(recvbin), videosink);
+		gst_bin_add(GST_BIN(recvbin), (GstElement *)appVideoSink);
 
-		gst_element_link_many(videortpsrc, videodec, videoconvert, videosink, NULL);
+		gst_element_link_many(videortpsrc, videodec, videoconvert, (GstElement *)appVideoSink, NULL);
 
 		actual_remoteVideoPayloadInfo = remoteVideoPayloadInfo;
 	}
@@ -1623,6 +1637,7 @@ bool RtpWorker::addAudioChain(int rate)
 
 	return true;
 }
+#define VIDEO_PREP
 
 bool RtpWorker::addVideoChain()
 {
@@ -1654,14 +1669,17 @@ bool RtpWorker::addVideoChain()
 	if(audiortppay)
 		videokbps -= 45;
 
+#ifdef VIDEO_PREP
 	GstElement *videoprep = bins_videoprep_create(size, fps, fileDemux ? false : true);
 	if(!videoprep)
 		return false;
-
+#endif
 	GstElement *videoenc = bins_videoenc_create(codec, pt, videokbps);
 	if(!videoenc)
 	{
+#ifdef VIDEO_PREP
 		g_object_unref(G_OBJECT(videoprep));
+#endif
 		return false;
 	}
 
@@ -1669,8 +1687,8 @@ bool RtpWorker::addVideoChain()
 
 	GstElement *playqueue = gst_element_factory_make("queue", NULL);
 	GstElement *videoconvertplay = gst_element_factory_make("videoconvert", NULL);
-	GstElement *videoplaysink = gst_element_factory_make("appsink", NULL); // was appvideosink
-	GstAppSink *appVideoSink = (GstAppSink *)videoplaysink;
+    GstAppSink *appVideoSink = makeVideoPlayAppSink("sourcevideoplay");
+
 
 	GstAppSinkCallbacks sinkPreviewCb;
 	sinkPreviewCb.new_sample = cb_show_frame_preview;
@@ -1698,32 +1716,40 @@ bool RtpWorker::addVideoChain()
 
 	if(queue)
 		gst_bin_add(GST_BIN(sendbin), queue);
-
+#ifdef VIDEO_PREP
 	gst_bin_add(GST_BIN(sendbin), videoprep);
+#endif
 	gst_bin_add(GST_BIN(sendbin), videotee);
 	gst_bin_add(GST_BIN(sendbin), playqueue);
 	gst_bin_add(GST_BIN(sendbin), videoconvertplay);
-	gst_bin_add(GST_BIN(sendbin), videoplaysink);
+	gst_bin_add(GST_BIN(sendbin), (GstElement *)appVideoSink);
 	gst_bin_add(GST_BIN(sendbin), rtpqueue);
 	gst_bin_add(GST_BIN(sendbin), videoenc);
 	gst_bin_add(GST_BIN(sendbin), videortpsink);
-
+#ifdef VIDEO_PREP
 	gst_element_link(videoprep, videotee);
-	gst_element_link_many(videotee, playqueue, videoconvertplay, videoplaysink, NULL);
-	gst_element_link_many(videotee, rtpqueue, videoenc, videortpsink, NULL);
+#endif
+	gst_element_link_many(videotee, playqueue, videoconvertplay, (GstElement *)appVideoSink, NULL);
+	gst_element_link_many(videotee, rtpqueue, videoenc, videortpsink, NULL); // FIXME!
 
 	videortppay = videoenc;
 
 	if(fileDemux)
 	{
+#ifdef VIDEO_PREP
 		gst_element_link(queue, videoprep);
+#else
+        gst_element_link(queue, videotee);
+#endif
 
 		gst_element_set_state(queue, GST_STATE_PAUSED);
+#ifdef VIDEO_PREP
 		gst_element_set_state(videoprep, GST_STATE_PAUSED);
+#endif
 		gst_element_set_state(videotee, GST_STATE_PAUSED);
 		gst_element_set_state(playqueue, GST_STATE_PAUSED);
 		gst_element_set_state(videoconvertplay, GST_STATE_PAUSED);
-		gst_element_set_state(videoplaysink, GST_STATE_PAUSED);
+		gst_element_set_state((GstElement *)appVideoSink, GST_STATE_PAUSED);
 		gst_element_set_state(rtpqueue, GST_STATE_PAUSED);
 		gst_element_set_state(videoenc, GST_STATE_PAUSED);
 		gst_element_set_state(videortpsink, GST_STATE_PAUSED);
@@ -1732,7 +1758,11 @@ bool RtpWorker::addVideoChain()
 	}
 	else
 	{
+#ifdef VIDEO_PREP
 		GstPad *pad = gst_element_get_static_pad(videoprep, "sink");
+#else
+        GstPad *pad = gst_element_get_static_pad(videotee, "sink");
+#endif
 		gst_element_add_pad(sendbin, gst_ghost_pad_new_from_template("sink1", pad,
 			gst_static_pad_template_get(&raw_video_sink_template)));
 		gst_object_unref(GST_OBJECT(pad));
@@ -1799,7 +1829,7 @@ bool RtpWorker::getCaps()
 		if(!caps)
 		{
 #ifdef RTPWORKER_DEBUG
-			qDebug("can't get video caps\n");
+			qWarning("can't get video caps\n");
 #endif
 			return false;
 		}
@@ -1887,9 +1917,15 @@ RtpWorker::Frame RtpWorker::Frame::pullFromSink(GstAppSink *appsink)
 	GstSample *sample = gst_app_sink_pull_sample(appsink);
 	GstCaps *caps = gst_sample_get_caps(sample);
 	GstBuffer *buffer = gst_sample_get_buffer(sample);
-	//QString strCaps = gst_caps_to_string(caps);
-	//qDebug() << "strCAPS=" << strCaps;
-	GstStructure *capsStruct = gst_caps_get_structure(caps,0);
+
+/*
+    gchar *capsstr;
+    capsstr = gst_caps_to_string(caps);
+    qDebug("recv video frame caps: %s\n", capsstr);
+    g_free (capsstr);
+*/
+
+    GstStructure *capsStruct = gst_caps_get_structure(caps,0);
 	gst_structure_get_int(capsStruct,"width",&width);
 	gst_structure_get_int(capsStruct,"height",&height);
 
@@ -1897,7 +1933,13 @@ RtpWorker::Frame RtpWorker::Frame::pullFromSink(GstAppSink *appsink)
 		QImage image(width, height, QImage::Format_RGB32);
 		gst_buffer_extract(buffer, 0, image.bits(), image.byteCount());
 		frame.image = image;
-	}
+    } else {
+        qDebug("wrong size of received buffer: %x != %lx", (width * height * 4), gst_buffer_get_size(buffer));
+        gchar *capsstr;
+        capsstr = gst_caps_to_string(caps);
+        qDebug("recv video frame caps: %s\n", capsstr);
+        g_free (capsstr);
+    }
 	gst_sample_unref(sample);
 
 	return frame;

@@ -203,6 +203,8 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 		//   also work fine but may result in double-resizing.
 		captureSize = QSize(320, 240);
 #endif
+        //return e; // fixme review if we need all the below. it seems it forces double conversion
+        // (yuy2 -> Y42B for rtp and yuy2 for preview. while w/o it we have i420 on input and conert only for preview)
 
 		if(captureSize.isValid())
 			capsfilter = filter_for_capture_size(captureSize);

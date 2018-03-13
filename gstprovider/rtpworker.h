@@ -188,7 +188,8 @@ private:
 	bool addAudioChain(int rate);
 	bool addVideoChain();
 	bool getCaps();
-	bool updateTheoraConfig();
+    bool updateTheoraConfig();
+    GstAppSink *makeVideoPlayAppSink(const gchar *name);
 };
 
 }
