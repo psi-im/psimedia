@@ -20,6 +20,7 @@
 
 #include "devices.h"
 
+#include <QSet>
 #include <QSize>
 #include <QStringList>
 #include <gst/gst.h>
