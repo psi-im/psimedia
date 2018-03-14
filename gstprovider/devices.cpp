@@ -25,6 +25,15 @@
 #include <QStringList>
 #include <gst/gst.h>
 
+#if !defined(Q_OS_LINUX)
+// add more platforms to the ifdef when ready
+// below is a default impl
+QList<GstDevice> PlatformDeviceMonitor::getDevices()
+{
+    return QList<GstDevice>();
+}
+#endif
+
 namespace PsiMedia {
 
 #if 0
@@ -252,9 +261,7 @@ class DeviceMonitor
 public:
     DeviceMonitor()
     {
-#if defined(Q_OS_LINUX)
         _platform = new PlatformDeviceMonitor;
-#endif
         _monitor = gst_device_monitor_new();
 
         GstBus *bus = gst_device_monitor_get_bus (_monitor);

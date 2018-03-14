@@ -1,4 +1,3 @@
-HEADERS += $$PWD/deviceenum.h
 
 #windows: {
 #	SOURCES += $$PWD/deviceenum_win.cpp

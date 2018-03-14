@@ -339,7 +339,7 @@ GstElement *bins_audioenc_create(const QString &codec, int id, int rate, int siz
         // also width could be taken from internal codec's caps. just any width.
         cs = gst_structure_new("audio/x-raw",
             "channels", G_TYPE_INT, channels, NULL);
-        qDebug("channels=%d\n", rate, size, channels);
+        qDebug("channels=%d\n", channels);
     } else {
         cs = gst_structure_new("audio/x-raw",
             "rate", G_TYPE_INT, rate,
@@ -361,10 +361,11 @@ GstElement *bins_audioenc_create(const QString &codec, int id, int rate, int siz
 	gst_bin_add(GST_BIN(bin), audioenc);
 	gst_bin_add(GST_BIN(bin), audiortppay);
 
-    if (audioresample)
+    if (audioresample) {
         gst_element_link_many(audioconvert, audioresample, capsfilter, audioenc, audiortppay, NULL);
-    else
+    } else {
         gst_element_link_many(audioconvert, capsfilter, audioenc, audiortppay, NULL);
+    }
 
 	GstPad *pad;
 
