@@ -25,6 +25,8 @@
 #include <QStringList>
 #include <gst/gst.h>
 
+namespace PsiMedia {
+
 #if !defined(Q_OS_LINUX)
 // add more platforms to the ifdef when ready
 // below is a default impl
@@ -34,7 +36,6 @@ QList<GstDevice> PlatformDeviceMonitor::getDevices()
 }
 #endif
 
-namespace PsiMedia {
 
 #if 0
 // for elements that we can't enumerate devices for, we need a way to ensure
