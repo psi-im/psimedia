@@ -28,7 +28,6 @@
 #include <gst/gst.h>
 #include <gst/app/gstappsink.h>
 #include "psimediaprovider.h"
-#include "gstcustomelements/gstcustomelements.h"
 
 namespace PsiMedia {
 

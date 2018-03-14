@@ -30,7 +30,6 @@
 //#include <QStyle>
 #include <QIcon>
 #include <gst/gst.h>
-#include "gstcustomelements/gstcustomelements.h"
 #include "gstelements/static/gstelements.h"
 
 namespace PsiMedia {

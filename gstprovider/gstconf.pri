@@ -10,7 +10,6 @@ windows {
 		c:/gstforwin/dxsdk/include \
 		c:/gstforwin/winsdk/include \
 		c:/gstforwin/include \
-		c:/gstforwin/include/liboil-0.3 \
 		c:/gstforwin/include/libxml2 \
 		c:/gstforwin/gstreamer/include/gstreamer-1.0 \
 		c:/gstforwin/gst-plugins-base/include/gstreamer-1.0
@@ -30,10 +29,8 @@ windows {
 	win32-g++|contains($$list($$[QT_VERSION]), 4.0.*|4.1.*|4.2.*|4.3.*) {
 		LIBS *= \
 			-Lc:/gstforwin/winsdk/lib \
-			-loil-0.3-0 \
 			-lgstaudio-1.0-0 \
 			-lgstrtp-1.0-0 \
-			-lgstnetbuffer-1.0-0 \
 			-lopus \
 			-lsetupapi \
 			-lksuser \
