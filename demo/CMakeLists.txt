@@ -1,5 +1,7 @@
 project(psimedia-demo)
 
+cmake_minimum_required(VERSION 2.8.11)
+
 add_definitions(-DDEBUG_POSTFIX=\"\")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   if(APPLE)
@@ -36,9 +38,11 @@ set(FORMS config.ui mainwin.ui)
 
 qt5_wrap_ui(UI_SOURCES ${FORMS})
 
-add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${MOC_SOURCES} ${UI_SOURCES})
+add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${UI_SOURCES})
 
-add_dependencies( ${PROJECT_NAME} gstprovider )
+if(NOT "${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_SOURCE_DIR}")
+    add_dependencies( ${PROJECT_NAME} gstprovider )
+endif()
 
 target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Gui Qt5::Widgets Qt5::Network)
 
