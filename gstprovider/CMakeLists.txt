@@ -55,24 +55,25 @@ set(PROJECT_LDFLAGS
     "-Wl,-as-needed"
 )
 
-message(STATUS "INCLUDE_DIRS=\"${GST_INCLUDES}\"")
-message(STATUS "LDFLAGS=\"${PROJECT_LDFLAGS}\"")
 
 if(WIN32)
     list(APPEND PROJECT_LDFLAGS
-        -loil-0.3-0
-        -lgstaudio-1.0-0
-        -lgstrtp-1.0-0
-        -lgstnetbuffer-1.0-0
-        -lopus
-        -lsetupapi
-        -lksuser
-        -lamstrmid
-        -ldsound
-        -ldxerr9
-        -lole32
+        oil-0.3
+        gstaudio-1.0
+        gstrtp-1.0
+        gstnet-1.0
+        opus
+        setupapi
+        ksuser
+        amstrmid
+        dsound
+        dxerr9
+        ole32
     )
 endif()
+
+message(STATUS "INCLUDE_DIRS=\"${GST_INCLUDES}\"")
+message(STATUS "LDFLAGS=\"${PROJECT_LDFLAGS}\"")
 
 include_directories(${GST_INCLUDES} ${CMAKE_SOURCE_DIR}/psimedia)
 
