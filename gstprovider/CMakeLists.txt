@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.8.11)
 find_package(Qt5 COMPONENTS Core Widgets REQUIRED)
 
 if(Qt5Core_FOUND)
-    message(STATUS "Qt5 found (${Qt5Core_VERSION})")
+    message(STATUS "Qt5 found, version ${Qt5Core_VERSION}")
 endif()
 
 # Tell CMake to run moc when necessary:
@@ -12,23 +12,20 @@ set(CMAKE_AUTOMOC ON)
 # to always look for includes there:
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-pkg_search_module(GLIB2 REQUIRED glib-2.0)
-pkg_search_module(GOBJECT2 REQUIRED gobject-2.0)
-pkg_search_module(GTHREAD2 REQUIRED gthread-2.0)
-pkg_search_module(GSTVIDEO REQUIRED gstreamer-video-1.0)
-pkg_search_module(GSTBASE REQUIRED gstreamer-base-1.0)
-pkg_search_module(GSTAUDIO REQUIRED gstreamer-audio-1.0)
-pkg_search_module(GSTAPP REQUIRED gstreamer-app-1.0)
-pkg_search_module(GSTREAMER REQUIRED gstreamer-1.0)
-
-message(STATUS "glib-2.0 module found (${GLIB2_VERSION})")
-message(STATUS "gobject-2.0 module found (${GOBJECT2_VERSION})")
-message(STATUS "gthread-2.0 module found (${GTHREAD2_VERSION})")
-message(STATUS "gstreamer-video-1.0 module found (${GSTVIDEO_VERSION})")
-message(STATUS "gstreamer-base-1.0 module found (${GSTBASE_VERSION})")
-message(STATUS "gstreamer-audio-1.0 module found (${GSTAUDIO_VERSION})")
-message(STATUS "gstreamer-app-1.0 module found (${GSTAPP_VERSION})")
-message(STATUS "gstreamer-1.0 module found (${GSTREAMER_VERSION})")
+#search Glib modules
+pkg_check_modules(GLIBMODULES REQUIRED
+                    glib-2.0
+                    gobject-2.0
+                    gthread-2.0
+)
+#search Gstreamer modules
+pkg_check_modules(GSTMODULES REQUIRED
+                    gstreamer-1.0
+                    gstreamer-app-1.0
+                    gstreamer-base-1.0
+                    gstreamer-audio-1.0
+                    gstreamer-video-1.0
+)
 
 set(SOURCES
     devices.cpp
@@ -48,30 +45,21 @@ endif()
 
 
 set(GST_INCLUDES
-    ${GSTREAMER_INCLUDE_DIRS}
-    ${GSTAPP_INCLUDE_DIRS}
-    ${GSTAUDIO_INCLUDE_DIRS}
-    ${GSTBASE_INCLUDE_DIRS}
-    ${GSTVIDEO_INCLUDE_DIRS}
-    ${GTHREAD2_INCLUDE_DIRS}
-    ${GOBJECT2_INCLUDE_DIRS}
-    ${GLIB2_INCLUDE_DIRS}
+    ${GSTMODULES_INCLUDE_DIRS}
+    ${GLIBMODULES_INCLUDE_DIRS}
 )
 
-set(EXTRA_LDFLAGS
-    ${GSTREAMER_LDFLAGS}
-    ${GSTAPP_LDFLAGS}
-    ${GSTAUDIO_LDFLAGS}
-    ${GSTBASE_LDFLAGS}
-    ${GSTVIDEO_LDFLAGS}
-    ${GTHREAD2_LDFLAGS}
-    ${GOBJECT2_LDFLAGS}
-    ${GLIB2_LDFLAGS}
+set(PROJECT_LDFLAGS
+    ${GSTMODULES_LDFLAGS}
+    ${GLIBMODULES_LDFLAGS}
     "-Wl,-as-needed"
 )
 
+message(STATUS "INCLUDE_DIRS=\"${GST_INCLUDES}\"")
+message(STATUS "LDFLAGS=\"${PROJECT_LDFLAGS}\"")
+
 if(WIN32)
-    list(APPEND EXTRA_LDFLAGS
+    list(APPEND PROJECT_LDFLAGS
         -loil-0.3-0
         -lgstaudio-1.0-0
         -lgstrtp-1.0-0
@@ -88,8 +76,8 @@ endif()
 
 include_directories(${GST_INCLUDES} ${CMAKE_SOURCE_DIR}/psimedia)
 
-add_library(gstprovider MODULE ${PARTS} ${SOURCES})
-target_link_libraries(${PROJECT_NAME}  ${EXTRA_LDFLAGS})
+add_library(gstprovider MODULE ${SOURCES})
+target_link_libraries(${PROJECT_NAME} ${PROJECT_LDFLAGS})
 
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} "-framework CoreAudio")
