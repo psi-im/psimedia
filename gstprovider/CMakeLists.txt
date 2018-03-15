@@ -43,25 +43,32 @@ if(UNIX AND NOT APPLE)
     list(APPEND SOURCES devices/deviceenum_unix.cpp)
 endif()
 
+add_definitions(
+    ${GLIBMODULES_CFLAGS}
+    ${GLIBMODULES_CFLAGS_OTHER}
+    ${GSTMODULES_CFLAGS}
+    ${GSTMODULES_CFLAGS_OTHER}
+)
+
+link_directories(
+    ${GSTMODULES_LIBRARY_DIRS}
+    ${GLIBMODULES_LIBRARY_DIRS}
+)
 
 set(GST_INCLUDES
     ${GSTMODULES_INCLUDE_DIRS}
     ${GLIBMODULES_INCLUDE_DIRS}
 )
 
-set(PROJECT_LDFLAGS
-    ${GSTMODULES_LDFLAGS}
-    ${GLIBMODULES_LDFLAGS}
-    "-Wl,-as-needed"
+set(CMAKE_MODULE_LINKER_FLAGS
+    ${GLIBMODULES_LDFLAGS_OTHER}
+    ${GSTMODULES_LDFLAGS_OTHER}
 )
-
 
 if(WIN32)
     list(APPEND PROJECT_LDFLAGS
-        oil-0.3
         gstaudio-1.0
         gstrtp-1.0
-        gstnet-1.0
         opus
         setupapi
         ksuser
@@ -72,13 +79,14 @@ if(WIN32)
     )
 endif()
 
-message(STATUS "INCLUDE_DIRS=\"${GST_INCLUDES}\"")
-message(STATUS "LDFLAGS=\"${PROJECT_LDFLAGS}\"")
-
 include_directories(${GST_INCLUDES} ${CMAKE_SOURCE_DIR}/psimedia)
 
 add_library(gstprovider MODULE ${SOURCES})
-target_link_libraries(${PROJECT_NAME} ${PROJECT_LDFLAGS})
+target_link_libraries(${PROJECT_NAME}
+                      ${GSTMODULES_LIBRARIES}
+                      ${GLIBMODULES_LIBRARIES}
+                      ${PROJECT_LDFLAGS}
+)
 
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} "-framework CoreAudio")
