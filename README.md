@@ -10,9 +10,17 @@ Currently it is used for video- and audio-calls support in [Psi IM](https://psi-
 
 This library is licensed under the Lesser GNU General Public License. See the [COPYING](https://github.com/psi-im/psimedia/blob/master/COPYING) file for more information.
 
-## Dependencies
+## Versions history
 
+See [CHANGELOG](https://github.com/psi-im/psi/blob/master/CHANGELOG) file.
+
+## Build dependencies
+
+* [qconf](https://github.com/psi-plus/qconf) (optional)
 * qtbase >= 5.6
+* glib >= 2.0
+* gobject >= 2.0
+* gthread >= 2.0
 * gstreamer >= 1.10.4
 * gst-plugins-base >= 1.10.4
 
@@ -27,14 +35,23 @@ demo/          demonstration GUI program
 ```
 
 To build the plugin and demo program, run:
-
 ```sh
 qt-qconf
 ./configure
 make
 ```
-There is no "make install" target in this case. The compiled plugin can be found under the gstprovider directory. An application that uses PsiMedia should have instructions on what to do with the plugin.
 
+There is no `make install` target in this case. The compiled plugin may be found under the `gstprovider` directory. An application that uses PsiMedia should have instructions on what to do with the plugin.
+
+For example, in Psi+ program `gstprovider` plugin should be placed into:
+
+* `/usr/lib/psi-plus/plugins/` in GNU/Linux systems
+* the root Psi+ directory on MS Windows systems (for example, `C:\\Program Files\Psi+\`)
+
+If you want to test demo program, use environment variable `PSI_MEDIA_PLUGIN` for setting the path to gstprovider plugin. For example:
+```
+PSI_MEDIA_PLUGIN=/usr/lib/psi-plus/plugins/libgstprovider.so ./demo
+```
 
 Alternatively you may build plugin and demo using `cmake`:
 ```sh
