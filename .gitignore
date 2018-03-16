@@ -1,2 +1,14 @@
+builddir/
+configure*
 *.pro.user
-
+.qmake.stash
+Makefile*
+conf.log
+conf.pri
+*/moc_*.cpp
+*/moc_*.h
+*/ui_*.h
+*/*.moc
+*/*.o
+demo/demo
+gstprovider/libgstprovider.*
