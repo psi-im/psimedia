@@ -156,8 +156,8 @@ static GstCaps *filter_for_desired_size(const QSize &size)
 // 		gst_caps_append_structure(caps, cs);
 // 	}
         return gst_caps_new_simple("video/x-raw",
-		                           "width", G_TYPE_INT, 320,
-		                           "height", G_TYPE_INT, 240,
+		                           "width", G_TYPE_INT, 640,
+		                           "height", G_TYPE_INT, 480,
 		                           "framerate", GST_TYPE_FRACTION, 30, 1, NULL);
 
 }
@@ -201,7 +201,7 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const Q
 		//   the resolution psimedia currently wants anyway,
 		//   as opposed to not specifying a captureSize, which would
 		//   also work fine but may result in double-resizing.
-		captureSize = QSize(320, 240);
+		captureSize = QSize(640, 480);
 #endif
         //return e; // fixme review if we need all the below. it seems it forces double conversion
         // (yuy2 -> Y42B for rtp and yuy2 for preview. while w/o it we have i420 on input and conert only for preview)
