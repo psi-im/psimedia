@@ -1095,7 +1095,7 @@ bool RtpWorker::startSend(int rate)
 		{
 			PipelineDeviceOptions opts;
 			//opts.videoSize = localVideoParams[0].size;
-			opts.videoSize = QSize(320, 240);
+			opts.videoSize = QSize(640, 480);
 			opts.fps = 30;
 
 			pd_videosrc = PipelineDeviceContext::create(send_pipelineContext, vin, PDevice::VideoIn, opts);
@@ -1643,7 +1643,7 @@ bool RtpWorker::addVideoChain()
 {
 	// TODO: support other codecs.  for now, we only support theora
 	QString codec = "theora";
-	QSize size = QSize(320, 240);
+	QSize size = QSize(640, 480);
 	int fps = 30;
 	//QString codec = localVideoParams[0].codec;
 	//QSize size = localVideoParams[0].size;
