@@ -1,15 +1,11 @@
 Build dependencies:
 * qconf (https://github.com/psi-plus/qconf)
-* Qt >= 4.4.0
+* Qt >= 5.6
 * glib >= 2.0
 * gobject >= 2.0
 * gthread >= 2.0
-* gstreamer >= 0.10.24
-* gstreamer-base >= 0.10.24
-* gstreamer-interfaces >= 0.10.24
-* gstreamer-audio >= 0.10.24
-* gstreamer-video >= 0.10.24
-* speexdsp >= 1.2rc1
+* gstreamer >= 1.10.4
+* gstreamer-base >= 1.10.4
 
 Building the plugin and demo program:
 $ qt-qconf

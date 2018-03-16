@@ -13,8 +13,8 @@ This library is licensed under the Lesser GNU General Public License. See the [C
 ## Dependencies
 
 * qtbase >= 5.6
-* gstreamer >= 1.12.4
-* gst-plugins-base >= 1.12.4
+* gstreamer >= 1.10.4
+* gst-plugins-base >= 1.10.4
 
 ## Installation
 
