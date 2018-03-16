@@ -12,7 +12,7 @@ This library is licensed under the Lesser GNU General Public License. See the [C
 
 ## Versions history
 
-See [CHANGELOG](https://github.com/psi-im/psi/blob/master/CHANGELOG) file.
+See [CHANGELOG](https://github.com/psi-im/psimedia/blob/master/CHANGELOG) file.
 
 ## Build dependencies
 
