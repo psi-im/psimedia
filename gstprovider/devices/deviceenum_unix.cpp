@@ -274,7 +274,17 @@ static QList<GstDevice> get_alsa_items(int type)
         devname = line.mid(x + 2);
         x = devname.indexOf(" :");
         if(x != -1)
+        {
+            QString devname2 = devname.mid(x + 3);
             devname = devname.mid(0, x);
+            int x = devname2.indexOf(" :");
+            if(x != -1)
+                devname2 = devname2.mid(0, x);
+            else
+                devname2 = devname2.trimmed();
+            if(devname != devname2)
+                devname.append(": ").append(devname2);
+        }
         else
             devname = devname.trimmed();
 
