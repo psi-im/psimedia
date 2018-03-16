@@ -10,7 +10,13 @@ Currently it is used for video- and audio-calls support in [Psi IM](https://psi-
 
 This library is licensed under the Lesser GNU General Public License. See the [COPYING](https://github.com/psi-im/psimedia/blob/master/COPYING) file for more information.
 
-## Usage
+## Dependencies
+
+* qtbase >= 5.6
+* gstreamer >= 1.12.4
+* gst-plugins-base >= 1.12.4
+
+## Installation
 
 Contents:
 
