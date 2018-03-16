@@ -39,10 +39,6 @@ set(SOURCES
     gstprovider.cpp
 )
 
-if(UNIX AND NOT APPLE)
-    list(APPEND SOURCES devices/deviceenum_unix.cpp)
-endif()
-
 add_definitions(
     ${GLIBMODULES_CFLAGS}
     ${GLIBMODULES_CFLAGS_OTHER}
@@ -69,7 +65,6 @@ if(WIN32)
     list(APPEND PROJECT_LDFLAGS
         gstaudio-1.0
         gstrtp-1.0
-        opus
         setupapi
         ksuser
         amstrmid

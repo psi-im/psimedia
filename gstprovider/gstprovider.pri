@@ -1,7 +1,6 @@
 CONFIG += link_prl
 
 include(gstconf.pri)
-include(devices/deviceenum.pri)
 
 HEADERS += \
 	$$PWD/devices.h \

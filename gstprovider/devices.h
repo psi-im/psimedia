@@ -39,12 +39,6 @@ public:
 	QString id;
 };
 
-class PlatformDeviceMonitor
-{
-public:
-    QList<GstDevice> getDevices();
-};
-
 QList<GstDevice> devices_list(PDevice::Type type);
 GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *captureSize = 0);
 
