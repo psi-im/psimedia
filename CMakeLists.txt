@@ -22,6 +22,15 @@ endif()
 
 message(STATUS "${PROJECT_NAME} module will be installed in plugins directory for client: \"${CLIENT_NAME}\"")
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
+#Detect MXE cross-compilation
+if( (CMAKE_CROSSCOMPILING) AND (DEFINED MSYS) )
+    message(STATUS "MXE environment detected")
+    option(USE_MXE "Use MXE toolkit" ON)
+    message(STATUS "MXE root path: ${CMAKE_PREFIX_PATH}")
+endif()
+
 #add extra search paths for libraries and includes
 set(LIB_SUFFIX "" CACHE STRING "Define suffix of directory name (32/64)" )
 set(BIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE STRING "Directory where binary will install")
