@@ -198,6 +198,7 @@ class AlsaItem
 public:
     int card, dev;
     bool input;
+    QString cardName;
     QString name;
 };
 
@@ -258,6 +259,10 @@ static QList<GstDevice> get_alsa_items(int type)
         if(!ok)
             continue;
         ai.input = input;
+        QByteArray path = QByteArray("/proc/asound/card").append(QByteArray::number(ai.card)).append("/id");
+        QStringList cId = read_proc_as_lines(path.data());
+        if(cId.count() > 0)
+            ai.cardName = cId.at(0);
         ai.name.sprintf("ALSA Card %d, Device %d", ai.card, ai.dev);
         items += ai;
     }
@@ -282,8 +287,8 @@ static QList<GstDevice> get_alsa_items(int type)
                 devname2 = devname2.mid(0, x);
             else
                 devname2 = devname2.trimmed();
-            if(devname != devname2)
-                devname.append(": ").append(devname2);
+            if(!devname2.isEmpty())
+                devname = devname2;
         }
         else
             devname = devname.trimmed();
@@ -339,7 +344,7 @@ static QList<GstDevice> get_alsa_items(int type)
             i.type = PDevice::AudioOut;
             i.id = QLatin1String("alsasink ");
         }
-        i.name = QLatin1String("alsa: ") + ai.name;
+        i.name = QLatin1String("alsa: ") + QString("[%1] %2").arg(ai.cardName).arg(ai.name);
         i.id += QString().sprintf("device=plughw:%d,%d", ai.card, ai.dev);
         out += i;
 
