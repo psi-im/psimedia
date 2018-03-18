@@ -320,12 +320,15 @@ static QList<GstDevice> get_alsa_items(int type)
     if(!items.isEmpty())
     {
         GstDevice i;
-        if(type == DIR_INPUT)
+        if(type == DIR_INPUT) {
             i.type = PDevice::AudioIn;
-        else // DIR_OUTPUT
+            i.id = "alsasrc";
+        }
+        else { // DIR_OUTPUT
             i.type = PDevice::AudioOut;
+            i.id = "alsasink";
+        }
         i.name = "alsa: Default";
-        i.id = "alsasrc";
         out += i;
     }
 
