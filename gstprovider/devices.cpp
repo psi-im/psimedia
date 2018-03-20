@@ -362,5 +362,3 @@ GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *ca
 }
 
 }
-
-#include "devices.moc"
