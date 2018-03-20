@@ -323,7 +323,7 @@ public:
             d->m.lock();
             QPair<GstMainLoop::ContextCallback,void*> p;
             bool exist = d->bridgeQueue.size() > 0;
-            if (exist);
+            if (exist)
                 p = d->bridgeQueue.dequeue();
             d->m.unlock();
             if (exist)
