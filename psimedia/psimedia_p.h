@@ -1,4 +1,4 @@
- /*
+/*
  * Copyright (C) 2008-2009  Barracuda Networks, Inc.
  *
  * This library is free software; you can redistribute it and/or
@@ -17,7 +17,7 @@
  * 02110-1301  USA
  *
  */
- 
+
 #include "psimedia.h"
 
 #include <QCoreApplication>
@@ -36,39 +36,39 @@ namespace PsiMedia {
 //----------------------------------------------------------------------------
 class VideoWidgetPrivate : public QObject, public VideoWidgetContext
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	friend class VideoWidget;
+    friend class VideoWidget;
 
-	VideoWidget *q;
-	QSize videoSize;
+    VideoWidget *q;
+    QSize videoSize;
 
-	VideoWidgetPrivate(VideoWidget *_q) :
-		QObject(_q),
-		q(_q)
-	{
-	}
+    VideoWidgetPrivate(VideoWidget *_q) :
+        QObject(_q),
+        q(_q)
+    {
+    }
 
-	virtual QObject *qobject()
-	{
-		return this;
-	}
+    virtual QObject *qobject()
+    {
+        return this;
+    }
 
-	virtual QWidget *qwidget()
-	{
-		return q;
-	}
+    virtual QWidget *qwidget()
+    {
+        return q;
+    }
 
-	virtual void setVideoSize(const QSize &size)
-	{
-		videoSize = size;
-		emit q->videoSizeChanged();
-	}
+    virtual void setVideoSize(const QSize &size)
+    {
+        videoSize = size;
+        emit q->videoSizeChanged();
+    }
 
 signals:
-	void resized(const QSize &newSize);
-	void paintEvent(QPainter *p);
+    void resized(const QSize &newSize);
+    void paintEvent(QPainter *p);
 };
 
 #endif
@@ -80,56 +80,66 @@ QList<VideoParams> importVideoModes(const QList<PVideoParams> &in);
 
 class Features::Private : public QObject
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	Features *q;
-	FeaturesContext *c;
+    Features *q;
+    FeaturesContext *c = nullptr;
 
-	QList<Device> audioOutputDevices;
-	QList<Device> audioInputDevices;
-	QList<Device> videoInputDevices;
-	QList<AudioParams> supportedAudioModes;
-	QList<VideoParams> supportedVideoModes;
+    QList<Device> audioOutputDevices;
+    QList<Device> audioInputDevices;
+    QList<Device> videoInputDevices;
+    QList<AudioParams> supportedAudioModes;
+    QList<VideoParams> supportedVideoModes;
 
-	Private(Features *_q) :
-		QObject(_q),
-		q(_q)
-	{
-		c = provider()->createFeatures();
-		c->qobject()->setParent(this);
-		connect(c->qobject(), SIGNAL(finished()), SLOT(c_finished()));
-	}
+    Private(Features *_q) :
+        QObject(_q),
+        q(_q)
+    {
+        if (provider()->isInitialized()) {
+            providerInitialized();
+        } else {
+            connect(provider()->qobject(), SIGNAL(initialized()), this, SLOT(providerInitialized()));
+        }
+    }
 
-	~Private()
-	{
-		delete c;
-	}
+    ~Private()
+    {
+        delete c;
+    }
 
-	void clearResults()
-	{
-		audioOutputDevices.clear();
-		audioInputDevices.clear();
-		videoInputDevices.clear();
-		supportedAudioModes.clear();
-		supportedVideoModes.clear();
-	}
+    void clearResults()
+    {
+        audioOutputDevices.clear();
+        audioInputDevices.clear();
+        videoInputDevices.clear();
+        supportedAudioModes.clear();
+        supportedVideoModes.clear();
+    }
 
-	void importResults(const PFeatures &in)
-	{
-		audioOutputDevices = importDevices(in.audioOutputDevices);
-		audioInputDevices = importDevices(in.audioInputDevices);
-		videoInputDevices = importDevices(in.videoInputDevices);
-		supportedAudioModes = importAudioModes(in.supportedAudioModes);
-		supportedVideoModes = importVideoModes(in.supportedVideoModes);
-	}
+    void importResults(const PFeatures &in)
+    {
+        audioOutputDevices = importDevices(in.audioOutputDevices);
+        audioInputDevices = importDevices(in.audioInputDevices);
+        videoInputDevices = importDevices(in.videoInputDevices);
+        supportedAudioModes = importAudioModes(in.supportedAudioModes);
+        supportedVideoModes = importVideoModes(in.supportedVideoModes);
+    }
 
 private slots:
-	void c_finished()
-	{
-		importResults(c->results());
-		emit q->finished();
-	}
+    void providerInitialized()
+    {
+        c = provider()->createFeatures();
+        c->qobject()->setParent(this);
+        connect(c->qobject(), SIGNAL(updated()), SLOT(c_updated()));
+        importResults(c->results());
+    }
+
+    void c_updated()
+    {
+        importResults(c->results());
+        emit q->updated();
+    }
 };
 
 //----------------------------------------------------------------------------
@@ -137,65 +147,65 @@ private slots:
 //----------------------------------------------------------------------------
 class RtpChannelPrivate : public QObject
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	RtpChannel *q;
-	RtpChannelContext *c;
-	bool enabled;
-	int readyReadListeners;
+    RtpChannel *q;
+    RtpChannelContext *c;
+    bool enabled;
+    int readyReadListeners;
 
-	RtpChannelPrivate(RtpChannel *_q) :
-		QObject(_q),
-		q(_q),
-		c(0),
-		enabled(false),
-		readyReadListeners(0)
-	{
-	}
+    RtpChannelPrivate(RtpChannel *_q) :
+        QObject(_q),
+        q(_q),
+        c(0),
+        enabled(false),
+        readyReadListeners(0)
+    {
+    }
 
-	void setContext(RtpChannelContext *_c)
-	{
-		if(c)
-		{
-			c->qobject()->disconnect(this);
-			c->qobject()->setParent(0);
-			enabled = false;
-			c = 0;
-		}
+    void setContext(RtpChannelContext *_c)
+    {
+        if(c)
+        {
+            c->qobject()->disconnect(this);
+            c->qobject()->setParent(0);
+            enabled = false;
+            c = 0;
+        }
 
-		if(!_c)
-			return;
+        if(!_c)
+            return;
 
-		c = _c;
-		c->qobject()->setParent(this);
-		connect(c->qobject(), SIGNAL(readyRead()), SLOT(c_readyRead()));
-		connect(c->qobject(), SIGNAL(packetsWritten(int)), SLOT(c_packetsWritten(int)));
-		connect(c->qobject(), SIGNAL(destroyed()), SLOT(c_destroyed()));
+        c = _c;
+        c->qobject()->setParent(this);
+        connect(c->qobject(), SIGNAL(readyRead()), SLOT(c_readyRead()));
+        connect(c->qobject(), SIGNAL(packetsWritten(int)), SLOT(c_packetsWritten(int)));
+        connect(c->qobject(), SIGNAL(destroyed()), SLOT(c_destroyed()));
 
-		if(readyReadListeners > 0)
-		{
-			enabled = true;
-			c->setEnabled(true);
-		}
-	}
+        if(readyReadListeners > 0)
+        {
+            enabled = true;
+            c->setEnabled(true);
+        }
+    }
 
 private slots:
-	void c_readyRead()
-	{
-		emit q->readyRead();
-	}
+    void c_readyRead()
+    {
+        emit q->readyRead();
+    }
 
-	void c_packetsWritten(int count)
-	{
-		emit q->packetsWritten(count);
-	}
+    void c_packetsWritten(int count)
+    {
+        emit q->packetsWritten(count);
+    }
 
-	void c_destroyed()
-	{
-		enabled = false;
-		c = 0;
-	}
+    void c_destroyed()
+    {
+        enabled = false;
+        c = 0;
+    }
 };
 
 //----------------------------------------------------------------------------
@@ -203,83 +213,83 @@ private slots:
 //----------------------------------------------------------------------------
 class RtpSessionPrivate : public QObject
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	RtpSession *q;
-	RtpSessionContext *c;
-	RtpChannel audioRtpChannel;
-	RtpChannel videoRtpChannel;
+    RtpSession *q;
+    RtpSessionContext *c;
+    RtpChannel audioRtpChannel;
+    RtpChannel videoRtpChannel;
 
-	RtpSessionPrivate(RtpSession *_q) :
-		QObject(_q),
-		q(_q)
-	{
-		c = provider()->createRtpSession();
-		c->qobject()->setParent(this);
-		connect(c->qobject(), SIGNAL(started()), SLOT(c_started()));
-		connect(c->qobject(), SIGNAL(preferencesUpdated()), SLOT(c_preferencesUpdated()));
-		connect(c->qobject(), SIGNAL(audioOutputIntensityChanged(int)), SLOT(c_audioOutputIntensityChanged(int)));
-		connect(c->qobject(), SIGNAL(audioInputIntensityChanged(int)), SLOT(c_audioInputIntensityChanged(int)));
-		connect(c->qobject(), SIGNAL(stoppedRecording()), SLOT(c_stoppedRecording()));
-		connect(c->qobject(), SIGNAL(stopped()), SLOT(c_stopped()));
-		connect(c->qobject(), SIGNAL(finished()), SLOT(c_finished()));
-		connect(c->qobject(), SIGNAL(error()), SLOT(c_error()));
-	}
+    RtpSessionPrivate(RtpSession *_q) :
+        QObject(_q),
+        q(_q)
+    {
+        c = provider()->createRtpSession();
+        c->qobject()->setParent(this);
+        connect(c->qobject(), SIGNAL(started()), SLOT(c_started()));
+        connect(c->qobject(), SIGNAL(preferencesUpdated()), SLOT(c_preferencesUpdated()));
+        connect(c->qobject(), SIGNAL(audioOutputIntensityChanged(int)), SLOT(c_audioOutputIntensityChanged(int)));
+        connect(c->qobject(), SIGNAL(audioInputIntensityChanged(int)), SLOT(c_audioInputIntensityChanged(int)));
+        connect(c->qobject(), SIGNAL(stoppedRecording()), SLOT(c_stoppedRecording()));
+        connect(c->qobject(), SIGNAL(stopped()), SLOT(c_stopped()));
+        connect(c->qobject(), SIGNAL(finished()), SLOT(c_finished()));
+        connect(c->qobject(), SIGNAL(error()), SLOT(c_error()));
+    }
 
-	~RtpSessionPrivate()
-	{
-		delete c;
-	}
+    ~RtpSessionPrivate()
+    {
+        delete c;
+    }
 
 private slots:
-	void c_started()
-	{
-		audioRtpChannel.d->setContext(c->audioRtpChannel());
-		videoRtpChannel.d->setContext(c->videoRtpChannel());
-		emit q->started();
-	}
+    void c_started()
+    {
+        audioRtpChannel.d->setContext(c->audioRtpChannel());
+        videoRtpChannel.d->setContext(c->videoRtpChannel());
+        emit q->started();
+    }
 
-	void c_preferencesUpdated()
-	{
-		emit q->preferencesUpdated();
-	}
+    void c_preferencesUpdated()
+    {
+        emit q->preferencesUpdated();
+    }
 
-	void c_audioOutputIntensityChanged(int intensity)
-	{
-		emit q->audioOutputIntensityChanged(intensity);
-	}
+    void c_audioOutputIntensityChanged(int intensity)
+    {
+        emit q->audioOutputIntensityChanged(intensity);
+    }
 
-	void c_audioInputIntensityChanged(int intensity)
-	{
-		emit q->audioInputIntensityChanged(intensity);
-	}
+    void c_audioInputIntensityChanged(int intensity)
+    {
+        emit q->audioInputIntensityChanged(intensity);
+    }
 
-	void c_stoppedRecording()
-	{
-		emit q->stoppedRecording();
-	}
+    void c_stoppedRecording()
+    {
+        emit q->stoppedRecording();
+    }
 
-	void c_stopped()
-	{
-		audioRtpChannel.d->setContext(0);
-		videoRtpChannel.d->setContext(0);
-		emit q->stopped();
-	}
+    void c_stopped()
+    {
+        audioRtpChannel.d->setContext(0);
+        videoRtpChannel.d->setContext(0);
+        emit q->stopped();
+    }
 
-	void c_finished()
-	{
-		audioRtpChannel.d->setContext(0);
-		videoRtpChannel.d->setContext(0);
-		emit q->finished();
-	}
+    void c_finished()
+    {
+        audioRtpChannel.d->setContext(0);
+        videoRtpChannel.d->setContext(0);
+        emit q->finished();
+    }
 
-	void c_error()
-	{
-		audioRtpChannel.d->setContext(0);
-		videoRtpChannel.d->setContext(0);
-		emit q->error();
-	}
+    void c_error()
+    {
+        audioRtpChannel.d->setContext(0);
+        videoRtpChannel.d->setContext(0);
+        emit q->error();
+    }
 };
 
 } // namespace

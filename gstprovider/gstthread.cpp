@@ -27,6 +27,7 @@
 #include <QMutex>
 #include <QWaitCondition>
 #include <QCoreApplication>
+#include <QQueue>
 //#include <QStyle>
 #include <QIcon>
 #include <gst/gst.h>
@@ -161,8 +162,8 @@ public:
 		// ignore "system" plugins
 		if(!pluginPath.isEmpty())
 		{
-			qputenv("GST_PLUGIN_SYSTEM_PATH", "");
-			qputenv("GST_PLUGIN_PATH", "");
+			qputenv("GST_PLUGIN_SYSTEM_PATH", pluginPath.toLocal8Bit()); // not sure about windows
+			//qputenv("GST_PLUGIN_PATH", "");
 		}
 
 		// you can also use NULLs here if you don't want to pass args
@@ -196,8 +197,8 @@ public:
 		}
 
 		// manually load plugins?
-		if(!pluginPath.isEmpty())
-			loadPlugins(pluginPath);
+		//if(!pluginPath.isEmpty())
+		//	loadPlugins(pluginPath);
 
 		//gstcustomelements_register();
 		//gstelements_register();
@@ -271,11 +272,18 @@ public:
 };
 
 //----------------------------------------------------------------------------
-// GstThread
+// GstMainLoop
 //----------------------------------------------------------------------------
-class GstThread::Private
+
+class GstMainLoop::Private
 {
 public:
+    typedef struct {
+      GSource         parent;
+      GstMainLoop::Private *d;
+    } BridgeQueueSource;
+
+    GstMainLoop *q;
 	QString pluginPath;
 	GstSession *gstSession;
 	bool success;
@@ -283,8 +291,11 @@ public:
 	GMainLoop *mainLoop;
 	QMutex m;
 	QWaitCondition w;
+    BridgeQueueSource *bridgeSource;
+    int bridgeId;
+    QQueue<QPair<GstMainLoop::ContextCallback,void*>> bridgeQueue;
 
-	Private() :
+	Private(GstMainLoop *q) : q(q),
 		gstSession(0),
 		success(false),
 		mainContext(0),
@@ -301,14 +312,72 @@ public:
 	{
 		w.wakeOne();
 		m.unlock();
+        emit q->started();
 		return FALSE;
 	}
+
+    static gboolean bridge_callback(gpointer data)
+    {
+        auto d = (GstMainLoop::Private*)data;
+        while (d->bridgeQueue.size()) {
+            d->m.lock();
+            QPair<GstMainLoop::ContextCallback,void*> p;
+            bool exist = d->bridgeQueue.size() > 0;
+            if (exist);
+                p = d->bridgeQueue.dequeue();
+            d->m.unlock();
+            if (exist)
+                p.first(p.second);
+        }
+
+        return d->mainLoop == nullptr? FALSE: TRUE;
+    }
+
+    static gboolean bridge_prepare(GSource *source,gint *timeout_)
+    {
+        *timeout_ = -1;
+        auto d = ((Private::BridgeQueueSource*)source)->d;
+        QMutexLocker locker(&d->m);
+        return d->bridgeQueue.size() > 0? TRUE: FALSE;
+    }
+
+    static gboolean bridge_check(GSource *source)
+    {
+        auto d = ((Private::BridgeQueueSource*)source)->d;
+        QMutexLocker locker(&d->m);
+        return d->bridgeQueue.size() > 0? TRUE: FALSE;
+    }
+
+    static gboolean bridge_dispatch(GSource *source,GSourceFunc callback,gpointer user_data)
+    {
+        if (callback(user_data))
+            return TRUE;
+        else
+            return FALSE;
+    }
+
 };
 
-GstThread::GstThread(QObject *parent) :
-	QThread(parent)
+GstMainLoop::GstMainLoop(const QString &resPath) :
+	QObject()
 {
-	d = new Private;
+	d = new Private(this);
+    d->pluginPath = resPath;
+
+    //create a variable of type GSourceFuncs
+    static GSourceFuncs bridgeFuncs =
+    {
+        Private::bridge_prepare,
+        Private::bridge_check,
+        Private::bridge_dispatch,
+        NULL,
+        NULL,
+        NULL
+    };
+
+    //create a new source
+    d->bridgeSource = reinterpret_cast<Private::BridgeQueueSource*>(g_source_new (&bridgeFuncs, sizeof(Private::BridgeQueueSource)));
+    d->bridgeSource->d = d;
 
 	// HACK: if gstreamer initializes before certain Qt internal
 	//   initialization occurs, then the app becomes unstable.
@@ -323,47 +392,53 @@ GstThread::GstThread(QObject *parent) :
 	//}
 }
 
-GstThread::~GstThread()
+GstMainLoop::~GstMainLoop()
 {
 	stop();
 	delete d;
 }
 
-bool GstThread::start(const QString &pluginPath)
+void GstMainLoop::stop()
 {
-	QMutexLocker locker(&d->m);
-	d->pluginPath = pluginPath;
-	QThread::start();
-	d->w.wait(&d->m);
-	return d->success;
-}
+    bool stopped = execInContext([this](void *data){
+        g_main_loop_quit(d->mainLoop);
+    }, this);
 
-void GstThread::stop()
-{
-	QMutexLocker locker(&d->m);
-	if(d->mainLoop)
-	{
-		// thread-safe ?
-		g_main_loop_quit(d->mainLoop);
+	if(stopped) {
 		d->w.wait(&d->m);
 	}
-
-	wait();
 }
 
-QString GstThread::gstVersion() const
+QString GstMainLoop::gstVersion() const
 {
 	QMutexLocker locker(&d->m);
 	return d->gstSession->version;
 }
 
-GMainContext *GstThread::mainContext()
+GMainContext *GstMainLoop::mainContext()
 {
 	QMutexLocker locker(&d->m);
-	return d->mainContext;
+    return d->mainContext;
 }
 
-void GstThread::run()
+bool GstMainLoop::isInitialized() const
+{
+    QMutexLocker locker(&d->m);
+    return d->success;
+}
+
+bool GstMainLoop::execInContext(ContextCallback cb, void *userData)
+{
+    QMutexLocker locker(&d->m);
+    if (d->mainLoop) {
+        d->bridgeQueue.enqueue({cb, userData});
+        g_main_context_wakeup(d->mainContext);
+        return true;
+    }
+    return false;
+}
+
+void GstMainLoop::init()
 {
 	//qDebug("GStreamer thread started\n");
 
@@ -381,7 +456,7 @@ void GstThread::run()
 		d->w.wakeOne();
 		d->m.unlock();
 		//qDebug("GStreamer thread completed (error)\n");
-		return;
+		emit finished();
 	}
 
 	d->success = true;
@@ -389,14 +464,23 @@ void GstThread::run()
 	//qDebug("Using GStreamer version %s\n", qPrintable(d->gstSession->version));
 
 	d->mainContext = g_main_context_new();
-	d->mainLoop = g_main_loop_new(d->mainContext, FALSE);
+    d->mainLoop = g_main_loop_new(d->mainContext, FALSE);
+
+    //attach bridge source to context
+    d->bridgeId = g_source_attach((GSource*)d->bridgeSource,d->mainContext);
+    g_source_set_callback ((GSource*)d->bridgeSource, GstMainLoop::Private::bridge_callback, d, NULL);
 
 	// deferred call to loop_started()
 	GSource *timer = g_timeout_source_new(0);
 	g_source_attach(timer, d->mainContext);
-	g_source_set_callback(timer, GstThread::Private::cb_loop_started, d, NULL);
+	g_source_set_callback(timer, GstMainLoop::Private::cb_loop_started, d, NULL);
+    d->m.unlock();
+    emit initialized();
+}
 
-	// kick off the event loop
+void GstMainLoop::start()
+{
+    // kick off the event loop
 	g_main_loop_run(d->mainLoop);
 
 	QMutexLocker locker(&d->m);
@@ -408,7 +492,8 @@ void GstThread::run()
 	d->gstSession = 0;
 
 	d->w.wakeOne();
-	//qDebug("GStreamer thread completed\n");
+    emit finished();
+    //qDebug("GStreamer thread completed\n");
 }
 
 }

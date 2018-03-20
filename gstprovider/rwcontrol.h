@@ -40,7 +40,7 @@ namespace PsiMedia {
 // RwControlLocal  - object to live in "local" Qt eventloop
 // RwControlRemote - object to live in "remote" glib eventloop
 //
-// When RwControlLocal is created, you pass it the GstThread.  The constructor
+// When RwControlLocal is created, you pass it the GstMainLoop.  The constructor
 // atomically creates a corresponding RwControlRemote in the remote thread and
 // associates the two objects.
 //
@@ -79,7 +79,7 @@ namespace PsiMedia {
 //   mechanisms described above.  Instead, special methods and callbacks are
 //   used which require special care.
 
-class GstThread;
+class GstMainLoop;
 class RwControlRemote;
 
 class RwControlConfigDevices
@@ -351,7 +351,7 @@ class RwControlLocal : public QObject
 	Q_OBJECT
 
 public:
-	RwControlLocal(GstThread *thread, QObject *parent = 0);
+	RwControlLocal(GstMainLoop *thread, QObject *parent = 0);
 	~RwControlLocal();
 
 	void start(const RwControlConfigDevices &devices, const RwControlConfigCodecs &codecs);
@@ -387,7 +387,7 @@ private slots:
 	void processMessages();
 
 private:
-	GstThread *thread_;
+	GstMainLoop *thread_;
 	GSource *timer;
 	QMutex m;
 	QWaitCondition w;

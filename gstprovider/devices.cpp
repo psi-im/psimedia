@@ -20,10 +20,12 @@
 
 #include "devices.h"
 
+#include <QMutex>
 #include <QSet>
 #include <QSize>
 #include <QStringList>
 #include <gst/gst.h>
+#include "gstthread.h"
 
 namespace PsiMedia {
 
@@ -154,148 +156,202 @@ get_launch_line (::GstDevice * device)
   return g_string_free (launch_line, FALSE);
 }
 
-class DeviceMonitor
+class DeviceMonitor::Private
 {
+public:
+    DeviceMonitor *q;
     GstDeviceMonitor *_monitor = nullptr;
-    QList<GstDevice> _devices;
+    QMap<QString,GstDevice> _devices;
     PlatformDeviceMonitor *_platform = nullptr;
+    QMutex m;
+
+    bool videoSrcFirst = true;
+    bool audioSrcFirst = true;
+    bool audioSinkFirst = true;
+
+    Private(DeviceMonitor *q) : q(q) {}
+
+    static GstDevice gstDevConvert(::GstDevice *gdev)
+    {
+        PsiMedia::GstDevice d;
+
+        gchar *ll = get_launch_line(gdev);
+        if (ll) {
+            auto e = gst_parse_launch(ll, NULL);
+            if (e) {
+                d.id = QString::fromUtf8(ll);
+                gst_object_unref(e);
+            }
+            g_free(ll);
+            if (d.id.isEmpty() || d.id.endsWith(QLatin1String(".monitor"))) {
+                d.id.clear();
+                return d;
+            }
+        }
+
+        gchar *name = gst_device_get_display_name(gdev);
+        d.name = QString::fromUtf8(name);
+        g_free(name);
+
+        if (gst_device_has_classes(gdev, "Audio/Source")) {
+            d.type = PDevice::AudioIn;
+        }
+
+        if (gst_device_has_classes(gdev, "Audio/Sink")) {
+            d.type = PDevice::AudioOut;
+        }
+
+        if (gst_device_has_classes(gdev, "Video/Source")) {
+            d.type = PDevice::VideoIn;
+        }
+
+        return d;
+    }
 
     static gboolean onChangeGstCB(GstBus * bus, GstMessage * message, gpointer user_data)
     {
-        auto monObj = reinterpret_cast<DeviceMonitor*>(user_data);
-        monObj->onChangeDMCallback(bus, message);
-        return G_SOURCE_CONTINUE;
-    }
-
-    void onChangeDMCallback(GstBus * bus, GstMessage * message)
-    {
         Q_UNUSED(bus)
+        auto monObj = reinterpret_cast<DeviceMonitor::Private*>(user_data);
+        PsiMedia::GstDevice d;
         ::GstDevice *device;
-        gchar *name;
 
         switch (GST_MESSAGE_TYPE (message)) {
         case GST_MESSAGE_DEVICE_ADDED:
             gst_message_parse_device_added (message, &device);
-            name = gst_device_get_display_name (device);
-            g_print("Device added: %s\n", name);
-            g_free (name);
+            d = gstDevConvert(device);
             gst_object_unref (device);
+            if (!d.id.isEmpty())
+                monObj->q->onDeviceAdded(d);
             break;
         case GST_MESSAGE_DEVICE_REMOVED:
             gst_message_parse_device_removed (message, &device);
-            name = gst_device_get_display_name (device);
-            g_print("Device removed: %s\n", name);
-            g_free (name);
+            d = gstDevConvert(device);
             gst_object_unref (device);
+            if (!d.id.isEmpty())
+                monObj->q->onDeviceRemoved(d);
             break;
         default:
             break;
         }
-    }
 
-    void updateDevList()
-    {
-        QSet<QString> ids;
-        _devices.clear();
-        GList *devs = gst_device_monitor_get_devices(_monitor);
-        GList *dev = devs;
-        bool videoSrcFirst = true;
-        bool audioSrcFirst = true;
-        bool audioSinkFirst = true;
-        for (; dev != NULL; dev = dev->next) {
-            PsiMedia::GstDevice d;
-
-            ::GstDevice *gdev = (::GstDevice*)(dev->data);
-            gchar *ll = get_launch_line(gdev);
-            if (ll) {
-                auto e = gst_parse_launch(ll, NULL);
-                if (e) {
-                    d.id = QString::fromUtf8(ll);
-                    gst_object_unref(e);
-                }
-                g_free(ll);
-                if (d.id.isEmpty() || d.id.endsWith(QLatin1String(".monitor")))
-                    continue;
-            }
-
-            gchar *name = gst_device_get_display_name(gdev);
-            d.name = QString::fromUtf8(name);
-            g_free(name);
-
-            if (gst_device_has_classes(gdev, "Audio/Source")) {
-                d.type = PDevice::AudioIn;
-                d.isDefault = audioSrcFirst;
-                audioSrcFirst = false;
-            }
-
-            if (gst_device_has_classes(gdev, "Audio/Sink")) {
-                d.type = PDevice::AudioOut;
-                d.isDefault = audioSinkFirst;
-                audioSinkFirst = false;
-            }
-
-            if (gst_device_has_classes(gdev, "Video/Source")) {
-                d.type = PDevice::VideoIn;
-                d.isDefault = videoSrcFirst;
-                videoSrcFirst = false;
-            }
-
-            _devices.append(d);
-            ids.insert(d.id);
-        }
-        g_list_free(devs);
-
-        if (_platform) {
-            auto l = _platform->getDevices();
-            for (auto const &d: l) {
-                if (!ids.contains(d.id)) {
-                    _devices.append(d);
-                }
-            }
-        }
-
-        for (auto const &d: _devices) {
-            qDebug("found dev: %s (%s)", qPrintable(d.name), qPrintable(d.id));
-        }
-    }
-
-public:
-    DeviceMonitor()
-    {
-        _platform = new PlatformDeviceMonitor;
-        _monitor = gst_device_monitor_new();
-
-        GstBus *bus = gst_device_monitor_get_bus (_monitor);
-        gst_bus_add_watch (bus, onChangeGstCB, this);
-        gst_object_unref (bus);
-
-        gst_device_monitor_add_filter (_monitor, "Audio/Sink", NULL);
-        gst_device_monitor_add_filter (_monitor, "Audio/Source", NULL);
-
-        GstCaps *caps;
-        caps = gst_caps_new_empty_simple ("video/x-raw");
-        gst_device_monitor_add_filter (_monitor, "Video/Source", caps);
-        caps = gst_caps_new_empty_simple ("image/jpeg");
-        gst_device_monitor_add_filter (_monitor, "Video/Source", caps);
-        gst_caps_unref (caps);
-
-        updateDevList();
-    }
-
-    QList<GstDevice> devices(PDevice::Type type)
-    {
-        QList<GstDevice> ret;
-        for (auto const &d: _devices) {
-            if (d.type == type) ret.append(d);
-        }
-        return ret;
+        return G_SOURCE_CONTINUE;
     }
 };
 
-QList<GstDevice> devices_list(PDevice::Type type)
+void DeviceMonitor::updateDevList()
 {
-    static auto dm = new DeviceMonitor();
-    return dm->devices(type);
+    d->_devices.clear();
+    GList *devs = gst_device_monitor_get_devices(d->_monitor);
+    GList *dev = devs;
+
+    for (; dev != NULL; dev = dev->next) {
+        PsiMedia::GstDevice pdev = Private::gstDevConvert((::GstDevice*)(dev->data));
+        if (pdev.id.isEmpty()) continue;
+        d->_devices.insert(pdev.id, pdev);
+    }
+    g_list_free(devs);
+
+    if (d->_platform) {
+        auto l = d->_platform->getDevices();
+        for (auto const &pdev: l) {
+            if (!d->_devices.contains(pdev.id)) {
+                d->_devices.insert(pdev.id, pdev);
+            }
+        }
+    }
+
+    for (auto const &pdev: d->_devices) {
+        qDebug("found dev: %s (%s)", qPrintable(pdev.name), qPrintable(pdev.id));
+    }
+}
+
+
+void DeviceMonitor::onDeviceAdded(GstDevice dev)
+{
+    QMutexLocker locker(&d->m);
+    if (d->_devices.contains(dev.id)) {
+        qWarning("Double added of device %s (%s)", qPrintable(dev.name), qPrintable(dev.id));
+    } else {
+        switch (dev.type) {
+        case PDevice::AudioIn:
+            dev.isDefault = d->audioSrcFirst;
+            d->audioSrcFirst = false;
+            break;
+        case PDevice::AudioOut:
+            dev.isDefault = d->audioSinkFirst;
+            d->audioSinkFirst = false;
+            break;
+        case PDevice::VideoIn:
+            dev.isDefault = d->videoSrcFirst;
+            d->videoSrcFirst = false;
+            break;
+        }
+        d->_devices.insert(dev.id, dev);
+        qDebug("added dev: %s (%s)", qPrintable(dev.name), qPrintable(dev.id));
+        emit updated();
+    }
+}
+
+void DeviceMonitor::onDeviceRemoved(const GstDevice &dev)
+{
+    QMutexLocker locker(&d->m);
+    if (d->_devices.remove(dev.id)) {
+        qDebug("removed dev: %s (%s)", qPrintable(dev.name), qPrintable(dev.id));
+        emit updated();
+    } else {
+        qWarning("Double remove of device %s (%s)", qPrintable(dev.name), qPrintable(dev.id));
+    }
+}
+
+DeviceMonitor::DeviceMonitor(GstMainLoop *mainLoop) :
+    d(new Private(this))
+{
+    qRegisterMetaType<GstDevice>("GstDevice");
+
+    auto context = mainLoop->mainContext();
+    d->_platform = new PlatformDeviceMonitor;
+    d->_monitor = gst_device_monitor_new();
+
+    GstBus *bus = gst_device_monitor_get_bus (d->_monitor);
+    GSource *source = gst_bus_create_watch(bus);
+    g_source_set_callback (source, (GSourceFunc)Private::onChangeGstCB, d, NULL);
+    g_source_attach(source, context);
+    g_source_unref(source);
+
+    gst_object_unref (bus);
+
+    gst_device_monitor_add_filter (d->_monitor, "Audio/Sink", NULL);
+    gst_device_monitor_add_filter (d->_monitor, "Audio/Source", NULL);
+
+    GstCaps *caps;
+    caps = gst_caps_new_empty_simple ("video/x-raw");
+    gst_device_monitor_add_filter (d->_monitor, "Video/Source", caps);
+    caps = gst_caps_new_empty_simple ("image/jpeg");
+    gst_device_monitor_add_filter (d->_monitor, "Video/Source", caps);
+    gst_caps_unref (caps);
+
+    updateDevList();
+    if (!gst_device_monitor_start(d->_monitor)) {
+        qWarning("failed to start device monitor");
+    }
+}
+
+DeviceMonitor::~DeviceMonitor()
+{
+    delete d->_platform;
+    g_object_unref(d->_monitor);
+    delete d;
+}
+
+QList<GstDevice> DeviceMonitor::devices(PDevice::Type type)
+{
+    QList<GstDevice> ret;
+    QMutexLocker locker(&d->m);
+    for (auto const &dev: d->_devices) {
+        if (dev.type == type) ret.append(dev);
+    }
+    std::sort(ret.begin(), ret.end(), [](const GstDevice &a, const GstDevice &b){return a.name < b.name;});
+    return ret;
 }
 
 GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *captureSize)
@@ -306,3 +362,5 @@ GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *ca
 }
 
 }
+
+#include "devices.moc"
