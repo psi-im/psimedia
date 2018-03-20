@@ -186,7 +186,6 @@ public:
     };
 
     virtual void lookup(int types) = 0;
-    virtual bool waitForFinished(int msecs) = 0; // -1 = no timeout
     virtual PFeatures results() const = 0;
 
     HINT_SIGNALS:

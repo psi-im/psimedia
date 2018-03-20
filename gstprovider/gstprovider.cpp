@@ -154,9 +154,6 @@ public:
 	virtual void lookup(int types)
 	{ }
 
-	virtual bool waitForFinished(int msecs)
-	{ }
-
 	virtual PFeatures results() const
 	{
         return features;
