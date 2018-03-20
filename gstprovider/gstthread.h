@@ -21,7 +21,9 @@
 #ifndef PSI_GSTTHREAD_H
 #define PSI_GSTTHREAD_H
 
-#include <QThread>
+#include <functional>
+#include <QString>
+#include <QObject>
 #include <glib.h>
 
 namespace PsiMedia {
@@ -31,22 +33,30 @@ namespace PsiMedia {
 //   ready for use.  if you want to do stuff in the other thread, set
 //   up a glib timeout of 0 against mainContext(), and go from there.
 
-class GstThread : public QThread
+class GstMainLoop : public QObject
 {
 	Q_OBJECT
 
 public:
-	GstThread(QObject *parent = 0);
-	~GstThread();
+    typedef std::function<void(void *userData)> ContextCallback;
 
-	bool start(const QString &pluginPath);
-	void stop();
+	GstMainLoop(const QString &resPath);
+	~GstMainLoop();
 
 	QString gstVersion() const;
 	GMainContext *mainContext();
+    bool isInitialized() const;
+    bool execInContext(ContextCallback cb, void *userData);
 
-protected:
-	virtual void run();
+signals:
+    void initialized();
+    void started();
+    void finished();
+
+public slots:
+	void init();
+    void start();
+    void stop();
 
 private:
 	class Private;

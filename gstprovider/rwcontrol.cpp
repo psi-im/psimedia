@@ -152,7 +152,7 @@ static void applyCodecsToWorker(RtpWorker *worker, const RwControlConfigCodecs &
 //----------------------------------------------------------------------------
 // RwControlLocal
 //----------------------------------------------------------------------------
-RwControlLocal::RwControlLocal(GstThread *thread, QObject *parent) :
+RwControlLocal::RwControlLocal(GstMainLoop *thread, QObject *parent) :
 	QObject(parent),
 	app(0),
 	cb_rtpAudioOut(0),

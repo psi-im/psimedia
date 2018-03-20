@@ -47,25 +47,59 @@ public:
 	}
 };
 
+class FeaturesWatcher : public QObject
+{
+    Q_OBJECT
+
+    Configuration _configuration;
+    PsiMedia::Features _features;
+
+    QString defaultDeviceId(const QList<PsiMedia::Device> &devs, const QString &userPref);
+public:
+    FeaturesWatcher(QObject *parent);
+    ~FeaturesWatcher();
+    inline const Configuration &configuration() const { return _configuration; }
+    inline const PsiMedia::Features &features() const { return _features; }
+    inline QList<PsiMedia::Device> audioInputDevices() { return _features.audioInputDevices(); }
+    inline QList<PsiMedia::Device> audioOutputDevices() { return _features.audioOutputDevices(); }
+    inline QList<PsiMedia::Device> videoInputDevices() { return _features.videoInputDevices(); }
+    inline QList<PsiMedia::AudioParams> supportedAudioModes() { return _features.supportedAudioModes(); }
+    inline QList<PsiMedia::VideoParams> supportedVideoModes() { return _features.supportedVideoModes(); }
+
+    void updateDefaults();
+private slots:
+    void featuresUpdated();
+
+signals:
+    void updated();
+};
+
+class MainWin;
 class ConfigDlg : public QDialog
 {
 	Q_OBJECT
 
 public:
 	Ui::Config ui;
-	Configuration config;
+    FeaturesWatcher *featuresWatcher;
+    bool hasAudioInPref;
+    bool hasAudioOutPref;
+    bool hasVideoInPref;
+    bool hasAudioParams;
+    bool hasVideoParams;
 
-	ConfigDlg(const Configuration &_config, QWidget *parent = 0);
+	ConfigDlg(MainWin *parent = 0);
 	int findAudioParamsData(QComboBox *cb, const PsiMedia::AudioParams &params);
 	int findVideoParamsData(QComboBox *cb, const PsiMedia::VideoParams &params);
-	
+
 protected:
 	virtual void accept();
 
 private slots:
 	void live_toggled(bool on);
 	void file_toggled(bool on);
-	void file_choose();
+    void file_choose();
+    void featuresUpdated();
 };
 
 // handles two udp sockets
@@ -126,13 +160,13 @@ public:
 	QString creditName;
 	PsiMedia::RtpSession producer;
 	PsiMedia::RtpSession receiver;
-	Configuration config;
 	bool transmitAudio, transmitVideo, transmitting;
 	bool receiveAudio, receiveVideo;
 	RtpBinding *sendAudioRtp, *sendVideoRtp;
 	RtpBinding *receiveAudioRtp, *receiveVideoRtp;
 	bool recording;
 	QFile *recordFile;
+    FeaturesWatcher *featureWatcher;
 
 	MainWin();
 	~MainWin();
@@ -163,5 +197,6 @@ private slots:
 	void receiver_stoppedRecording();
 	void receiver_stopped();
 	void receiver_error();
-	void record_toggle();
+    void record_toggle();
+    void featuresUpdated();
 };

@@ -35,6 +35,7 @@
 #ifdef QT_GUI_LIB
 #include <QWidget>
 #include <QPainter>
+#include <QThread>
 #endif
 
 namespace PsiMedia {
@@ -45,6 +46,7 @@ static PDevice gstDeviceToPDevice(const GstDevice &dev, PDevice::Type type)
 	out.type = type;
 	out.name = dev.name;
 	out.id = dev.id;
+    out.isDefault = dev.isDefault;
 	return out;
 }
 
@@ -118,81 +120,30 @@ private slots:
 //----------------------------------------------------------------------------
 // GstFeaturesContext
 //----------------------------------------------------------------------------
-static QList<PDevice> get_audioOutputDevices()
-{
-	QList<PDevice> list;
-	foreach(const GstDevice &i, devices_list(PDevice::AudioOut))
-		list += gstDeviceToPDevice(i, PDevice::AudioOut);
-	return list;
-}
-
-static QList<PDevice> get_audioInputDevices()
-{
-	QList<PDevice> list;
-	foreach(const GstDevice &i, devices_list(PDevice::AudioIn))
-		list += gstDeviceToPDevice(i, PDevice::AudioIn);
-	return list;
-}
-
-static QList<PDevice> get_videoInputDevices()
-{
-	QList<PDevice> list;
-	foreach(const GstDevice &i, devices_list(PDevice::VideoIn))
-		list += gstDeviceToPDevice(i, PDevice::VideoIn);
-	return list;
-}
-
-class FeaturesThread : public QThread
-{
-        Q_OBJECT
-
-public:
-	int types;
-	PFeatures results;
-
-	FeaturesThread(QObject *parent = 0) :
-		QThread(parent)
-	{
-	}
-
-	virtual void run()
-	{
-		PFeatures out;
-		if(types & FeaturesContext::AudioOut)
-			out.audioOutputDevices = get_audioOutputDevices();
-		if(types & FeaturesContext::AudioIn)
-			out.audioInputDevices = get_audioInputDevices();
-		if(types & FeaturesContext::VideoIn)
-			out.videoInputDevices = get_videoInputDevices();
-		if(types & FeaturesContext::AudioModes)
-			out.supportedAudioModes = modes_supportedAudio();
-		if(types & FeaturesContext::VideoModes)
-			out.supportedVideoModes = modes_supportedVideo();
-		results = out;
-	}
-};
-
 class GstFeaturesContext : public QObject, public FeaturesContext
 {
 	Q_OBJECT
 	Q_INTERFACES(PsiMedia::FeaturesContext)
 
 public:
-	GstThread *gstThread;
-	FeaturesThread *thread;
+	GstMainLoop *gstLoop;
+    DeviceMonitor *deviceMonitor = nullptr;
+    PFeatures features;
 
-	GstFeaturesContext(GstThread *_gstThread, QObject *parent = 0) :
+	GstFeaturesContext(GstMainLoop *_gstLoop, QObject *parent = 0) :
 		QObject(parent),
-		gstThread(_gstThread)
+		gstLoop(_gstLoop)
 	{
-		thread = new FeaturesThread(this);
-		connect(thread, SIGNAL(finished()), SIGNAL(finished()));
+        gstLoop->execInContext([this](void *userData){
+            deviceMonitor = new DeviceMonitor(gstLoop);
+            connect(deviceMonitor, &DeviceMonitor::updated, this, &GstFeaturesContext::devicesUpdated);
+            devicesUpdated();
+        }, this);
 	}
 
 	~GstFeaturesContext()
 	{
-		thread->wait();
-		delete thread;
+        delete deviceMonitor; // thread safe?
 	}
 
 	virtual QObject *qobject()
@@ -201,26 +152,51 @@ public:
 	}
 
 	virtual void lookup(int types)
-	{
-		if(types > 0)
-		{
-			thread->types = types;
-			thread->start();
-		}
-	}
-
-	virtual bool waitForFinished(int msecs)
-	{
-		return thread->wait(msecs < 0 ? ULONG_MAX : msecs);
-	}
+	{ }
 
 	virtual PFeatures results() const
 	{
-		return thread->results;
+        return features;
 	}
 
+private:
+    QList<PDevice> audioOutputDevices()
+    {
+        QList<PDevice> list;
+        foreach(const GstDevice &i, deviceMonitor->devices(PDevice::AudioOut))
+            list += gstDeviceToPDevice(i, PDevice::AudioOut);
+        return list;
+    }
+
+    QList<PDevice> audioInputDevices()
+    {
+        QList<PDevice> list;
+        foreach(const GstDevice &i, deviceMonitor->devices(PDevice::AudioIn))
+            list += gstDeviceToPDevice(i, PDevice::AudioIn);
+        return list;
+    }
+
+    QList<PDevice> videoInputDevices()
+    {
+        QList<PDevice> list;
+        foreach(const GstDevice &i, deviceMonitor->devices(PDevice::VideoIn))
+            list += gstDeviceToPDevice(i, PDevice::VideoIn);
+        return list;
+    }
+
+private slots:
+    void devicesUpdated()
+    {
+        features.audioInputDevices = audioInputDevices();
+        features.audioOutputDevices = audioOutputDevices();
+        features.videoInputDevices = videoInputDevices();
+        features.supportedAudioModes = modes_supportedAudio();
+        features.supportedVideoModes = modes_supportedVideo();
+        emit updated();
+    }
+
 signals:
-	void finished();
+	void updated();
 };
 
 //----------------------------------------------------------------------------
@@ -494,7 +470,7 @@ class GstRtpSessionContext : public QObject, public RtpSessionContext
 	Q_INTERFACES(PsiMedia::RtpSessionContext)
 
 public:
-	GstThread *gstThread;
+	GstMainLoop *gstLoop;
 
 	RwControlLocal *control;
 	RwControlConfigDevices devices;
@@ -517,9 +493,9 @@ public:
 	QMutex write_mutex;
 	bool allow_writes;
 
-	GstRtpSessionContext(GstThread *_gstThread, QObject *parent = 0) :
+	GstRtpSessionContext(GstMainLoop *_gstLoop, QObject *parent = 0) :
 		QObject(parent),
-		gstThread(_gstThread),
+		gstLoop(_gstLoop),
 		control(0),
 		isStarted(false),
 		isStopping(false),
@@ -716,7 +692,7 @@ public:
 
 		write_mutex.lock();
 
-		control = new RwControlLocal(gstThread, this);
+		control = new RwControlLocal(gstLoop, this);
 		connect(control, SIGNAL(statusReady(const RwControlStatus &)), SLOT(control_statusReady(const RwControlStatus &)));
 		connect(control, SIGNAL(previewFrame(const QImage &)), SLOT(control_previewFrame(const QImage &)));
 		connect(control, SIGNAL(outputFrame(const QImage &)), SLOT(control_outputFrame(const QImage &)));
@@ -1012,12 +988,20 @@ class GstProvider : public QObject, public Provider
 	Q_INTERFACES(PsiMedia::Provider)
 
 public:
-	GstThread *thread;
+	QThread gstEventLoopThread;
+    QPointer<GstMainLoop> gstEventLoop;
 
-	GstProvider() :
-		thread(0)
+	GstProvider()
 	{
+        gstEventLoopThread.setObjectName("GstEventLoop");
 	}
+
+    ~GstProvider()
+    {
+        gstEventLoop->stop();
+        gstEventLoopThread.quit();
+        gstEventLoopThread.wait();
+    }
 
 	virtual QObject *qobject()
 	{
@@ -1026,21 +1010,29 @@ public:
 
 	virtual bool init(const QString &resourcePath)
 	{
-		thread = new GstThread(this);
-		if(!thread->start(resourcePath))
-		{
-			delete thread;
-			thread = 0;
-			return false;
-		}
+		gstEventLoop = new GstMainLoop(resourcePath);
+        gstEventLoop->moveToThread(&gstEventLoopThread);
+
+        connect(&gstEventLoopThread, &QThread::finished, gstEventLoop, &QObject::deleteLater, Qt::QueuedConnection);
+        connect(&gstEventLoopThread, &QThread::started, gstEventLoop, &GstMainLoop::init, Qt::QueuedConnection);
+        connect(gstEventLoop, &GstMainLoop::initialized, this, [this](){
+            // do any custom stuff here before glib event loop started. it's already initialized
+            if (!gstEventLoop->isInitialized()) {
+                qWarning("glib event loop failed to initialize");
+            }
+        }, Qt::QueuedConnection);
+        connect(gstEventLoop, &GstMainLoop::initialized, gstEventLoop, &GstMainLoop::start, Qt::QueuedConnection);
+        connect(gstEventLoop, &GstMainLoop::started, this, &GstProvider::initialized, Qt::QueuedConnection);
+
+        gstEventLoopThread.start();
 
 		return true;
 	}
 
-	~GstProvider()
-	{
-		delete thread;
-	}
+    bool isInitialized() const
+    {
+        return gstEventLoop && gstEventLoop->isInitialized();
+    }
 
 	virtual QString creditName()
 	{
@@ -1055,19 +1047,22 @@ public:
 		"more information, see http://www.gstreamer.net/\n\n"
 		"If you enjoy this software, please give the GStreamer "
 		"people a million dollars."
-		).arg(thread->gstVersion());
+		).arg(gstEventLoop->gstVersion());
 		return str;
 	}
 
 	virtual FeaturesContext *createFeatures()
 	{
-		return new GstFeaturesContext(thread);
+		return new GstFeaturesContext(gstEventLoop);
 	}
 
 	virtual RtpSessionContext *createRtpSession()
 	{
-		return new GstRtpSessionContext(thread);
+		return new GstRtpSessionContext(gstEventLoop);
 	}
+
+signals:
+    void initialized();
 };
 
 class GstPlugin : public QObject, public Plugin

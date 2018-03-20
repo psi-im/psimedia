@@ -30,6 +30,8 @@ class QSize;
 
 namespace PsiMedia {
 
+class GstMainLoop;
+
 class GstDevice
 {
 public:
@@ -39,9 +41,40 @@ public:
 	QString id;
 };
 
-QList<GstDevice> devices_list(PDevice::Type type);
+class PlatformDeviceMonitor
+{
+public:
+    QList<GstDevice> getDevices();
+};
+
+class DeviceMonitor : public QObject
+{
+    Q_OBJECT
+
+    class Private;
+    //friend class Private;
+    Private *d;
+
+    void updateDevList();
+
+private slots:
+    void onDeviceAdded(GstDevice dev);
+    void onDeviceRemoved(const GstDevice &dev);
+
+signals:
+    void updated();
+
+public:
+    DeviceMonitor(GstMainLoop *mainLoop);
+    ~DeviceMonitor();
+
+    QList<GstDevice> devices(PDevice::Type type);
+};
+
 GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *captureSize = 0);
 
 }
+
+Q_DECLARE_METATYPE(PsiMedia::GstDevice)
 
 #endif

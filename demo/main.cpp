@@ -27,6 +27,7 @@
 #include <QDir>
 #include <QtPlugin>
 #include <QLibrary>
+#include <QSettings>
 #include "psimedia.h"
 
 
@@ -192,179 +193,25 @@ static bool codecStringToPayloadInfo(const QString &in, PsiMedia::PayloadInfo *a
 	return true;
 }
 
-class PsiMediaFeaturesSnapshot
-{
-public:
-	enum Mode
-	{
-		Input  = 0x01,
-		Output = 0x02,
-		All    = 0x03
-	};
-
-	int mode;
-	QList<PsiMedia::Device> audioOutputDevices;
-	QList<PsiMedia::Device> audioInputDevices;
-	QList<PsiMedia::Device> videoInputDevices;
-	QList<PsiMedia::AudioParams> supportedAudioModes;
-	QList<PsiMedia::VideoParams> supportedVideoModes;
-
-	PsiMediaFeaturesSnapshot(Mode m)
-	{
-		mode = m;
-
-		PsiMedia::Features f;
-
-		int flags = 0;
-		flags |= PsiMedia::Features::AudioModes;
-		flags |= PsiMedia::Features::VideoModes;
-		if(mode & Input)
-		{
-			flags |= PsiMedia::Features::AudioIn;
-			flags |= PsiMedia::Features::VideoIn;
-		}
-		if(mode & Output)
-			flags |= PsiMedia::Features::AudioOut;
-
-		f.lookup(flags);
-		f.waitForFinished();
-
-		audioOutputDevices = f.audioOutputDevices();
-		audioInputDevices = f.audioInputDevices();
-		videoInputDevices = f.videoInputDevices();
-		supportedAudioModes = f.supportedAudioModes();
-		supportedVideoModes = f.supportedVideoModes();
-	}
-};
-
-// get default settings
-static Configuration getDefaultConfiguration()
-{
-	Configuration config;
-	config.liveInput = true;
-	config.loopFile = true;
-
-	PsiMediaFeaturesSnapshot snap(PsiMediaFeaturesSnapshot::All);
-
-	QList<PsiMedia::Device> devs;
-
-	devs = snap.audioOutputDevices;
-	if(!devs.isEmpty())
-		config.audioOutDeviceId = devs.first().id();
-
-	devs = snap.audioInputDevices;
-	if(!devs.isEmpty())
-		config.audioInDeviceId = devs.first().id();
-
-	devs = snap.videoInputDevices;
-	if(!devs.isEmpty())
-		config.videoInDeviceId = devs.first().id();
-
-	config.audioParams = snap.supportedAudioModes.first();
-	config.videoParams = snap.supportedVideoModes.first();
-
-	return config;
-}
-
-// adjust any invalid settings to nearby valid ones
-static Configuration adjustConfiguration(const Configuration &in, const PsiMediaFeaturesSnapshot &snap)
-{
-	Configuration out = in;
-	bool found;
-
-	if((snap.mode & PsiMediaFeaturesSnapshot::Output) && !out.audioOutDeviceId.isEmpty())
-	{
-		found = false;
-		foreach(const PsiMedia::Device &dev, snap.audioOutputDevices)
-		{
-			if(out.audioOutDeviceId == dev.id())
-			{
-				found = true;
-				break;
-			}
-		}
-		if(!found)
-		{
-			if(!snap.audioOutputDevices.isEmpty())
-				out.audioOutDeviceId = snap.audioOutputDevices.first().id();
-			else
-				out.audioOutDeviceId.clear();
-		}
-	}
-
-	if((snap.mode & PsiMediaFeaturesSnapshot::Input) && !out.audioInDeviceId.isEmpty())
-	{
-		found = false;
-		foreach(const PsiMedia::Device &dev, snap.audioInputDevices)
-		{
-			if(out.audioInDeviceId == dev.id())
-			{
-				found = true;
-				break;
-			}
-		}
-		if(!found)
-		{
-			if(!snap.audioInputDevices.isEmpty())
-				out.audioInDeviceId = snap.audioInputDevices.first().id();
-			else
-				out.audioInDeviceId.clear();
-		}
-	}
-
-	if((snap.mode & PsiMediaFeaturesSnapshot::Input) && !out.videoInDeviceId.isEmpty())
-	{
-		found = false;
-		foreach(const PsiMedia::Device &dev, snap.videoInputDevices)
-		{
-			if(out.videoInDeviceId == dev.id())
-			{
-				found = true;
-				break;
-			}
-		}
-		if(!found)
-		{
-			if(!snap.videoInputDevices.isEmpty())
-				out.videoInDeviceId = snap.videoInputDevices.first().id();
-			else
-				out.videoInDeviceId.clear();
-		}
-	}
-
-	found = false;
-	foreach(const PsiMedia::AudioParams &params, snap.supportedAudioModes)
-	{
-		if(out.audioParams == params)
-		{
-			found = true;
-			break;
-		}
-	}
-	if(!found)
-		out.audioParams = snap.supportedAudioModes.first();
-
-	found = false;
-	foreach(const PsiMedia::VideoParams &params, snap.supportedVideoModes)
-	{
-		if(out.videoParams == params)
-		{
-			found = true;
-			break;
-		}
-	}
-	if(!found)
-		out.videoParams = snap.supportedVideoModes.first();
-
-	return out;
-}
-
-ConfigDlg::ConfigDlg(const Configuration &_config, QWidget *parent) :
-	QDialog(parent),
-	config(_config)
+ConfigDlg::ConfigDlg(MainWin *parent) :
+	QDialog(parent)
 {
 	ui.setupUi(this);
 	setWindowTitle(tr("Configure Audio/Video"));
+
+    QSettings s;
+    hasAudioInPref = s.contains("audioIn");   // if we ever opened configuration dialog before and set something there
+    hasAudioOutPref = s.contains("audioOut");
+    hasVideoInPref = s.contains("videoIn");
+    hasAudioParams = s.contains("audioParams");
+    hasVideoParams = s.contains("videoParams");
+
+    // with qt-5.7 and above we can use qOverlaod instead of these awful casts
+    connect(ui.cb_audioInDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasAudioInPref = true; });
+    connect(ui.cb_audioOutDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasAudioOutPref = true; });
+    connect(ui.cb_videoInDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasVideoInPref = true; });
+    connect(ui.cb_audioMode, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasAudioParams = true; });
+    connect(ui.cb_videoMode, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasVideoParams = true; });
 
 	ui.lb_audioInDevice->setEnabled(false);
 	ui.cb_audioInDevice->setEnabled(false);
@@ -374,26 +221,47 @@ ConfigDlg::ConfigDlg(const Configuration &_config, QWidget *parent) :
 	ui.le_file->setEnabled(false);
 	ui.tb_file->setEnabled(false);
 	ui.ck_loop->setEnabled(false);
+    featuresWatcher = parent->featureWatcher;
 
 	connect(ui.rb_sendLive, SIGNAL(toggled(bool)), SLOT(live_toggled(bool)));
 	connect(ui.rb_sendFile, SIGNAL(toggled(bool)), SLOT(file_toggled(bool)));
 	connect(ui.tb_file, SIGNAL(clicked()), SLOT(file_choose()));
+    connect(featuresWatcher, &FeaturesWatcher::updated, this, &ConfigDlg::featuresUpdated);
 
-	PsiMediaFeaturesSnapshot snap(PsiMediaFeaturesSnapshot::All);
+    featuresUpdated();
+}
 
-	ui.cb_audioOutDevice->addItem("<None>", QString());
-	foreach(const PsiMedia::Device &dev, snap.audioOutputDevices)
+void ConfigDlg::featuresUpdated()
+{
+    ui.cb_audioInDevice->blockSignals(true);
+    ui.cb_audioOutDevice->blockSignals(true);
+    ui.cb_videoInDevice->blockSignals(true);
+    ui.cb_audioMode->blockSignals(true);
+    ui.cb_videoMode->blockSignals(true);
+
+    QString audioInPref = ui.cb_audioInDevice->currentData().toString();
+    QString audioOutPref = ui.cb_audioOutDevice->currentData().toString();
+    QString videoInPref = ui.cb_videoInDevice->currentData().toString();
+    auto audioMode = ui.cb_audioMode->currentData().value<PsiMedia::AudioParams>();
+    auto videoMode = ui.cb_videoMode->currentData().value<PsiMedia::VideoParams>();
+
+    ui.cb_audioOutDevice->clear();
+    ui.cb_audioOutDevice->addItem("<None>", QString());
+	for(const auto &dev: featuresWatcher->audioOutputDevices())
 		ui.cb_audioOutDevice->addItem(dev.name(), dev.id());
 
+    ui.cb_audioInDevice->clear();
 	ui.cb_audioInDevice->addItem("<None>", QString());
-	foreach(const PsiMedia::Device &dev, snap.audioInputDevices)
+	for(const auto &dev: featuresWatcher->audioInputDevices())
 		ui.cb_audioInDevice->addItem(dev.name(), dev.id());
 
+    ui.cb_videoInDevice->clear();
 	ui.cb_videoInDevice->addItem("<None>", QString());
-	foreach(const PsiMedia::Device &dev, snap.videoInputDevices)
+	for(const auto &dev: featuresWatcher->videoInputDevices())
 		ui.cb_videoInDevice->addItem(dev.name(), dev.id());
 
-	foreach(const PsiMedia::AudioParams &params, snap.supportedAudioModes)
+    ui.cb_audioMode->clear();
+	foreach(const PsiMedia::AudioParams &params, featuresWatcher->supportedAudioModes())
 	{
 		QString codec = params.codec();
 		if(codec == "vorbis" || codec == "opus")
@@ -413,7 +281,8 @@ ConfigDlg::ConfigDlg(const Configuration &_config, QWidget *parent) :
 		ui.cb_audioMode->addItem(str, qVariantFromValue<PsiMedia::AudioParams>(params));
 	}
 
-	foreach(const PsiMedia::VideoParams &params, snap.supportedVideoModes)
+    ui.cb_videoMode->clear();
+	foreach(const PsiMedia::VideoParams &params, featuresWatcher->supportedVideoModes())
 	{
 		QString codec = params.codec();
 		if(codec == "theora")
@@ -428,18 +297,29 @@ ConfigDlg::ConfigDlg(const Configuration &_config, QWidget *parent) :
 
 	// the following lookups are guaranteed, since the config is
 	//   adjusted to all valid values as necessary
-	config = adjustConfiguration(config, snap);
-	ui.cb_audioOutDevice->setCurrentIndex(ui.cb_audioOutDevice->findData(config.audioOutDeviceId));
-	ui.cb_audioInDevice->setCurrentIndex(ui.cb_audioInDevice->findData(config.audioInDeviceId));
-	ui.cb_videoInDevice->setCurrentIndex(ui.cb_videoInDevice->findData(config.videoInDeviceId));
-	ui.cb_audioMode->setCurrentIndex(findAudioParamsData(ui.cb_audioMode, config.audioParams));
-	ui.cb_videoMode->setCurrentIndex(findVideoParamsData(ui.cb_videoMode, config.videoParams));
+    auto config = featuresWatcher->configuration();
+    if (!hasAudioInPref) audioInPref = config.audioInDeviceId; // if we didn't change anything, try default from config
+    if (!hasAudioOutPref) audioOutPref = config.audioOutDeviceId;
+    if (!hasVideoInPref) videoInPref = config.videoInDeviceId;
+    if (!hasAudioParams) audioMode = config.audioParams;
+    if (!hasVideoParams) videoMode = config.videoParams;
+	ui.cb_audioOutDevice->setCurrentIndex(ui.cb_audioOutDevice->findData(audioOutPref));
+	ui.cb_audioInDevice->setCurrentIndex(ui.cb_audioInDevice->findData(audioInPref));
+	ui.cb_videoInDevice->setCurrentIndex(ui.cb_videoInDevice->findData(videoInPref));
+	ui.cb_audioMode->setCurrentIndex(findAudioParamsData(ui.cb_audioMode, audioMode));
+	ui.cb_videoMode->setCurrentIndex(findVideoParamsData(ui.cb_videoMode, videoMode));
 	if(config.liveInput)
 		ui.rb_sendLive->setChecked(true);
 	else
 		ui.rb_sendFile->setChecked(true);
 	ui.le_file->setText(config.file);
 	ui.ck_loop->setChecked(config.loopFile);
+
+    ui.cb_audioInDevice->blockSignals(false);
+    ui.cb_audioOutDevice->blockSignals(false);
+    ui.cb_videoInDevice->blockSignals(false);
+    ui.cb_audioMode->blockSignals(false);
+    ui.cb_videoMode->blockSignals(false);
 }
 
 // apparently custom QVariants can't be compared, so we have to
@@ -468,14 +348,23 @@ int ConfigDlg::findVideoParamsData(QComboBox *cb, const PsiMedia::VideoParams &p
 
 void ConfigDlg::accept()
 {
-	config.audioOutDeviceId = ui.cb_audioOutDevice->itemData(ui.cb_audioOutDevice->currentIndex()).toString();
-	config.audioInDeviceId = ui.cb_audioInDevice->itemData(ui.cb_audioInDevice->currentIndex()).toString();
-	config.audioParams = ui.cb_audioMode->itemData(ui.cb_audioMode->currentIndex()).value<PsiMedia::AudioParams>();
-	config.videoInDeviceId = ui.cb_videoInDevice->itemData(ui.cb_videoInDevice->currentIndex()).toString();
-	config.videoParams = ui.cb_videoMode->itemData(ui.cb_videoMode->currentIndex()).value<PsiMedia::VideoParams>();
-	config.liveInput = ui.rb_sendLive->isChecked();
-	config.file = ui.le_file->text();
-	config.loopFile = ui.ck_loop->isChecked();
+    QSettings s;
+    if (hasAudioInPref)
+        s.setValue("audioIn", ui.cb_audioInDevice->itemData(ui.cb_audioInDevice->currentIndex()).toString());
+    if (hasAudioOutPref)
+        s.setValue("audioOut", ui.cb_audioInDevice->itemData(ui.cb_audioOutDevice->currentIndex()).toString());
+    if (hasVideoInPref)
+        s.setValue("videoIn", ui.cb_audioInDevice->itemData(ui.cb_videoInDevice->currentIndex()).toString());
+    if (hasAudioParams)
+        s.setValue("audioParams", ui.cb_audioMode->itemData(ui.cb_audioMode->currentIndex()).value<PsiMedia::AudioParams>().toString());
+    if (hasVideoParams)
+        s.setValue("videoParams", ui.cb_videoMode->itemData(ui.cb_videoMode->currentIndex()).value<PsiMedia::VideoParams>().toString());
+
+    s.setValue("liveInput", ui.rb_sendLive->isChecked());
+	s.setValue("file", ui.le_file->text());
+    s.setValue("loopFile", ui.ck_loop->isChecked());
+
+    featuresWatcher->updateDefaults();
 
 	QDialog::accept();
 }
@@ -641,7 +530,8 @@ MainWin::MainWin() :
 		connect(action_AboutProvider, SIGNAL(triggered()), SLOT(doAboutProvider()));
 	}
 
-	config = getDefaultConfiguration();
+	featureWatcher = new FeaturesWatcher(this);
+    connect(featureWatcher, &FeaturesWatcher::updated, this, &MainWin::featuresUpdated);
 
 	ui.pb_transmit->setEnabled(false);
 	ui.pb_stopSend->setEnabled(false);
@@ -727,6 +617,11 @@ MainWin::~MainWin()
 	cleanup_record();
 }
 
+void MainWin::featuresUpdated()
+{
+    // TODO
+}
+
 void MainWin::setSendFieldsEnabled(bool b)
 {
 	ui.lb_remoteAddress->setEnabled(b);
@@ -807,9 +702,8 @@ void MainWin::cleanup_record()
 
 void MainWin::doConfigure()
 {
-	ConfigDlg w(config, this);
+	ConfigDlg w(this);
 	w.exec();
-	config = w.config;
 }
 
 void MainWin::doAbout()
@@ -831,11 +725,10 @@ void MainWin::doAboutProvider()
 
 void MainWin::start_send()
 {
-	config = adjustConfiguration(config, PsiMediaFeaturesSnapshot(PsiMediaFeaturesSnapshot::Input));
-
 	transmitAudio = false;
 	transmitVideo = false;
 
+    auto config = featureWatcher->configuration();
 	if(config.liveInput)
 	{
 		if(config.audioInDeviceId.isEmpty() && config.videoInDeviceId.isEmpty())
@@ -857,8 +750,7 @@ void MainWin::start_send()
 
 		if(!config.videoInDeviceId.isEmpty())
 		{
-            qDebug("Video input device is disabled till finished with audio");
-			producer.setVideoInputDevice(config.videoInDeviceId); // FIXME
+            producer.setVideoInputDevice(config.videoInDeviceId);
 
 			transmitVideo = true;
 		}
@@ -966,8 +858,6 @@ void MainWin::stop_send()
 
 void MainWin::start_receive()
 {
-	config = adjustConfiguration(config, PsiMediaFeaturesSnapshot(PsiMediaFeaturesSnapshot::Output));
-
 	QString receiveConfig = ui.le_receiveConfig->text();
 	PsiMedia::PayloadInfo audio;
 	PsiMedia::PayloadInfo video;
@@ -1010,6 +900,7 @@ void MainWin::start_receive()
 		}
 	}
 
+    auto config = featureWatcher->configuration();
 	if(receiveAudio && !config.audioOutDeviceId.isEmpty())
 	{
 		receiver.setAudioOutputDevice(config.audioOutDeviceId);
@@ -1251,6 +1142,9 @@ int main(int argc, char **argv)
 {
 	QApplication qapp(argc, argv);
 
+    qapp.setOrganizationName("psi-im.org");
+    qapp.setApplicationName("psimedia");
+
 #ifndef GSTPROVIDER_STATIC
 	QString pluginFile;
 	QString resourcePath;
@@ -1261,10 +1155,10 @@ int main(int argc, char **argv)
 #if defined(Q_OS_WIN)
 		pluginFile = findPlugin(".", "gstprovider" DEBUG_POSTFIX);
 		if(!pluginFile.isEmpty())
-			resourcePath = QCoreApplication::applicationDirPath() + "/gstreamer-0.10";
+			resourcePath = QCoreApplication::applicationDirPath() + "/gstreamer-1.0";
 #elif defined(Q_OS_MAC)
 		pluginFile = findPlugin("../PlugIns", "gstprovider" DEBUG_POSTFIX);
-		// codesign can't sign gstreamer-0.10 folder
+		// codesign can't sign gstreamer-1.0 folder
 		if(!pluginFile.isEmpty())
 			resourcePath = QCoreApplication::applicationDirPath() + "/../PlugIns/gstreamer";
 #endif
@@ -1297,4 +1191,96 @@ int main(int argc, char **argv)
 
 	qapp.exec();
 	return 0;
+}
+
+//----------------------------------------------------
+// FeaturesWatcher
+//----------------------------------------------------
+FeaturesWatcher::FeaturesWatcher(QObject *parent)
+{
+    QSettings s;
+
+    connect(&_features, &PsiMedia::Features::updated, this, &FeaturesWatcher::featuresUpdated);
+    updateDefaults();
+}
+
+FeaturesWatcher::~FeaturesWatcher()
+{
+}
+
+
+void FeaturesWatcher::updateDefaults()
+{
+    QSettings s;
+
+    _configuration.liveInput = s.value("liveInput", true).toBool();
+	_configuration.loopFile = s.value("liveFile", true).toBool();
+    _configuration.file = s.value("file", QString()).toString();
+
+    bool hasAudioIn = s.contains("audioIn");   // if we ever opened configuration dialog and set something there
+    bool hasAudioOut = s.contains("audioOut");
+    bool hasVideoIn = s.contains("videoIn");
+    QString userPrefAudioIn = s.value("audioIn").toString();
+    QString userPrefAudioOut = s.value("audioOut").toString();
+    QString userPrefVideoIn = s.value("videoIn").toString();
+    QString audioParams = s.value("audioParams").toString();
+    QString videoParams = s.value("videoParams").toString();
+
+    _configuration.audioOutDeviceId = (hasAudioIn && userPrefAudioIn.isEmpty())?
+                QString() : defaultDeviceId(_features.audioOutputDevices(), userPrefAudioOut);
+    _configuration.audioInDeviceId = (hasAudioOut && userPrefAudioOut.isEmpty())?
+                QString() : defaultDeviceId(_features.audioInputDevices(), userPrefAudioIn);
+    _configuration.videoInDeviceId = (hasVideoIn && userPrefVideoIn.isEmpty())?
+                QString() : defaultDeviceId(_features.videoInputDevices(), userPrefVideoIn);
+
+    bool found = false;
+    for (auto const &d: _features.supportedAudioModes()) {
+        if (d.toString() == audioParams) {
+            _configuration.audioParams = d;
+            found = true;
+            break;
+        }
+    }
+    if (!found && _features.supportedAudioModes().count())
+        _configuration.audioParams = _features.supportedAudioModes().first();
+
+    found = false;
+    for (auto const &d: _features.supportedVideoModes()) {
+        if (d.toString() == videoParams) {
+            _configuration.videoParams = d;
+            found = true;
+            break;
+        }
+    }
+    if (!found && _features.supportedVideoModes().count())
+        _configuration.videoParams = _features.supportedVideoModes().first();
+}
+
+void FeaturesWatcher::featuresUpdated()
+{
+    updateDefaults();
+    emit updated();
+}
+
+QString FeaturesWatcher::defaultDeviceId(const QList<PsiMedia::Device> &devs, const QString &userPref)
+{
+    QString def;
+    bool userPrefFound = false;
+    for (auto const &d: devs) {
+        if (d.isDefault())
+            def = d.id();
+        if (d.id() == userPref) {
+            userPrefFound = true;
+            break;
+        }
+    }
+
+    if (userPrefFound)
+        return userPref;
+
+    if (def.isEmpty() && !devs.isEmpty()) {
+        def = devs.first().id();
+    }
+
+    return def;
 }

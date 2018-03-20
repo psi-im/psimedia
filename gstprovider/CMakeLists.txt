@@ -67,11 +67,19 @@ if(WIN32)
         gstrtp-1.0
         setupapi
         ksuser
-        amstrmid
         dsound
-        dxerr9
         ole32
     )
+    if(USE_MXE OR MSVC)
+        list(APPEND PROJECT_LDFLAGS
+            amstrmid
+        )
+    endif()
+    if(NOT MSVC)
+        list(APPEND PROJECT_LDFLAGS
+            dxerr9
+        )
+    endif()
 endif()
 
 include_directories(${GST_INCLUDES} ${CMAKE_SOURCE_DIR}/psimedia)
