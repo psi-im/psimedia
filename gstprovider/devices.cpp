@@ -22,6 +22,7 @@
 
 #include <QMutex>
 #include <QSet>
+#include <QMap>
 #include <QSize>
 #include <QStringList>
 #include <gst/gst.h>
