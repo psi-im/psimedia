@@ -82,11 +82,11 @@ class ConfigDlg : public QDialog
 public:
 	Ui::Config ui;
     FeaturesWatcher *featuresWatcher;
-    bool hasAudioInPref;
-    bool hasAudioOutPref;
-    bool hasVideoInPref;
-    bool hasAudioParams;
-    bool hasVideoParams;
+    bool hasAudioInPref = false;
+    bool hasAudioOutPref = false;
+    bool hasVideoInPref = false;
+    bool hasAudioParams = false;
+    bool hasVideoParams = false;
 
 	ConfigDlg(MainWin *parent = 0);
 	int findAudioParamsData(QComboBox *cb, const PsiMedia::AudioParams &params);

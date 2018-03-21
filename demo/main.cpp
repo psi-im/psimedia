@@ -199,13 +199,6 @@ ConfigDlg::ConfigDlg(MainWin *parent) :
 	ui.setupUi(this);
 	setWindowTitle(tr("Configure Audio/Video"));
 
-    QSettings s;
-    hasAudioInPref = s.contains("audioIn");   // if we ever opened configuration dialog before and set something there
-    hasAudioOutPref = s.contains("audioOut");
-    hasVideoInPref = s.contains("videoIn");
-    hasAudioParams = s.contains("audioParams");
-    hasVideoParams = s.contains("videoParams");
-
     // with qt-5.7 and above we can use qOverlaod instead of these awful casts
     connect(ui.cb_audioInDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasAudioInPref = true; });
     connect(ui.cb_audioOutDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasAudioOutPref = true; });
@@ -352,9 +345,9 @@ void ConfigDlg::accept()
     if (hasAudioInPref)
         s.setValue("audioIn", ui.cb_audioInDevice->itemData(ui.cb_audioInDevice->currentIndex()).toString());
     if (hasAudioOutPref)
-        s.setValue("audioOut", ui.cb_audioInDevice->itemData(ui.cb_audioOutDevice->currentIndex()).toString());
+        s.setValue("audioOut", ui.cb_audioOutDevice->itemData(ui.cb_audioOutDevice->currentIndex()).toString());
     if (hasVideoInPref)
-        s.setValue("videoIn", ui.cb_audioInDevice->itemData(ui.cb_videoInDevice->currentIndex()).toString());
+        s.setValue("videoIn", ui.cb_videoInDevice->itemData(ui.cb_videoInDevice->currentIndex()).toString());
     if (hasAudioParams)
         s.setValue("audioParams", ui.cb_audioMode->itemData(ui.cb_audioMode->currentIndex()).value<PsiMedia::AudioParams>().toString());
     if (hasVideoParams)
@@ -1226,10 +1219,10 @@ void FeaturesWatcher::updateDefaults()
     QString audioParams = s.value("audioParams").toString();
     QString videoParams = s.value("videoParams").toString();
 
-    _configuration.audioOutDeviceId = (hasAudioIn && userPrefAudioIn.isEmpty())?
-                QString() : defaultDeviceId(_features.audioOutputDevices(), userPrefAudioOut);
-    _configuration.audioInDeviceId = (hasAudioOut && userPrefAudioOut.isEmpty())?
+    _configuration.audioInDeviceId = (hasAudioIn && userPrefAudioIn.isEmpty())?
                 QString() : defaultDeviceId(_features.audioInputDevices(), userPrefAudioIn);
+    _configuration.audioOutDeviceId = (hasAudioOut && userPrefAudioOut.isEmpty())?
+                QString() : defaultDeviceId(_features.audioOutputDevices(), userPrefAudioOut);
     _configuration.videoInDeviceId = (hasVideoIn && userPrefVideoIn.isEmpty())?
                 QString() : defaultDeviceId(_features.videoInputDevices(), userPrefVideoIn);
 
