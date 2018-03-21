@@ -30,16 +30,6 @@
 
 namespace PsiMedia {
 
-#if !defined(Q_OS_LINUX)
-// add more platforms to the ifdef when ready
-// below is a default impl
-QList<GstDevice> PlatformDeviceMonitor::getDevices()
-{
-    return QList<GstDevice>();
-}
-#endif
-
-
 #if 0
 // for elements that we can't enumerate devices for, we need a way to ensure
 //   that at least the default device works
@@ -163,7 +153,6 @@ public:
     DeviceMonitor *q;
     GstDeviceMonitor *_monitor = nullptr;
     QMap<QString,GstDevice> _devices;
-    PlatformDeviceMonitor *_platform = nullptr;
     QMutex m;
 
     bool videoSrcFirst = true;
@@ -252,15 +241,6 @@ void DeviceMonitor::updateDevList()
     }
     g_list_free(devs);
 
-    if (d->_platform) {
-        auto l = d->_platform->getDevices();
-        for (auto const &pdev: l) {
-            if (!d->_devices.contains(pdev.id)) {
-                d->_devices.insert(pdev.id, pdev);
-            }
-        }
-    }
-
     for (auto const &pdev: d->_devices) {
         qDebug("found dev: %s (%s)", qPrintable(pdev.name), qPrintable(pdev.id));
     }
@@ -310,7 +290,6 @@ DeviceMonitor::DeviceMonitor(GstMainLoop *mainLoop) :
     qRegisterMetaType<GstDevice>("GstDevice");
 
     auto context = mainLoop->mainContext();
-    d->_platform = new PlatformDeviceMonitor;
     d->_monitor = gst_device_monitor_new();
 
     GstBus *bus = gst_device_monitor_get_bus (d->_monitor);
@@ -339,7 +318,6 @@ DeviceMonitor::DeviceMonitor(GstMainLoop *mainLoop) :
 
 DeviceMonitor::~DeviceMonitor()
 {
-    delete d->_platform;
     g_object_unref(d->_monitor);
     delete d;
 }
