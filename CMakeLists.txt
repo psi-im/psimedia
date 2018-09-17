@@ -59,9 +59,14 @@ if(NOT MSVC)
 endif()
 
 #add extra search paths for libraries and includes
-set(LIB_SUFFIX "" CACHE STRING "Define suffix of directory name (32/64)" )
-set(BIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE STRING "Directory where binary will install")
-set(LIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/${CLIENT_NAME}/plugins" CACHE STRING "Directory where plugin will install")
+if(WIN32)
+    set(BIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}" CACHE STRING "Directory where binary will be installed")
+    set(LIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/plugins" CACHE STRING "Directory where plugin will be installed")
+else(WIN32)
+    set(LIB_SUFFIX "" CACHE STRING "Define suffix of directory name (32/64)" )
+    set(BIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE STRING "Directory where binary will be installed")
+    set(LIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/${CLIENT_NAME}/plugins" CACHE STRING "Directory where plugin will be installed")
+endif(WIN32)
 
 if(BUILD_DEMO)
   add_subdirectory(demo)
