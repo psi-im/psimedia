@@ -12,3 +12,4 @@ conf.pri
 */*.o
 demo/demo
 gstprovider/libgstprovider.*
+CMakeLists.txt.*
