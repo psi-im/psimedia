@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.11)
+cmake_minimum_required(VERSION 3.1.0)
 
 find_package(Qt5 COMPONENTS Core Widgets REQUIRED)
 
@@ -61,8 +61,9 @@ set(GST_INCLUDES
 )
 
 set(CMAKE_MODULE_LINKER_FLAGS
-    ${GLIBMODULES_LDFLAGS_OTHER}
-    ${GSTMODULES_LDFLAGS_OTHER}
+   "${CMAKE_MODULE_LINKER_FLAGS} \
+    ${GLIBMODULES_LDFLAGS_OTHER} \
+    ${GSTMODULES_LDFLAGS_OTHER}"
 )
 
 if(WIN32)

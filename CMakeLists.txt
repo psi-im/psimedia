@@ -1,6 +1,6 @@
 project(gstprovider)
 
-cmake_minimum_required(VERSION 2.8.11)
+cmake_minimum_required(VERSION 3.1.0)
 
 #Detect MXE cross-compilation
 if( (CMAKE_CROSSCOMPILING) AND (DEFINED MSYS) )
@@ -54,9 +54,7 @@ endif()
 
 message(STATUS "${PROJECT_NAME} module will be installed in plugins directory for client: \"${CLIENT_NAME}\"")
 
-if(NOT MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-endif()
+set(CMAKE_CXX_STANDARD 11)
 
 #add extra search paths for libraries and includes
 if(WIN32)
