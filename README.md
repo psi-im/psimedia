@@ -35,6 +35,7 @@ demo/          demonstration GUI program
 ```
 
 To build the plugin and demo program, run:
+
 ```sh
 qt-qconf
 ./configure
@@ -49,18 +50,22 @@ For example, in Psi+ program `gstprovider` plugin should be placed into:
 * the root Psi+ directory on MS Windows systems (for example, `C:\\Program Files\Psi+\`)
 
 If you want to test demo program, use environment variable `PSI_MEDIA_PLUGIN` for setting the path to gstprovider plugin. For example:
+
 ```
 PSI_MEDIA_PLUGIN=/usr/lib/psi-plus/plugins/libgstprovider.so ./demo
 ```
 
 Alternatively you may build plugin and demo using `cmake`:
+
 ```sh
 mkdir -p builddir
 cd builddir
 cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Release
 make
 ```
+
 There is special "make install" target in this case oriented to Psi IM users, see:
+
 ```
 make install DESTDIR=./out
 tree ./out
