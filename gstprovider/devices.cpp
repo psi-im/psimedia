@@ -46,21 +46,21 @@ QList<GstDevice> PlatformDeviceMonitor::getDevices()
 // FIXME: why do we have both this function and test_video() ?
 static bool test_element(const QString &element_name)
 {
-	GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), NULL);
-	if(!e)
-		return 0;
+    GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), NULL);
+    if(!e)
+        return 0;
 
-	gst_element_set_state(e, GST_STATE_READY);
-	int ret = gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
+    gst_element_set_state(e, GST_STATE_READY);
+    int ret = gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
 
-	gst_element_set_state(e, GST_STATE_NULL);
-	gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
-	g_object_unref(G_OBJECT(e));
+    gst_element_set_state(e, GST_STATE_NULL);
+    gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
+    g_object_unref(G_OBJECT(e));
 
-	if(ret != GST_STATE_CHANGE_SUCCESS)
-		return false;
+    if(ret != GST_STATE_CHANGE_SUCCESS)
+        return false;
 
-	return true;
+    return true;
 }
 #endif
 
@@ -68,93 +68,93 @@ static bool test_element(const QString &element_name)
 static gchar *
 get_launch_line (::GstDevice * device)
 {
-  static const char *const ignored_propnames[] =
-      { "name", "parent", "direction", "template", "caps", NULL };
-  GString *launch_line;
-  GstElement *element;
-  GstElement *pureelement;
-  GParamSpec **properties, *property;
-  GValue value = G_VALUE_INIT;
-  GValue pvalue = G_VALUE_INIT;
-  guint i, number_of_properties;
-  GstElementFactory *factory;
+    static const char *const ignored_propnames[] =
+    { "name", "parent", "direction", "template", "caps", NULL };
+    GString *launch_line;
+    GstElement *element;
+    GstElement *pureelement;
+    GParamSpec **properties, *property;
+    GValue value = G_VALUE_INIT;
+    GValue pvalue = G_VALUE_INIT;
+    guint i, number_of_properties;
+    GstElementFactory *factory;
 
-  element = gst_device_create_element (device, NULL);
+    element = gst_device_create_element (device, NULL);
 
-  if (!element)
-    return NULL;
+    if (!element)
+        return NULL;
 
-  factory = gst_element_get_factory (element);
-  if (!factory) {
-    gst_object_unref (element);
-    return NULL;
-  }
+    factory = gst_element_get_factory (element);
+    if (!factory) {
+        gst_object_unref (element);
+        return NULL;
+    }
 
-  if (!gst_plugin_feature_get_name (factory)) {
-    gst_object_unref (element);
-    return NULL;
-  }
+    if (!gst_plugin_feature_get_name (factory)) {
+        gst_object_unref (element);
+        return NULL;
+    }
 
-  launch_line = g_string_new (gst_plugin_feature_get_name (factory));
+    launch_line = g_string_new (gst_plugin_feature_get_name (factory));
 
-  pureelement = gst_element_factory_create (factory, NULL);
+    pureelement = gst_element_factory_create (factory, NULL);
 
-  /* get paramspecs and show non-default properties */
-  properties =
-      g_object_class_list_properties (G_OBJECT_GET_CLASS (element),
-      &number_of_properties);
-  if (properties) {
-    for (i = 0; i < number_of_properties; i++) {
-      gint j;
-      gboolean ignore = FALSE;
-      property = properties[i];
+    /* get paramspecs and show non-default properties */
+    properties =
+            g_object_class_list_properties (G_OBJECT_GET_CLASS (element),
+                                            &number_of_properties);
+    if (properties) {
+        for (i = 0; i < number_of_properties; i++) {
+            gint j;
+            gboolean ignore = FALSE;
+            property = properties[i];
 
-      /* skip some properties */
-      if ((property->flags & G_PARAM_READWRITE) != G_PARAM_READWRITE)
-        continue;
+            /* skip some properties */
+            if ((property->flags & G_PARAM_READWRITE) != G_PARAM_READWRITE)
+                continue;
 
-      for (j = 0; ignored_propnames[j]; j++)
-        if (!g_strcmp0 (ignored_propnames[j], property->name))
-          ignore = TRUE;
+            for (j = 0; ignored_propnames[j]; j++)
+                if (!g_strcmp0 (ignored_propnames[j], property->name))
+                    ignore = TRUE;
 
-      if (ignore)
-        continue;
+            if (ignore)
+                continue;
 
-      /* Can't use _param_value_defaults () because sub-classes modify the
+            /* Can't use _param_value_defaults () because sub-classes modify the
        * values already.
        */
 
-      g_value_init (&value, property->value_type);
-      g_value_init (&pvalue, property->value_type);
-      g_object_get_property (G_OBJECT (element), property->name, &value);
-      g_object_get_property (G_OBJECT (pureelement), property->name, &pvalue);
-      if (gst_value_compare (&value, &pvalue) != GST_VALUE_EQUAL) {
-        gchar *valuestr = gst_value_serialize (&value);
+            g_value_init (&value, property->value_type);
+            g_value_init (&pvalue, property->value_type);
+            g_object_get_property (G_OBJECT (element), property->name, &value);
+            g_object_get_property (G_OBJECT (pureelement), property->name, &pvalue);
+            if (gst_value_compare (&value, &pvalue) != GST_VALUE_EQUAL) {
+                gchar *valuestr = gst_value_serialize (&value);
 
-        if (!valuestr) {
-          GST_WARNING ("Could not serialize property %s:%s",
-              GST_OBJECT_NAME (element), property->name);
-          g_free (valuestr);
-          goto next;
+                if (!valuestr) {
+                    GST_WARNING ("Could not serialize property %s:%s",
+                                 GST_OBJECT_NAME (element), property->name);
+                    g_free (valuestr);
+                    goto next;
+                }
+
+                g_string_append_printf (launch_line, " %s=%s",
+                                        property->name, valuestr);
+                g_free (valuestr);
+
+            }
+
+next:
+            g_value_unset (&value);
+            g_value_unset (&pvalue);
         }
-
-        g_string_append_printf (launch_line, " %s=%s",
-            property->name, valuestr);
-        g_free (valuestr);
-
-      }
-
-    next:
-      g_value_unset (&value);
-      g_value_unset (&pvalue);
+        g_free (properties);
     }
-    g_free (properties);
-  }
 
-  gst_object_unref (element);
-  gst_object_unref (pureelement);
+    gst_object_unref (element);
+    gst_object_unref (pureelement);
 
-  return g_string_free (launch_line, FALSE);
+    return g_string_free (launch_line, FALSE);
 }
 
 class DeviceMonitor::Private

@@ -33,18 +33,18 @@
 class Configuration
 {
 public:
-	bool liveInput;
-	QString audioOutDeviceId, audioInDeviceId, videoInDeviceId;
-	QString file;
-	bool loopFile;
-	PsiMedia::AudioParams audioParams;
-	PsiMedia::VideoParams videoParams;
+    bool liveInput;
+    QString audioOutDeviceId, audioInDeviceId, videoInDeviceId;
+    QString file;
+    bool loopFile;
+    PsiMedia::AudioParams audioParams;
+    PsiMedia::VideoParams videoParams;
 
-	Configuration() :
-		liveInput(false),
-		loopFile(false)
-	{
-	}
+    Configuration() :
+        liveInput(false),
+        loopFile(false)
+    {
+    }
 };
 
 class FeaturesWatcher : public QObject
@@ -77,10 +77,10 @@ signals:
 class MainWin;
 class ConfigDlg : public QDialog
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	Ui::Config ui;
+    Ui::Config ui;
     FeaturesWatcher *featuresWatcher;
     bool hasAudioInPref = false;
     bool hasAudioOutPref = false;
@@ -88,16 +88,16 @@ public:
     bool hasAudioParams = false;
     bool hasVideoParams = false;
 
-	ConfigDlg(MainWin *parent = 0);
-	int findAudioParamsData(QComboBox *cb, const PsiMedia::AudioParams &params);
-	int findVideoParamsData(QComboBox *cb, const PsiMedia::VideoParams &params);
+    ConfigDlg(MainWin *parent = 0);
+    int findAudioParamsData(QComboBox *cb, const PsiMedia::AudioParams &params);
+    int findVideoParamsData(QComboBox *cb, const PsiMedia::VideoParams &params);
 
 protected:
-	virtual void accept();
+    virtual void accept();
 
 private slots:
-	void live_toggled(bool on);
-	void file_toggled(bool on);
+    void live_toggled(bool on);
+    void file_toggled(bool on);
     void file_choose();
     void featuresUpdated();
 };
@@ -105,98 +105,98 @@ private slots:
 // handles two udp sockets
 class RtpSocketGroup : public QObject
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	QUdpSocket socket[2];
+    QUdpSocket socket[2];
 
-	RtpSocketGroup(QObject *parent = 0);
-	bool bind(int basePort);
-	
+    RtpSocketGroup(QObject *parent = 0);
+    bool bind(int basePort);
+
 signals:
-	void readyRead(int offset);
-	void datagramWritten(int offset);
+    void readyRead(int offset);
+    void datagramWritten(int offset);
 
 private slots:
-	void sock_readyRead();
-	void sock_bytesWritten(qint64 bytes);
+    void sock_readyRead();
+    void sock_bytesWritten(qint64 bytes);
 };
 
 // bind a channel to a socket group.
 // takes ownership of socket group.
 class RtpBinding : public QObject
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	enum Mode
-	{
-		Send,
-		Receive
-	};
+    enum Mode
+    {
+        Send,
+        Receive
+    };
 
-	Mode mode;
-	PsiMedia::RtpChannel *channel;
-	RtpSocketGroup *socketGroup;
-	QHostAddress sendAddress;
-	int sendBasePort;
+    Mode mode;
+    PsiMedia::RtpChannel *channel;
+    RtpSocketGroup *socketGroup;
+    QHostAddress sendAddress;
+    int sendBasePort;
 
-	RtpBinding(Mode _mode, PsiMedia::RtpChannel *_channel, RtpSocketGroup *_socketGroup, QObject *parent = 0);
-	
+    RtpBinding(Mode _mode, PsiMedia::RtpChannel *_channel, RtpSocketGroup *_socketGroup, QObject *parent = 0);
+
 private slots:
-	void net_ready(int offset);
-	void net_written(int offset);
-	void app_ready();
-	void app_written(int count);
+    void net_ready(int offset);
+    void net_written(int offset);
+    void app_ready();
+    void app_written(int count);
 };
 
 class MainWin : public QMainWindow
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	Ui::MainWin ui;
-	QAction *action_AboutProvider;
-	QString creditName;
-	PsiMedia::RtpSession producer;
-	PsiMedia::RtpSession receiver;
-	bool transmitAudio, transmitVideo, transmitting;
-	bool receiveAudio, receiveVideo;
-	RtpBinding *sendAudioRtp, *sendVideoRtp;
-	RtpBinding *receiveAudioRtp, *receiveVideoRtp;
-	bool recording;
-	QFile *recordFile;
+    Ui::MainWin ui;
+    QAction *action_AboutProvider;
+    QString creditName;
+    PsiMedia::RtpSession producer;
+    PsiMedia::RtpSession receiver;
+    bool transmitAudio, transmitVideo, transmitting;
+    bool receiveAudio, receiveVideo;
+    RtpBinding *sendAudioRtp, *sendVideoRtp;
+    RtpBinding *receiveAudioRtp, *receiveVideoRtp;
+    bool recording;
+    QFile *recordFile;
     FeaturesWatcher *featureWatcher;
 
-	MainWin();
-	~MainWin();
-	void setSendFieldsEnabled(bool b);
-	void setSendConfig(const QString &s);
-	void setReceiveFieldsEnabled(bool b);
-	static QString rtpSessionErrorToString(PsiMedia::RtpSession::Error e);
-	void cleanup_send_rtp();
-	void cleanup_receive_rtp();
-	void cleanup_record();
-	
+    MainWin();
+    ~MainWin();
+    void setSendFieldsEnabled(bool b);
+    void setSendConfig(const QString &s);
+    void setReceiveFieldsEnabled(bool b);
+    static QString rtpSessionErrorToString(PsiMedia::RtpSession::Error e);
+    void cleanup_send_rtp();
+    void cleanup_receive_rtp();
+    void cleanup_record();
+
 private slots:
-	void doConfigure();
-	void doAbout();
-	void doAboutProvider();
-	void start_send();
-	void transmit();
-	void stop_send();
-	void start_receive();
-	void stop_receive();
-	void change_volume_mic(int value);
-	void change_volume_spk(int value);
-	void producer_started();
-	void producer_stopped();
-	void producer_finished();
-	void producer_error();
-	void receiver_started();
-	void receiver_stoppedRecording();
-	void receiver_stopped();
-	void receiver_error();
+    void doConfigure();
+    void doAbout();
+    void doAboutProvider();
+    void start_send();
+    void transmit();
+    void stop_send();
+    void start_receive();
+    void stop_receive();
+    void change_volume_mic(int value);
+    void change_volume_spk(int value);
+    void producer_started();
+    void producer_stopped();
+    void producer_finished();
+    void producer_error();
+    void receiver_started();
+    void receiver_stoppedRecording();
+    void receiver_stopped();
+    void receiver_error();
     void record_toggle();
     void featuresUpdated();
 };

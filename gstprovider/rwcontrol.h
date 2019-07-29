@@ -85,74 +85,74 @@ class RwControlRemote;
 class RwControlConfigDevices
 {
 public:
-	QString audioOutId;
-	QString audioInId;
-	QString videoInId;
-	QString fileNameIn;
-	QByteArray fileDataIn;
-	bool loopFile;
-	bool useVideoPreview;
-	bool useVideoOut;
-	int audioOutVolume;
-	int audioInVolume;
+    QString audioOutId;
+    QString audioInId;
+    QString videoInId;
+    QString fileNameIn;
+    QByteArray fileDataIn;
+    bool loopFile;
+    bool useVideoPreview;
+    bool useVideoOut;
+    int audioOutVolume;
+    int audioInVolume;
 
-	RwControlConfigDevices() :
-		loopFile(false),
-		useVideoPreview(false),
-		useVideoOut(false),
-		audioOutVolume(-1),
-		audioInVolume(-1)
-	{
-	}
+    RwControlConfigDevices() :
+        loopFile(false),
+        useVideoPreview(false),
+        useVideoOut(false),
+        audioOutVolume(-1),
+        audioInVolume(-1)
+    {
+    }
 };
 
 class RwControlConfigCodecs
 {
 public:
-	bool useLocalAudioParams;
-	bool useLocalVideoParams;
-	bool useRemoteAudioPayloadInfo;
-	bool useRemoteVideoPayloadInfo;
+    bool useLocalAudioParams;
+    bool useLocalVideoParams;
+    bool useRemoteAudioPayloadInfo;
+    bool useRemoteVideoPayloadInfo;
 
-	QList<PAudioParams> localAudioParams;
-	QList<PVideoParams> localVideoParams;
-	QList<PPayloadInfo> remoteAudioPayloadInfo;
-	QList<PPayloadInfo> remoteVideoPayloadInfo;
+    QList<PAudioParams> localAudioParams;
+    QList<PVideoParams> localVideoParams;
+    QList<PPayloadInfo> remoteAudioPayloadInfo;
+    QList<PPayloadInfo> remoteVideoPayloadInfo;
 
-	int maximumSendingBitrate;
+    int maximumSendingBitrate;
 
-	RwControlConfigCodecs() :
-		useLocalAudioParams(false),
-		useLocalVideoParams(false),
-		useRemoteAudioPayloadInfo(false),
-		useRemoteVideoPayloadInfo(false),
-		maximumSendingBitrate(-1)
-	{
-	}
+    RwControlConfigCodecs() :
+        useLocalAudioParams(false),
+        useLocalVideoParams(false),
+        useRemoteAudioPayloadInfo(false),
+        useRemoteVideoPayloadInfo(false),
+        maximumSendingBitrate(-1)
+    {
+    }
 };
 
 class RwControlTransmit
 {
 public:
-	bool useAudio;
-	bool useVideo;
+    bool useAudio;
+    bool useVideo;
 
-	RwControlTransmit() :
-		useAudio(false),
-		useVideo(false)
-	{
-	}
+    RwControlTransmit() :
+        useAudio(false),
+        useVideo(false)
+    {
+    }
 };
 
 class RwControlRecord
 {
 public:
-	bool enabled;
+    bool enabled;
 
-	RwControlRecord() :
-		enabled(false)
-	{
-	}
+    RwControlRecord() :
+        enabled(false)
+    {
+    }
 };
 
 // note: if this is received spontaneously, then only finished, error, and
@@ -160,308 +160,308 @@ public:
 class RwControlStatus
 {
 public:
-	QList<PAudioParams> localAudioParams;
-	QList<PVideoParams> localVideoParams;
-	QList<PPayloadInfo> localAudioPayloadInfo;
-	QList<PPayloadInfo> localVideoPayloadInfo;
-	QList<PPayloadInfo> remoteAudioPayloadInfo;
-	QList<PPayloadInfo> remoteVideoPayloadInfo;
-	bool canTransmitAudio;
-	bool canTransmitVideo;
+    QList<PAudioParams> localAudioParams;
+    QList<PVideoParams> localVideoParams;
+    QList<PPayloadInfo> localAudioPayloadInfo;
+    QList<PPayloadInfo> localVideoPayloadInfo;
+    QList<PPayloadInfo> remoteAudioPayloadInfo;
+    QList<PPayloadInfo> remoteVideoPayloadInfo;
+    bool canTransmitAudio;
+    bool canTransmitVideo;
 
-	bool stopped;
-	bool finished;
-	bool error;
-	int errorCode;
+    bool stopped;
+    bool finished;
+    bool error;
+    int errorCode;
 
-	RwControlStatus() :
-		canTransmitAudio(false),
-		canTransmitVideo(false),
-		stopped(false),
-		finished(false),
-		error(false),
-		errorCode(-1)
-	{
-	}
+    RwControlStatus() :
+        canTransmitAudio(false),
+        canTransmitVideo(false),
+        stopped(false),
+        finished(false),
+        error(false),
+        errorCode(-1)
+    {
+    }
 };
 
 class RwControlAudioIntensity
 {
 public:
-	enum Type
-	{
-		Output,
-		Input
-	};
+    enum Type
+    {
+        Output,
+        Input
+    };
 
-	Type type;
-	int value;
+    Type type;
+    int value;
 
-	RwControlAudioIntensity() :
-		type((Type)-1),
-		value(-1)
-	{
-	}
+    RwControlAudioIntensity() :
+        type((Type)-1),
+        value(-1)
+    {
+    }
 };
 
 // always remote -> local, for internal use
 class RwControlFrame
 {
 public:
-	enum Type
-	{
-		Preview,
-		Output
-	};
+    enum Type
+    {
+        Preview,
+        Output
+    };
 
-	Type type;
-	QImage image;
+    Type type;
+    QImage image;
 };
 
 // internal
 class RwControlMessage
 {
 public:
-	enum Type
-	{
-		Start,
-		Stop,
-		UpdateDevices,
-		UpdateCodecs,
-		Transmit,
-		Record,
-		Status,
-		AudioIntensity,
-		Frame
-	};
+    enum Type
+    {
+        Start,
+        Stop,
+        UpdateDevices,
+        UpdateCodecs,
+        Transmit,
+        Record,
+        Status,
+        AudioIntensity,
+        Frame
+    };
 
-	Type type;
+    Type type;
 
-	RwControlMessage(Type _type) :
-		type(_type)
-	{
-	}
+    RwControlMessage(Type _type) :
+        type(_type)
+    {
+    }
 
-	virtual ~RwControlMessage()
-	{
-	}
+    virtual ~RwControlMessage()
+    {
+    }
 };
 
 class RwControlStartMessage : public RwControlMessage
 {
 public:
-	RwControlConfigDevices devices;
-	RwControlConfigCodecs codecs;
+    RwControlConfigDevices devices;
+    RwControlConfigCodecs codecs;
 
-	RwControlStartMessage() :
-		RwControlMessage(RwControlMessage::Start)
-	{
-	}
+    RwControlStartMessage() :
+        RwControlMessage(RwControlMessage::Start)
+    {
+    }
 };
 
 class RwControlStopMessage : public RwControlMessage
 {
 public:
-	RwControlStopMessage() :
-		RwControlMessage(RwControlMessage::Stop)
-	{
-	}
+    RwControlStopMessage() :
+        RwControlMessage(RwControlMessage::Stop)
+    {
+    }
 };
 
 class RwControlUpdateDevicesMessage : public RwControlMessage
 {
 public:
-	RwControlConfigDevices devices;
+    RwControlConfigDevices devices;
 
-	RwControlUpdateDevicesMessage() :
-		RwControlMessage(RwControlMessage::UpdateDevices)
-	{
-	}
+    RwControlUpdateDevicesMessage() :
+        RwControlMessage(RwControlMessage::UpdateDevices)
+    {
+    }
 };
 
 class RwControlUpdateCodecsMessage : public RwControlMessage
 {
 public:
-	RwControlConfigCodecs codecs;
+    RwControlConfigCodecs codecs;
 
-	RwControlUpdateCodecsMessage() :
-		RwControlMessage(RwControlMessage::UpdateCodecs)
-	{
-	}
+    RwControlUpdateCodecsMessage() :
+        RwControlMessage(RwControlMessage::UpdateCodecs)
+    {
+    }
 };
 
 class RwControlTransmitMessage : public RwControlMessage
 {
 public:
-	RwControlTransmit transmit;
+    RwControlTransmit transmit;
 
-	RwControlTransmitMessage() :
-		RwControlMessage(RwControlMessage::Transmit)
-	{
-	}
+    RwControlTransmitMessage() :
+        RwControlMessage(RwControlMessage::Transmit)
+    {
+    }
 };
 
 class RwControlRecordMessage : public RwControlMessage
 {
 public:
-	RwControlRecord record;
+    RwControlRecord record;
 
-	RwControlRecordMessage() :
-		RwControlMessage(RwControlMessage::Record)
-	{
-	}
+    RwControlRecordMessage() :
+        RwControlMessage(RwControlMessage::Record)
+    {
+    }
 };
 
 class RwControlStatusMessage : public RwControlMessage
 {
 public:
-	RwControlStatus status;
+    RwControlStatus status;
 
-	RwControlStatusMessage() :
-		RwControlMessage(RwControlMessage::Status)
-	{
-	}
+    RwControlStatusMessage() :
+        RwControlMessage(RwControlMessage::Status)
+    {
+    }
 };
 
 class RwControlAudioIntensityMessage : public RwControlMessage
 {
 public:
-	RwControlAudioIntensity intensity;
+    RwControlAudioIntensity intensity;
 
-	RwControlAudioIntensityMessage() :
-		RwControlMessage(RwControlMessage::AudioIntensity)
-	{
-	}
+    RwControlAudioIntensityMessage() :
+        RwControlMessage(RwControlMessage::AudioIntensity)
+    {
+    }
 };
 
 class RwControlFrameMessage : public RwControlMessage
 {
 public:
-	RwControlFrame frame;
+    RwControlFrame frame;
 
-	RwControlFrameMessage() :
-		RwControlMessage(RwControlMessage::Frame),
-		frame()
-	{
-	}
+    RwControlFrameMessage() :
+        RwControlMessage(RwControlMessage::Frame),
+        frame()
+    {
+    }
 };
 
 class RwControlLocal : public QObject
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
-	RwControlLocal(GstMainLoop *thread, QObject *parent = 0);
-	~RwControlLocal();
+    RwControlLocal(GstMainLoop *thread, QObject *parent = 0);
+    ~RwControlLocal();
 
-	void start(const RwControlConfigDevices &devices, const RwControlConfigCodecs &codecs);
-	void stop(); // if called, may still receive many status messages before stopped
-	void updateDevices(const RwControlConfigDevices &devices);
-	void updateCodecs(const RwControlConfigCodecs &codecs);
-	void setTransmit(const RwControlTransmit &transmit);
-	void setRecord(const RwControlRecord &record);
+    void start(const RwControlConfigDevices &devices, const RwControlConfigCodecs &codecs);
+    void stop(); // if called, may still receive many status messages before stopped
+    void updateDevices(const RwControlConfigDevices &devices);
+    void updateCodecs(const RwControlConfigCodecs &codecs);
+    void setTransmit(const RwControlTransmit &transmit);
+    void setRecord(const RwControlRecord &record);
 
-	// can be called from any thread
-	void rtpAudioIn(const PRtpPacket &packet);
-	void rtpVideoIn(const PRtpPacket &packet);
+    // can be called from any thread
+    void rtpAudioIn(const PRtpPacket &packet);
+    void rtpVideoIn(const PRtpPacket &packet);
 
-	// can come from any thread.
-	// note that it is only safe to assign callbacks prior to starting.
-	// note if the stream is stopped while recording is active, then
-	//   stopped status will not be reported until EOF is delivered.
-	void *app;
-	void (*cb_rtpAudioOut)(const PRtpPacket &packet, void *app);
-	void (*cb_rtpVideoOut)(const PRtpPacket &packet, void *app);
-	void (*cb_recordData)(const QByteArray &packet, void *app);
+    // can come from any thread.
+    // note that it is only safe to assign callbacks prior to starting.
+    // note if the stream is stopped while recording is active, then
+    //   stopped status will not be reported until EOF is delivered.
+    void *app;
+    void (*cb_rtpAudioOut)(const PRtpPacket &packet, void *app);
+    void (*cb_rtpVideoOut)(const PRtpPacket &packet, void *app);
+    void (*cb_recordData)(const QByteArray &packet, void *app);
 
 signals:
-	// response to start, stop, updateCodecs, or it could be spontaneous
-	void statusReady(const RwControlStatus &status);
+    // response to start, stop, updateCodecs, or it could be spontaneous
+    void statusReady(const RwControlStatus &status);
 
-	void previewFrame(const QImage &img);
-	void outputFrame(const QImage &img);
-	void audioOutputIntensityChanged(int intensity);
-	void audioInputIntensityChanged(int intensity);
+    void previewFrame(const QImage &img);
+    void outputFrame(const QImage &img);
+    void audioOutputIntensityChanged(int intensity);
+    void audioInputIntensityChanged(int intensity);
 
 private slots:
-	void processMessages();
+    void processMessages();
 
 private:
-	GstMainLoop *thread_;
-	GSource *timer;
-	QMutex m;
-	QWaitCondition w;
-	RwControlRemote *remote_;
-	bool wake_pending;
+    GstMainLoop *thread_;
+    GSource *timer;
+    QMutex m;
+    QWaitCondition w;
+    RwControlRemote *remote_;
+    bool wake_pending;
 
-	QMutex in_mutex;
-	QList<RwControlMessage*> in;
+    QMutex in_mutex;
+    QList<RwControlMessage*> in;
 
-	static gboolean cb_doCreateRemote(gpointer data);
-	static gboolean cb_doDestroyRemote(gpointer data);
+    static gboolean cb_doCreateRemote(gpointer data);
+    static gboolean cb_doDestroyRemote(gpointer data);
 
-	gboolean doCreateRemote();
-	gboolean doDestroyRemote();
+    gboolean doCreateRemote();
+    gboolean doDestroyRemote();
 
-	friend class RwControlRemote;
-	void postMessage(RwControlMessage *msg);
+    friend class RwControlRemote;
+    void postMessage(RwControlMessage *msg);
 };
 
 class RwControlRemote
 {
 public:
-	RwControlRemote(GMainContext *mainContext, RwControlLocal *local);
-	~RwControlRemote();
+    RwControlRemote(GMainContext *mainContext, RwControlLocal *local);
+    ~RwControlRemote();
 
 private:
-	GSource *timer;
-	GMainContext *mainContext_;
-	QMutex m;
-	RwControlLocal *local_;
-	bool start_requested;
-	bool blocking;
-	bool pending_status;
+    GSource *timer;
+    GMainContext *mainContext_;
+    QMutex m;
+    RwControlLocal *local_;
+    bool start_requested;
+    bool blocking;
+    bool pending_status;
 
-	RtpWorker *worker;
-	QList<RwControlMessage*> in;
+    RtpWorker *worker;
+    QList<RwControlMessage*> in;
 
-	static gboolean cb_processMessages(gpointer data);
-	static void cb_worker_started(void *app);
-	static void cb_worker_updated(void *app);
-	static void cb_worker_stopped(void *app);
-	static void cb_worker_finished(void *app);
-	static void cb_worker_error(void *app);
-	static void cb_worker_audioOutputIntensity(int value, void *app);
-	static void cb_worker_audioInputIntensity(int value, void *app);
-	static void cb_worker_previewFrame(const RtpWorker::Frame &frame, void *app);
-	static void cb_worker_outputFrame(const RtpWorker::Frame &frame, void *app);
-	static void cb_worker_rtpAudioOut(const PRtpPacket &packet, void *app);
-	static void cb_worker_rtpVideoOut(const PRtpPacket &packet, void *app);
-	static void cb_worker_recordData(const QByteArray &packet, void *app);
+    static gboolean cb_processMessages(gpointer data);
+    static void cb_worker_started(void *app);
+    static void cb_worker_updated(void *app);
+    static void cb_worker_stopped(void *app);
+    static void cb_worker_finished(void *app);
+    static void cb_worker_error(void *app);
+    static void cb_worker_audioOutputIntensity(int value, void *app);
+    static void cb_worker_audioInputIntensity(int value, void *app);
+    static void cb_worker_previewFrame(const RtpWorker::Frame &frame, void *app);
+    static void cb_worker_outputFrame(const RtpWorker::Frame &frame, void *app);
+    static void cb_worker_rtpAudioOut(const PRtpPacket &packet, void *app);
+    static void cb_worker_rtpVideoOut(const PRtpPacket &packet, void *app);
+    static void cb_worker_recordData(const QByteArray &packet, void *app);
 
-	gboolean processMessages();
-	void worker_started();
-	void worker_updated();
-	void worker_stopped();
-	void worker_finished();
-	void worker_error();
-	void worker_audioOutputIntensity(int value);
-	void worker_audioInputIntensity(int value);
-	void worker_previewFrame(const RtpWorker::Frame &frame);
-	void worker_outputFrame(const RtpWorker::Frame &frame);
-	void worker_rtpAudioOut(const PRtpPacket &packet);
-	void worker_rtpVideoOut(const PRtpPacket &packet);
-	void worker_recordData(const QByteArray &packet);
+    gboolean processMessages();
+    void worker_started();
+    void worker_updated();
+    void worker_stopped();
+    void worker_finished();
+    void worker_error();
+    void worker_audioOutputIntensity(int value);
+    void worker_audioInputIntensity(int value);
+    void worker_previewFrame(const RtpWorker::Frame &frame);
+    void worker_outputFrame(const RtpWorker::Frame &frame);
+    void worker_rtpAudioOut(const PRtpPacket &packet);
+    void worker_rtpVideoOut(const PRtpPacket &packet);
+    void worker_recordData(const QByteArray &packet);
 
-	void resumeMessages();
+    void resumeMessages();
 
-	// return false to block further message processing
-	bool processMessage(RwControlMessage *msg);
+    // return false to block further message processing
+    bool processMessage(RwControlMessage *msg);
 
-	friend class RwControlLocal;
-	void postMessage(RwControlMessage *msg);
-	void rtpAudioIn(const PRtpPacket &packet);
-	void rtpVideoIn(const PRtpPacket &packet);
+    friend class RwControlLocal;
+    void postMessage(RwControlMessage *msg);
+    void rtpAudioIn(const PRtpPacket &packet);
+    void rtpVideoIn(const PRtpPacket &packet);
 };
 
 }

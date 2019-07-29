@@ -35,16 +35,16 @@ namespace PsiMedia {
 
 class GstMainLoop : public QObject
 {
-	Q_OBJECT
+    Q_OBJECT
 
 public:
     typedef std::function<void(void *userData)> ContextCallback;
 
-	GstMainLoop(const QString &resPath);
-	~GstMainLoop();
+    GstMainLoop(const QString &resPath);
+    ~GstMainLoop();
 
-	QString gstVersion() const;
-	GMainContext *mainContext();
+    QString gstVersion() const;
+    GMainContext *mainContext();
     bool isInitialized() const;
     bool execInContext(ContextCallback cb, void *userData);
 
@@ -54,13 +54,13 @@ signals:
     void finished();
 
 public slots:
-	void init();
+    void init();
     void start();
     void stop();
 
 private:
-	class Private;
-	Private *d;
+    class Private;
+    Private *d;
 };
 
 }
