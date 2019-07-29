@@ -63,6 +63,7 @@ class PipelineDeviceOptions
 public:
 	QSize videoSize;
 	int fps;
+    bool aec = false; // echo cancelation (will be enabled when prober is available)
 
 	PipelineDeviceOptions() :
 		fps(-1)
@@ -95,8 +96,8 @@ public:
 	void deactivate();
 
 	GstElement *element();
-	void setOptions(const PipelineDeviceOptions &opts);
-
+	void setOptions(const PipelineDeviceOptions &opts);    
+    PipelineDeviceOptions options() const;
 private:
 	PipelineDeviceContext();
 

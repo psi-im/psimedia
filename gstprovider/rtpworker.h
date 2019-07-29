@@ -49,21 +49,21 @@ public:
 		static Frame pullFromSink(GstAppSink *appsink);
 	};
 
-	void *app; // for callbacks
+	void *app = nullptr; // for callbacks
 
 	QString aout;
 	QString ain;
 	QString vin;
 	QString infile;
 	QByteArray indata;
-	bool loopFile;
+	bool loopFile = false;
 	QList<PAudioParams> localAudioParams;
 	QList<PVideoParams> localVideoParams;
 	QList<PPayloadInfo> localAudioPayloadInfo;
 	QList<PPayloadInfo> localVideoPayloadInfo;
 	QList<PPayloadInfo> remoteAudioPayloadInfo;
 	QList<PPayloadInfo> remoteVideoPayloadInfo;
-	int maxbitrate;
+	int maxbitrate = 0;
 
 	// read-only
 	bool canTransmitAudio;
@@ -115,24 +115,24 @@ public:
 	void (*cb_recordData)(const QByteArray &packet, void *app);
 
 private:
-	GMainContext *mainContext_;
-	GSource *timer;
+	GMainContext *mainContext_ = nullptr;
+	GSource *timer = nullptr;
 
-	PipelineDeviceContext *pd_audiosrc, *pd_videosrc, *pd_audiosink;
-	GstElement *sendbin, *recvbin;
+	PipelineDeviceContext *pd_audiosrc = nullptr, *pd_videosrc = nullptr, *pd_audiosink = nullptr;
+	GstElement *sendbin = nullptr, *recvbin = nullptr;
 
-	GstElement *fileDemux;
-	GstElement *audiosrc;
-	GstElement *videosrc;
-	GstElement *audiortpsrc;
-	GstElement *videortpsrc;
-	GstElement *audiortppay;
-	GstElement *videortppay;
-	GstElement *volumein;
-	GstElement *volumeout;
-	bool rtpaudioout;
-	bool rtpvideoout;
-	QMutex audiortpsrc_mutex;
+	GstElement *fileDemux = nullptr;
+	GstElement *audiosrc = nullptr;
+	GstElement *videosrc = nullptr;
+	GstElement *audiortpsrc = nullptr;
+	GstElement *videortpsrc = nullptr;
+	GstElement *audiortppay = nullptr;
+	GstElement *videortppay = nullptr;
+	GstElement *volumein = nullptr;
+	GstElement *volumeout = nullptr;
+	bool rtpaudioout = false;
+	bool rtpvideoout = false;
+    QMutex audiortpsrc_mutex;
 	QMutex videortpsrc_mutex;
 	QMutex volumein_mutex;
 	QMutex volumeout_mutex;
@@ -146,8 +146,8 @@ private:
 	QList<PPayloadInfo> actual_remoteAudioPayloadInfo;
 	QList<PPayloadInfo> actual_remoteVideoPayloadInfo;
 
-	Stats *audioStats;
-	Stats *videoStats;
+	Stats *audioStats = nullptr;
+	Stats *videoStats = nullptr;
 
 	void cleanup();
 

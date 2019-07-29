@@ -408,7 +408,7 @@ bool RtpSocketGroup::bind(int basePort)
 
 void RtpSocketGroup::sock_readyRead()
 {
-	QUdpSocket *udp = (QUdpSocket *)sender();
+	QUdpSocket *udp = static_cast<QUdpSocket *>(sender());
 	if(udp == &socket[0])
 		emit readyRead(0);
 	else
@@ -419,7 +419,7 @@ void RtpSocketGroup::sock_bytesWritten(qint64 bytes)
 {
 	Q_UNUSED(bytes);
 
-	QUdpSocket *udp = (QUdpSocket *)sender();
+	QUdpSocket *udp = static_cast<QUdpSocket *>(sender());
 	if(udp == &socket[0])
 		emit datagramWritten(0);
 	else

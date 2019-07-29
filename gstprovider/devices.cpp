@@ -235,7 +235,7 @@ public:
             break;
         }
 
-        return G_SOURCE_CONTINUE;
+        return TRUE;
     }
 };
 
@@ -308,16 +308,19 @@ DeviceMonitor::DeviceMonitor(GstMainLoop *mainLoop) :
     d(new Private(this))
 {
     qRegisterMetaType<GstDevice>("GstDevice");
+    Q_ASSERT(mainLoop->mainContext() == g_main_context_default());
 
-    auto context = mainLoop->mainContext();
+    //auto context = mainLoop->mainContext();
     d->_platform = new PlatformDeviceMonitor;
     d->_monitor = gst_device_monitor_new();
 
     GstBus *bus = gst_device_monitor_get_bus (d->_monitor);
-    GSource *source = gst_bus_create_watch(bus);
-    g_source_set_callback (source, (GSourceFunc)Private::onChangeGstCB, d, NULL);
-    g_source_attach(source, context);
-    g_source_unref(source);
+    gst_bus_add_watch(bus, Private::onChangeGstCB, d);
+
+    //GSource *source = gst_bus_create_watch(bus);
+    //g_source_set_callback (source, (GSourceFunc)Private::onChangeGstCB, d, NULL);
+    //g_source_attach(source, context);
+    //g_source_unref(source);
 
     gst_object_unref (bus);
 

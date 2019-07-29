@@ -481,7 +481,7 @@ static GstBuffer* makeGstBuffer(const PRtpPacket &packet)
 GstAppSink* RtpWorker::makeVideoPlayAppSink(const gchar *name)
 {
     GstElement *videoplaysink = gst_element_factory_make("appsink", name); // was appvideosink
-	GstAppSink *appVideoSink = (GstAppSink *)videoplaysink;
+	GstAppSink *appVideoSink = reinterpret_cast<GstAppSink *>(videoplaysink);
 
     GstCaps *videoplaycaps;
     videoplaycaps = gst_caps_new_simple ("video/x-raw",
@@ -791,7 +791,7 @@ void RtpWorker::fileDemux_pad_removed(GstElement *element, GstPad *pad)
 gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
 {
 	Q_UNUSED(bus);
-	//GMainLoop *loop = (GMainLoop *)data;
+	//GMainLoop *loop = static_cast<GMainLoop *>(data);
 	switch(GST_MESSAGE_TYPE(msg))
 	{
 		case GST_MESSAGE_EOS:
@@ -988,7 +988,7 @@ bool RtpWorker::setupSendRecv()
 	//   - once sending or receiving is started, devices can't be changed
 	//     (changes will be ignored)
 
-	if(!sendbin)
+    if(!sendbin)
 	{
 		if(!localAudioParams.isEmpty() || !localVideoParams.isEmpty())
 		{
@@ -1006,7 +1006,7 @@ bool RtpWorker::setupSendRecv()
 		}*/
 	}
 
-	if(!recvbin)
+    if(!recvbin)
 	{
 		if((!localAudioParams.isEmpty() && !remoteAudioPayloadInfo.isEmpty()) || (!localVideoParams.isEmpty() && !remoteVideoPayloadInfo.isEmpty()))
 		{
@@ -1075,7 +1075,9 @@ bool RtpWorker::startSend(int rate)
 
 		if(!ain.isEmpty() && !localAudioParams.isEmpty())
 		{
-			pd_audiosrc = PipelineDeviceContext::create(send_pipelineContext, ain, PDevice::AudioIn);
+            PipelineDeviceOptions options;
+            options.aec = pd_audiosink != nullptr;
+			pd_audiosrc = PipelineDeviceContext::create(send_pipelineContext, ain, PDevice::AudioIn, options);
 			if(!pd_audiosrc)
 			{
 #ifdef RTPWORKER_DEBUG
@@ -1087,7 +1089,6 @@ bool RtpWorker::startSend(int rate)
 				error = RtpSessionContext::ErrorGeneric;
 				return false;
 			}
-
 			audiosrc = pd_audiosrc->element();
 		}
 
@@ -1412,6 +1413,11 @@ bool RtpWorker::startRecv()
 #endif
 				goto fail1;
 			}
+            if (pd_audiosrc) {
+                PipelineDeviceOptions opts = pd_audiosrc->options();
+                opts.aec = true;
+                pd_audiosrc->setOptions(opts);
+            }
 
 			audioout = pd_audiosink->element();
 		}
@@ -1590,7 +1596,7 @@ bool RtpWorker::addAudioChain(int rate)
 	}
 
 	GstElement *audiortpsink = gst_element_factory_make("appsink", NULL);
-	GstAppSink *appRtpSink = (GstAppSink *)audiortpsink;
+	GstAppSink *appRtpSink = reinterpret_cast<GstAppSink *>(audiortpsink);
 
 	if(!fileDemux)
 		g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, NULL);
@@ -1699,7 +1705,7 @@ bool RtpWorker::addVideoChain()
 
 	GstElement *rtpqueue = gst_element_factory_make("queue", NULL);
 	GstElement *videortpsink = gst_element_factory_make("appsink", NULL); // was apprtpsink
-	GstAppSink *appRtpSink = (GstAppSink *)videortpsink;
+	GstAppSink *appRtpSink = reinterpret_cast<GstAppSink *>(videortpsink);
 	if(!fileDemux)
 		g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, NULL);
 
@@ -1931,7 +1937,11 @@ RtpWorker::Frame RtpWorker::Frame::pullFromSink(GstAppSink *appsink)
 
 	if ((gsize)(width * height * 4) == gst_buffer_get_size(buffer)) {
 		QImage image(width, height, QImage::Format_RGB32);
+#if QT_VERSION >= QT_VERSION_CHECK(5,11,0)
+        gst_buffer_extract(buffer, 0, image.bits(), image.sizeInBytes());
+#else
 		gst_buffer_extract(buffer, 0, image.bits(), image.byteCount());
+#endif
 		frame.image = image;
     } else {
         qDebug("wrong size of received buffer: %x != %lx", (width * height * 4), gst_buffer_get_size(buffer));

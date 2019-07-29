@@ -62,7 +62,7 @@ static RwControlFrameMessage *getLatestFrameAndRemoveOthers(QList<RwControlMessa
 			if(fmsg)
 				delete fmsg;
 
-			fmsg = (RwControlFrameMessage *)msg;
+			fmsg = static_cast<RwControlFrameMessage*>(msg);
 			list->removeAt(n);
 			--n; // adjust position
 		}
@@ -82,7 +82,7 @@ static RwControlAudioIntensityMessage *getLatestAudioIntensityAndRemoveOthers(QL
 			if(amsg)
 				delete amsg;
 
-			amsg = (RwControlAudioIntensityMessage *)msg;
+			amsg = static_cast<RwControlAudioIntensityMessage*>(msg);
 			list->removeAt(n);
 			--n; // adjust position
 		}
@@ -341,7 +341,7 @@ void RwControlLocal::processMessages()
 		RwControlMessage *msg = list.takeFirst();
 		if(msg->type == RwControlMessage::Status)
 		{
-			RwControlStatusMessage *smsg = (RwControlStatusMessage *)msg;
+			RwControlStatusMessage *smsg = static_cast<RwControlStatusMessage*>(msg);
 			RwControlStatus status = smsg->status;
 			delete smsg;
 			emit statusReady(status);
@@ -365,7 +365,7 @@ void RwControlLocal::postMessage(RwControlMessage *msg)
 	//   oldest frame to make room
 	if(msg->type == RwControlMessage::Frame)
 	{
-		RwControlFrameMessage *fmsg = (RwControlFrameMessage *)msg;
+		RwControlFrameMessage *fmsg = static_cast<RwControlFrameMessage*>(msg);
 		int firstPos = -1;
 		if(queuedFrameInfo(in, fmsg->frame.type, &firstPos) >= QUEUE_FRAME_MAX)
 			in.removeAt(firstPos);
@@ -524,7 +524,7 @@ bool RwControlRemote::processMessage(RwControlMessage *msg)
 {
 	if(msg->type == RwControlMessage::Start)
 	{
-		RwControlStartMessage *smsg = (RwControlStartMessage *)msg;
+		RwControlStartMessage *smsg = static_cast<RwControlStartMessage*>(msg);
 
 		applyDevicesToWorker(worker, smsg->devices);
 		applyCodecsToWorker(worker, smsg->codecs);
@@ -536,7 +536,7 @@ bool RwControlRemote::processMessage(RwControlMessage *msg)
 	}
 	else if(msg->type == RwControlMessage::Stop)
 	{
-		RwControlStopMessage *smsg = (RwControlStopMessage *)msg;
+		RwControlStopMessage *smsg = static_cast<RwControlStopMessage*>(msg);
 		Q_UNUSED(smsg);
 
 		if(start_requested)
@@ -558,7 +558,7 @@ bool RwControlRemote::processMessage(RwControlMessage *msg)
 	}
 	else if(msg->type == RwControlMessage::UpdateDevices)
 	{
-		RwControlUpdateDevicesMessage *umsg = (RwControlUpdateDevicesMessage *)msg;
+		RwControlUpdateDevicesMessage *umsg = static_cast<RwControlUpdateDevicesMessage*>(msg);
 
 		applyDevicesToWorker(worker, umsg->devices);
 
@@ -567,7 +567,7 @@ bool RwControlRemote::processMessage(RwControlMessage *msg)
 	}
 	else if(msg->type == RwControlMessage::UpdateCodecs)
 	{
-		RwControlUpdateCodecsMessage *umsg = (RwControlUpdateCodecsMessage *)msg;
+		RwControlUpdateCodecsMessage *umsg = static_cast<RwControlUpdateCodecsMessage*>(msg);
 
 		applyCodecsToWorker(worker, umsg->codecs);
 
@@ -577,7 +577,7 @@ bool RwControlRemote::processMessage(RwControlMessage *msg)
 	}
 	else if(msg->type == RwControlMessage::Transmit)
 	{
-		RwControlTransmitMessage *tmsg = (RwControlTransmitMessage *)msg;
+		RwControlTransmitMessage *tmsg = static_cast<RwControlTransmitMessage*>(msg);
 
 		if(tmsg->transmit.useAudio)
 			worker->transmitAudio();
@@ -591,7 +591,7 @@ bool RwControlRemote::processMessage(RwControlMessage *msg)
 	}
 	else if(msg->type == RwControlMessage::Record)
 	{
-		RwControlRecordMessage *rmsg = (RwControlRecordMessage *)msg;
+		RwControlRecordMessage *rmsg = static_cast<RwControlRecordMessage*>(msg);
 
 		if(rmsg->record.enabled)
 			worker->recordStart();
