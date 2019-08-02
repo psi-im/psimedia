@@ -24,20 +24,5 @@ windows {
 		-lgobject-2.0-0 \
 		-lgstvideo-1.0-0 \
 		-lgstbase-1.0-0
-
-	# qmake mingw seems to have broken prl support, so force these
-	win32-g++|contains($$list($$[QT_VERSION]), 4.0.*|4.1.*|4.2.*|4.3.*) {
-		LIBS *= \
-			-Lc:/gstforwin/winsdk/lib \
-			-lgstaudio-1.0-0 \
-			-lgstrtp-1.0-0 \
-			-lopus \
-			-lsetupapi \
-			-lksuser \
-			-lamstrmid \
-			-ldsound \
-			-ldxerr9 \
-			-lole32
-	}
 }
 

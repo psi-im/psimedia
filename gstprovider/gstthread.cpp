@@ -222,7 +222,7 @@ public:
                 << "videorate"
                 << "videoscale"
                 << "rtpjitterbuffer"
-                << "liveadder"
+                << "audiomixer"
                 << "appsink";
 
 #if defined(Q_OS_MAC)

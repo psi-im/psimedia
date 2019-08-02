@@ -497,7 +497,7 @@ gboolean RwControlRemote::processMessages()
         //   because they are unnecessary
         simplifyQueue(&in);
 
-        RwControlMessage *msg = in.takeFirst();
+        RwControlMessage *msg = in.takeFirst(); // FIXME we crashed here once likely because cb_processMessages was called too late
         m.unlock();
 
         bool ret = processMessage(msg);

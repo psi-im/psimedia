@@ -186,8 +186,8 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const P
     if(type == PDevice::AudioIn)
     {
         GstPad *pad;
-        gst_bin_add(GST_BIN(bin), e);
         gst_element_set_name(e, "aindev");
+        gst_bin_add(GST_BIN(bin), e);
 
         if (options.aec) {
             GstElement *webrtcdsp = gst_element_factory_make("webrtcdsp", NULL);
@@ -251,12 +251,26 @@ static GstElement *make_devicebin(const QString &id, PDevice::Type type, const P
         GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
         GstElement *echoprobe = gst_element_factory_make("webrtcechoprobe", NULL);
 
+        // build resampler caps
+        GstStructure *cs;
+        GstCaps *caps = gst_caps_new_empty();
+        cs = gst_structure_new("audio/x-raw",
+                               "rate", G_TYPE_INT, 48000,
+                               "format", G_TYPE_STRING, "S16LE",
+                               "channels", G_TYPE_INT, 1,
+                               "channel-mask", GST_TYPE_BITMASK, 1, NULL);
+        gst_caps_append_structure(caps, cs);
+        GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
+        g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
+        gst_caps_unref(caps);
+
         gst_bin_add(GST_BIN(bin), audioconvert);
         gst_bin_add(GST_BIN(bin), audioresample);
+        gst_bin_add(GST_BIN(bin), capsfilter);
         gst_bin_add(GST_BIN(bin), echoprobe);
         gst_bin_add(GST_BIN(bin), e);
 
-        gst_element_link_many(audioconvert, audioresample, echoprobe, e, NULL);
+        gst_element_link_many(audioconvert, audioresample, capsfilter, echoprobe, e, NULL);
 
         GstPad *pad = gst_element_get_static_pad(audioconvert, "sink");
         gst_element_add_pad(bin, gst_ghost_pad_new("sink", pad));
@@ -293,6 +307,7 @@ public:
     PDevice::Type type;
     GstElement *pipeline;
     GstElement *device_bin;
+    GstElement *aindev = nullptr;
     bool activated;
     bool webrtcdspInitialized = false;
 
@@ -343,11 +358,16 @@ public:
 
             if (context->opts.aec)
                 webrtcdspInitialized = true;
+
+            if (type == PDevice::AudioIn) {
+                aindev = gst_bin_get_by_name(GST_BIN(device_bin), "aindev");
+                qDebug("aindev %p", aindev);
+            }
         }
         else // AudioOut
         {
 #ifdef USE_LIVEADDER
-            adder = gst_element_factory_make("liveadder", NULL);
+            adder = gst_element_factory_make("audiomixer", NULL);
 
             audioconvert = gst_element_factory_make("audioconvert", NULL);
             audioresample = gst_element_factory_make("audioresample", NULL);
@@ -613,9 +633,8 @@ public:
     void update(const PipelineDeviceContext &ctx)
     {
         // TODO: change video properties based on options
-        if (type == PDevice::AudioOut && ctx.options().aec && !webrtcdspInitialized) {
+        if (type == PDevice::AudioIn && ctx.options().aec && !webrtcdspInitialized) {
             // seems like we want to enable AEC. for this we have to modify already running pipeline
-            GstElement *aindev = gst_bin_get_by_name(GST_BIN(device_bin), "aindev");
             if (!aindev) {
                 qWarning("AudioIn device is not found. failed to insert DSP element");
                 return;
@@ -629,16 +648,18 @@ public:
                     // useful article:
                     // https://gstreamer.freedesktop.org/documentation/application-development/advanced/pipeline-manipulation.html?gi-language=c#dynamically-changing-the-pipeline
 
-                    GstElement *aindev = gst_bin_get_by_name(GST_BIN(pipeline->device_bin), "aindev");
                     GstElement *webrtcdsp = gst_element_factory_make("webrtcdsp", nullptr);
                     Q_ASSERT(webrtcdsp);
                     GST_DEBUG_OBJECT (pipeline->device_bin, "adding   %" GST_PTR_FORMAT, webrtcdsp);
-                    gst_bin_add(GST_BIN(pipeline->pipeline), webrtcdsp);
-                    gst_element_link_many(aindev, webrtcdsp, nullptr);
+                    gst_bin_add(GST_BIN(pipeline->device_bin), webrtcdsp);
+
                     pad = gst_element_get_static_pad(webrtcdsp, "src");
-                    GstState state;
-                    gst_element_get_state(aindev, &state, nullptr, 0);
-                    gst_element_set_state (webrtcdsp, state);
+                    GstPad *binPad = gst_element_get_static_pad(pipeline->device_bin, "src");
+                    gst_ghost_pad_set_target((GstGhostPad*)binPad, pad);
+                    g_object_unref(G_OBJECT(binPad));
+                    gst_element_link_many(pipeline->aindev, webrtcdsp, nullptr);
+
+                    gst_element_sync_state_with_parent(webrtcdsp);
 
                     return GST_PAD_PROBE_REMOVE;
                 }
