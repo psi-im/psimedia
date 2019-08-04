@@ -338,13 +338,15 @@ GstElement *bins_audioenc_create(const QString &codec, int id, int rate, int siz
         // there is much sense to change rate if variadic-rate codec can do internal resampling.
         // also width could be taken from internal codec's caps. just any width.
         cs = gst_structure_new("audio/x-raw",
-                               "channels", G_TYPE_INT, channels, NULL);
+                               "channels", G_TYPE_INT, channels,
+                               "channel-mask", GST_TYPE_BITMASK, 1, NULL);
         qDebug("channels=%d\n", channels);
     } else {
         cs = gst_structure_new("audio/x-raw",
                                "rate", G_TYPE_INT, rate,
                                "width", G_TYPE_INT, size,
-                               "channels", G_TYPE_INT, channels, NULL);
+                               "channels", G_TYPE_INT, channels,
+                               "channel-mask", GST_TYPE_BITMASK, 1, NULL);
         qDebug("rate=%d,width=%d,channels=%d\n", rate, size, channels);
     }
     gst_caps_append_structure(caps, cs);

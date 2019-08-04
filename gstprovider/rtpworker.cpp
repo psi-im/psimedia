@@ -600,12 +600,16 @@ GstFlowReturn RtpWorker::cb_packet_ready_rtp_video(GstAppSink *appsink, gpointer
 
 GstFlowReturn RtpWorker::cb_packet_ready_preroll_stub(GstAppSink *appsink, gpointer data)
 {
+    Q_UNUSED(appsink)
+    Q_UNUSED(data)
     qDebug("RtpWorker::cb_packet_ready_preroll_stub");
     return GST_FLOW_OK;
 }
 
 void RtpWorker::cb_packet_ready_eos_stub(GstAppSink *appsink, gpointer data)
 {
+    Q_UNUSED(appsink)
+    Q_UNUSED(data)
     qDebug("RtpWorker::cb_packet_ready_eos_stub");
 }
 
@@ -1076,7 +1080,11 @@ bool RtpWorker::startSend(int rate)
         if(!ain.isEmpty() && !localAudioParams.isEmpty())
         {
             PipelineDeviceOptions options;
-            options.aec = pd_audiosink != nullptr;
+            if (pd_audiosink != nullptr) {
+                options = pd_audiosink->options();
+                options.aec = !options.echoProberName.isEmpty();
+            }
+
             pd_audiosrc = PipelineDeviceContext::create(send_pipelineContext, ain, PDevice::AudioIn, options);
             if(!pd_audiosrc)
             {
@@ -1416,6 +1424,7 @@ bool RtpWorker::startRecv()
             if (pd_audiosrc) {
                 PipelineDeviceOptions opts = pd_audiosrc->options();
                 opts.aec = true;
+                opts.echoProberName = pd_audiosink->options().echoProberName;
                 pd_audiosrc->setOptions(opts);
             }
 
