@@ -27,6 +27,7 @@
  <dep type='pkg' name='gstreamer-base' pkgname='gstreamer-base-1.0' version='>=1.10.4'>
   <required/>
  </dep>
+ <!-- libgstreamer-plugins-base1.0-dev -->
  <dep type='pkg' name='gstreamer-audio' pkgname='gstreamer-audio-1.0' version='>=1.10.4'>
   <required/>
  </dep>

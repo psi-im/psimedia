@@ -25,4 +25,3 @@ windows {
 		-lgstvideo-1.0-0 \
 		-lgstbase-1.0-0
 }
-
