@@ -343,6 +343,7 @@ DeviceMonitor::DeviceMonitor(GstMainLoop *mainLoop) :
 DeviceMonitor::~DeviceMonitor()
 {
     delete d->_platform;
+    gst_device_monitor_stop(d->_monitor);
     g_object_unref(d->_monitor);
     delete d;
 }
