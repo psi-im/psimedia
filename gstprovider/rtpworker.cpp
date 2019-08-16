@@ -72,7 +72,7 @@ static const char *state_to_str(GstState state)
     case GST_STATE_PLAYING: return "PLAYING";
     case GST_STATE_VOID_PENDING:
     default:
-        return 0;
+        return nullptr;
     }
 }
 
@@ -102,7 +102,7 @@ public:
 
         if(sizes_at >= 30)
         {
-            memmove(sizes, sizes + 1, sizeof(int) * (sizes_at - 1));
+            memmove(sizes, sizes + 1, sizeof(int) * static_cast<unsigned long>(sizes_at - 1));
             --sizes_at;
         }
         sizes[sizes_at++] = current_size;
@@ -137,8 +137,8 @@ public:
 static void dump_pipeline(GstElement *in, int indent = 1);
 static void dump_pipeline_each(const GValue *value, gpointer data)
 {
-    GstElement *e = (GstElement *)g_value_get_object(value);
-    int indent = *((int*)data);
+    GstElement *e = static_cast<GstElement *>(g_value_get_object(value));
+    int indent = *(static_cast<int*>(data));
     if(GST_IS_BIN(e))
     {
         qDebug("%s%s:\n", qPrintable(QString(indent, ' ')), gst_element_get_name(e));
@@ -160,21 +160,21 @@ static void dump_pipeline(GstElement *in, int indent)
 // RtpWorker
 //----------------------------------------------------------------------------
 static int worker_refs = 0;
-static PipelineContext *send_pipelineContext = 0;
-static PipelineContext *recv_pipelineContext = 0;
-static GstElement *spipeline = 0;
-static GstElement *rpipeline = 0;
+static PipelineContext *send_pipelineContext = nullptr;
+static PipelineContext *recv_pipelineContext = nullptr;
+static GstElement *spipeline = nullptr;
+static GstElement *rpipeline = nullptr;
 //static GstBus *sbus = 0;
 static bool send_in_use = false;
 static bool recv_in_use = false;
 
 static bool use_shared_clock = true;
-static GstClock *shared_clock = 0;
+static GstClock *shared_clock = nullptr;
 static bool send_clock_is_shared = false;
 //static bool recv_clock_is_shared = false;
 
 RtpWorker::RtpWorker(GMainContext *mainContext) :
-    app(0),
+    app(nullptr),
     loopFile(false),
     maxbitrate(-1),
     canTransmitAudio(false),
@@ -182,34 +182,34 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
     outputVolume(100),
     inputVolume(100),
     error(0),
-    cb_started(0),
-    cb_updated(0),
-    cb_stopped(0),
-    cb_finished(0),
-    cb_error(0),
-    cb_audioOutputIntensity(0),
-    cb_audioInputIntensity(0),
-    cb_previewFrame(0),
-    cb_outputFrame(0),
-    cb_rtpAudioOut(0),
-    cb_rtpVideoOut(0),
-    cb_recordData(0),
+    cb_started(nullptr),
+    cb_updated(nullptr),
+    cb_stopped(nullptr),
+    cb_finished(nullptr),
+    cb_error(nullptr),
+    cb_audioOutputIntensity(nullptr),
+    cb_audioInputIntensity(nullptr),
+    cb_previewFrame(nullptr),
+    cb_outputFrame(nullptr),
+    cb_rtpAudioOut(nullptr),
+    cb_rtpVideoOut(nullptr),
+    cb_recordData(nullptr),
     mainContext_(mainContext),
-    timer(0),
-    pd_audiosrc(0),
-    pd_videosrc(0),
-    pd_audiosink(0),
-    sendbin(0),
-    recvbin(0),
-    fileDemux(0),
-    audiosrc(0),
-    videosrc(0),
-    audiortpsrc(0),
-    videortpsrc(0),
-    audiortppay(0),
-    videortppay(0),
-    volumein(0),
-    volumeout(0),
+    timer(nullptr),
+    pd_audiosrc(nullptr),
+    pd_videosrc(nullptr),
+    pd_audiosink(nullptr),
+    sendbin(nullptr),
+    recvbin(nullptr),
+    fileDemux(nullptr),
+    audiosrc(nullptr),
+    videosrc(nullptr),
+    audiortpsrc(nullptr),
+    videortpsrc(nullptr),
+    audiortppay(nullptr),
+    videortppay(nullptr),
+    volumein(nullptr),
+    volumeout(nullptr),
     rtpaudioout(false),
     rtpvideoout(false)
   //recordTimer(0)
@@ -229,7 +229,7 @@ RtpWorker::RtpWorker(GMainContext *mainContext) :
         /*sbus = gst_pipeline_get_bus(GST_PIPELINE(spipeline));
         GSource *source = gst_bus_create_watch(bus);
         gst_object_unref(bus);
-        g_source_set_callback(source, (GSourceFunc)cb_bus_call, this, NULL);
+        g_source_set_callback(source, (GSourceFunc)cb_bus_call, this, nullptr);
         g_source_attach(source, mainContext_);*/
 #endif
 
@@ -246,7 +246,7 @@ RtpWorker::~RtpWorker()
     if(timer)
     {
         g_source_destroy(timer);
-        timer = 0;
+        timer = nullptr;
     }
 
     /*if(recordTimer)
@@ -261,10 +261,10 @@ RtpWorker::~RtpWorker()
     if(worker_refs == 0)
     {
         delete send_pipelineContext;
-        send_pipelineContext = 0;
+        send_pipelineContext = nullptr;
 
         delete recv_pipelineContext;
-        recv_pipelineContext = 0;
+        recv_pipelineContext = nullptr;
 
         //sbus = 0;
     }
@@ -279,19 +279,19 @@ void RtpWorker::cleanup()
     qDebug("cleaning up...\n");
 #endif
     volumein_mutex.lock();
-    volumein = 0;
+    volumein = nullptr;
     volumein_mutex.unlock();
 
     volumeout_mutex.lock();
-    volumeout = 0;
+    volumeout = nullptr;
     volumeout_mutex.unlock();
 
     audiortpsrc_mutex.lock();
-    audiortpsrc = 0;
+    audiortpsrc = nullptr;
     audiortpsrc_mutex.unlock();
 
     videortpsrc_mutex.lock();
-    videortpsrc = 0;
+    videortpsrc = nullptr;
     videortpsrc_mutex.unlock();
 
     rtpaudioout_mutex.lock();
@@ -313,14 +313,14 @@ void RtpWorker::cleanup()
         if(shared_clock && send_clock_is_shared)
         {
             gst_object_unref(shared_clock);
-            shared_clock = 0;
+            shared_clock = nullptr;
             send_clock_is_shared = false;
 
             if(recv_in_use)
             {
                 qDebug("recv clock reverts to auto\n");
                 gst_element_set_state(rpipeline, GST_STATE_READY);
-                gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+                gst_element_get_state(rpipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
 
                 // only restart the receive pipeline if it is
@@ -328,7 +328,7 @@ void RtpWorker::cleanup()
                 if(!recvbin)
                 {
                     gst_element_set_state(rpipeline, GST_STATE_PLAYING);
-                    //gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+                    //gst_element_get_state(rpipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 }
             }
         }
@@ -336,9 +336,9 @@ void RtpWorker::cleanup()
         send_pipelineContext->deactivate();
         gst_pipeline_auto_clock(GST_PIPELINE(spipeline));
         //gst_element_set_state(sendbin, GST_STATE_NULL);
-        //gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
+        //gst_element_get_state(sendbin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
         gst_bin_remove(GST_BIN(spipeline), sendbin);
-        sendbin = 0;
+        sendbin = nullptr;
         send_in_use = false;
     }
 
@@ -360,7 +360,7 @@ void RtpWorker::cleanup()
                 send_pipelineContext->deactivate();
                 gst_pipeline_auto_clock(GST_PIPELINE(spipeline));
                 send_pipelineContext->activate();
-                //gst_element_get_state(spipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+                //gst_element_get_state(spipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
                 // send clock becomes shared
                 shared_clock = gst_pipeline_get_clock(GST_PIPELINE(spipeline));
@@ -373,30 +373,30 @@ void RtpWorker::cleanup()
         recv_pipelineContext->deactivate();
         gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
         //gst_element_set_state(recvbin, GST_STATE_NULL);
-        //gst_element_get_state(recvbin, NULL, NULL, GST_CLOCK_TIME_NONE);
+        //gst_element_get_state(recvbin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
         gst_bin_remove(GST_BIN(rpipeline), recvbin);
-        recvbin = 0;
+        recvbin = nullptr;
         recv_in_use = false;
     }
 
     if(pd_audiosrc)
     {
         delete pd_audiosrc;
-        pd_audiosrc = 0;
-        audiosrc = 0;
+        pd_audiosrc = nullptr;
+        audiosrc = nullptr;
     }
 
     if(pd_videosrc)
     {
         delete pd_videosrc;
-        pd_videosrc = 0;
-        videosrc = 0;
+        pd_videosrc = nullptr;
+        videosrc = nullptr;
     }
 
     if(pd_audiosink)
     {
         delete pd_audiosink;
-        pd_audiosink = 0;
+        pd_audiosink = nullptr;
     }
 
 #ifdef RTPWORKER_DEBUG
@@ -408,7 +408,7 @@ void RtpWorker::start()
 {
     Q_ASSERT(!timer);
     timer = g_timeout_source_new(0);
-    g_source_set_callback(timer, cb_doStart, this, NULL);
+    g_source_set_callback(timer, cb_doStart, this, nullptr);
     g_source_attach(timer, mainContext_);
 }
 
@@ -416,7 +416,7 @@ void RtpWorker::update()
 {
     Q_ASSERT(!timer);
     timer = g_timeout_source_new(0);
-    g_source_set_callback(timer, cb_doUpdate, this, NULL);
+    g_source_set_callback(timer, cb_doUpdate, this, nullptr);
     g_source_attach(timer, mainContext_);
 }
 
@@ -451,7 +451,7 @@ void RtpWorker::stop()
         g_source_destroy(timer);
 
     timer = g_timeout_source_new(0);
-    g_source_set_callback(timer, cb_doStop, this, NULL);
+    g_source_set_callback(timer, cb_doStop, this, nullptr);
     g_source_attach(timer, mainContext_);
 }
 
@@ -461,16 +461,16 @@ static GstBuffer* makeGstBuffer(const PRtpPacket &packet)
     GstMemory *memory;
     GstMapInfo info;
     buffer = gst_buffer_new ();
-    memory = gst_allocator_alloc (NULL, packet.rawValue.size(), NULL);
+    memory = gst_allocator_alloc (nullptr, gsize(packet.rawValue.size()), nullptr);
     if (buffer && memory) {
         gst_memory_map(memory, &info, GST_MAP_WRITE);
-        std::memcpy(info.data, packet.rawValue.data(), packet.rawValue.size());
+        std::memcpy(info.data, packet.rawValue.data(), size_t(packet.rawValue.size()));
         gst_memory_unmap(memory, &info);
         gst_buffer_insert_memory (buffer, -1, memory);
         return buffer;
     }
     if (memory) {
-        gst_allocator_free(NULL, memory);
+        gst_allocator_free(nullptr, memory);
     }
     if (buffer) {
         gst_buffer_unref(buffer);
@@ -486,7 +486,7 @@ GstAppSink* RtpWorker::makeVideoPlayAppSink(const gchar *name)
     GstCaps *videoplaycaps;
     videoplaycaps = gst_caps_new_simple ("video/x-raw",
                                          "format", G_TYPE_STRING, "BGRx",
-                                         NULL);
+                                         nullptr);
     gst_app_sink_set_caps (appVideoSink, videoplaycaps);
     gst_caps_unref(videoplaycaps);
 
@@ -514,8 +514,8 @@ void RtpWorker::setOutputVolume(int level)
     outputVolume = level;
     if(volumeout)
     {
-        double vol = (double)level / 100;
-        g_object_set(G_OBJECT(volumeout), "volume", vol, NULL);
+        double vol = double(level) / 100;
+        g_object_set(G_OBJECT(volumeout), "volume", vol, nullptr);
     }
 }
 
@@ -525,8 +525,8 @@ void RtpWorker::setInputVolume(int level)
     inputVolume = level;
     if(volumein)
     {
-        double vol = (double)level / 100;
-        g_object_set(G_OBJECT(volumein), "volume", vol, NULL);
+        double vol = double(level) / 100;
+        g_object_set(G_OBJECT(volumein), "volume", vol, nullptr);
     }
 }
 
@@ -545,57 +545,57 @@ void RtpWorker::recordStop()
 
 gboolean RtpWorker::cb_doStart(gpointer data)
 {
-    return ((RtpWorker *)data)->doStart();
+    return static_cast<RtpWorker *>(data)->doStart();
 }
 
 gboolean RtpWorker::cb_doUpdate(gpointer data)
 {
-    return ((RtpWorker *)data)->doUpdate();
+    return static_cast<RtpWorker *>(data)->doUpdate();
 }
 
 gboolean RtpWorker::cb_doStop(gpointer data)
 {
-    return ((RtpWorker *)data)->doStop();
+    return static_cast<RtpWorker *>(data)->doStop();
 }
 
 void RtpWorker::cb_fileDemux_no_more_pads(GstElement *element, gpointer data)
 {
-    ((RtpWorker *)data)->fileDemux_no_more_pads(element);
+    static_cast<RtpWorker *>(data)->fileDemux_no_more_pads(element);
 }
 
 void RtpWorker::cb_fileDemux_pad_added(GstElement *element, GstPad *pad, gpointer data)
 {
-    ((RtpWorker *)data)->fileDemux_pad_added(element, pad);
+    static_cast<RtpWorker *>(data)->fileDemux_pad_added(element, pad);
 }
 
 void RtpWorker::cb_fileDemux_pad_removed(GstElement *element, GstPad *pad, gpointer data)
 {
-    ((RtpWorker *)data)->fileDemux_pad_removed(element, pad);
+    static_cast<RtpWorker *>(data)->fileDemux_pad_removed(element, pad);
 }
 
 gboolean RtpWorker::cb_bus_call(GstBus *bus, GstMessage *msg, gpointer data)
 {
-    return ((RtpWorker *)data)->bus_call(bus, msg);
+    return static_cast<RtpWorker *>(data)->bus_call(bus, msg);
 }
 
 GstFlowReturn RtpWorker::cb_show_frame_preview(GstAppSink *appsink, gpointer data)
 {
-    return ((RtpWorker *)data)->show_frame_preview(appsink);
+    return static_cast<RtpWorker *>(data)->show_frame_preview(appsink);
 }
 
 GstFlowReturn RtpWorker::cb_show_frame_output(GstAppSink *appsink, gpointer data)
 {
-    return ((RtpWorker *)data)->show_frame_output(appsink);
+    return static_cast<RtpWorker *>(data)->show_frame_output(appsink);
 }
 
 GstFlowReturn RtpWorker::cb_packet_ready_rtp_audio(GstAppSink *appsink, gpointer data)
 {
-    return ((RtpWorker *)data)->packet_ready_rtp_audio(appsink);
+    return static_cast<RtpWorker *>(data)->packet_ready_rtp_audio(appsink);
 }
 
 GstFlowReturn RtpWorker::cb_packet_ready_rtp_video(GstAppSink *appsink, gpointer data)
 {
-    return ((RtpWorker *)data)->packet_ready_rtp_video(appsink);
+    return static_cast<RtpWorker *>(data)->packet_ready_rtp_video(appsink);
 }
 
 GstFlowReturn RtpWorker::cb_packet_ready_preroll_stub(GstAppSink *appsink, gpointer data)
@@ -616,20 +616,20 @@ void RtpWorker::cb_packet_ready_eos_stub(GstAppSink *appsink, gpointer data)
 
 gboolean RtpWorker::cb_fileReady(gpointer data)
 {
-    return ((RtpWorker *)data)->fileReady();
+    return static_cast<RtpWorker *>(data)->fileReady();
 }
 
 gboolean RtpWorker::doStart()
 {
-    timer = 0;
+    timer = nullptr;
 
-    fileDemux = 0;
-    audiosrc = 0;
-    videosrc = 0;
-    audiortpsrc = 0;
-    videortpsrc = 0;
-    audiortppay = 0;
-    videortppay = 0;
+    fileDemux = nullptr;
+    audiosrc = nullptr;
+    videosrc = nullptr;
+    audiortpsrc = nullptr;
+    videortpsrc = nullptr;
+    audiortppay = nullptr;
+    videortppay = nullptr;
 
     // default to 400kbps
     if(maxbitrate == -1)
@@ -652,7 +652,7 @@ gboolean RtpWorker::doStart()
 
 gboolean RtpWorker::doUpdate()
 {
-    timer = 0;
+    timer = nullptr;
 
     if(!setupSendRecv())
     {
@@ -670,7 +670,7 @@ gboolean RtpWorker::doUpdate()
 
 gboolean RtpWorker::doStop()
 {
-    timer = 0;
+    timer = nullptr;
 
     cleanup();
 
@@ -689,7 +689,7 @@ void RtpWorker::fileDemux_no_more_pads(GstElement *element)
 
     // FIXME: make this get canceled on cleanup?
     GSource *ftimer = g_timeout_source_new(0);
-    g_source_set_callback(ftimer, cb_fileReady, this, NULL);
+    g_source_set_callback(ftimer, cb_fileReady, this, nullptr);
     g_source_attach(ftimer, mainContext_);
 }
 
@@ -703,7 +703,7 @@ void RtpWorker::fileDemux_pad_added(GstElement *element, GstPad *pad)
     g_free(name);
 #endif
 
-    GstCaps *caps = gst_pad_query_caps(pad, NULL);
+    GstCaps *caps = gst_pad_query_caps(pad, nullptr);
 #ifdef RTPWORKER_DEBUG
     gchar *gstr = gst_caps_to_string(caps);
     QString capsString = QString::fromUtf8(gstr);
@@ -711,10 +711,10 @@ void RtpWorker::fileDemux_pad_added(GstElement *element, GstPad *pad)
     qDebug("  caps: [%s]\n", qPrintable(capsString));
 #endif
 
-    int num = gst_caps_get_size(caps);
+    int num = int(gst_caps_get_size(caps));
     for(int n = 0; n < num; ++n)
     {
-        GstStructure *cs = gst_caps_get_structure(caps, n);
+        GstStructure *cs = gst_caps_get_structure(caps, guint(n));
         QString mime = gst_structure_get_name(cs);
 
         QStringList parts = mime.split('/');
@@ -723,7 +723,7 @@ void RtpWorker::fileDemux_pad_added(GstElement *element, GstPad *pad)
         QString type = parts[0];
         QString subtype = parts[1];
 
-        GstElement *decoder = 0;
+        GstElement *decoder = nullptr;
 
         bool isAudio = false;
 
@@ -733,16 +733,16 @@ void RtpWorker::fileDemux_pad_added(GstElement *element, GstPad *pad)
             isAudio = true;
 
             if(subtype == "x-opus")
-                decoder = gst_element_factory_make("opusdec", NULL);
+                decoder = gst_element_factory_make("opusdec", nullptr);
             else if(subtype == "x-vorbis")
-                decoder = gst_element_factory_make("vorbisdec", NULL);
+                decoder = gst_element_factory_make("vorbisdec", nullptr);
         }
         else if(type == "video")
         {
             isAudio = false;
 
             if(subtype == "x-theora")
-                decoder = gst_element_factory_make("theoradec", NULL);
+                decoder = gst_element_factory_make("theoradec", nullptr);
         }
 
         if(decoder)
@@ -898,10 +898,10 @@ GstFlowReturn RtpWorker::packet_ready_rtp_audio(GstAppSink *appsink)
 {
     GstSample *sample = gst_app_sink_pull_sample(appsink);
     GstBuffer *buffer = gst_sample_get_buffer(sample);
-    int sz = gst_buffer_get_size(buffer);
+    int sz = int(gst_buffer_get_size(buffer));
     QByteArray ba;
     ba.resize(sz);
-    gst_buffer_extract(buffer, 0, ba.data(), sz);
+    gst_buffer_extract(buffer, 0, ba.data(), gsize(sz));
     gst_sample_unref(sample);
 
     PRtpPacket packet;
@@ -923,10 +923,10 @@ GstFlowReturn RtpWorker::packet_ready_rtp_video(GstAppSink *appsink)
 {
     GstSample *sample = gst_app_sink_pull_sample(appsink);
     GstBuffer *buffer = gst_sample_get_buffer(sample);
-    int sz = gst_buffer_get_size(buffer);
+    int sz = int(gst_buffer_get_size(buffer));
     QByteArray ba;
     ba.resize(sz);
-    gst_buffer_extract(buffer, 0, ba.data(), sz);
+    gst_buffer_extract(buffer, 0, ba.data(), gsize(sz));
     gst_sample_unref(sample);
 
     PRtpPacket packet;
@@ -949,7 +949,7 @@ gboolean RtpWorker::fileReady()
     if(loopFile)
     {
         //gst_element_set_state(sendPipeline, GST_STATE_PAUSED);
-        //gst_element_get_state(sendPipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+        //gst_element_get_state(sendPipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
         /*gst_element_seek(sendPipeline, 1, GST_FORMAT_TIME,
             (GstSeekFlags)(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_SEGMENT),
@@ -957,9 +957,9 @@ gboolean RtpWorker::fileReady()
     }
 
     send_pipelineContext->activate();
-    gst_element_get_state(send_pipelineContext->element(), NULL, NULL, GST_CLOCK_TIME_NONE);
+    gst_element_get_state(send_pipelineContext->element(), nullptr, nullptr, GST_CLOCK_TIME_NONE);
     //gst_element_set_state(sendPipeline, GST_STATE_PLAYING);
-    //gst_element_get_state(sendPipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+    //gst_element_get_state(sendPipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
     if(!getCaps())
     {
@@ -1051,10 +1051,10 @@ bool RtpWorker::startSend(int rate)
 
         sendbin = gst_bin_new("sendbin");
 
-        GstElement *fileSource = gst_element_factory_make("filesrc", NULL);
-        g_object_set(G_OBJECT(fileSource), "location", infile.toUtf8().data(), NULL);
+        GstElement *fileSource = gst_element_factory_make("filesrc", nullptr);
+        g_object_set(G_OBJECT(fileSource), "location", infile.toUtf8().data(), nullptr);
 
-        fileDemux = gst_element_factory_make("oggdemux", NULL);
+        fileDemux = gst_element_factory_make("oggdemux", nullptr);
         g_signal_connect(G_OBJECT(fileDemux),
                          "no-more-pads",
                          G_CALLBACK(cb_fileDemux_no_more_pads), this);
@@ -1092,7 +1092,7 @@ bool RtpWorker::startSend(int rate)
                 qDebug("Failed to create audio input element '%s'.\n", qPrintable(ain));
 #endif
                 g_object_unref(G_OBJECT(sendbin));
-                sendbin = 0;
+                sendbin = nullptr;
 
                 error = RtpSessionContext::ErrorGeneric;
                 return false;
@@ -1114,9 +1114,9 @@ bool RtpWorker::startSend(int rate)
                 qDebug("Failed to create video input element '%s'.\n", qPrintable(vin));
 #endif
                 delete pd_audiosrc;
-                pd_audiosrc = 0;
+                pd_audiosrc = nullptr;
                 g_object_unref(G_OBJECT(sendbin));
-                sendbin = 0;
+                sendbin = nullptr;
 
                 error = RtpSessionContext::ErrorGeneric;
                 return false;
@@ -1137,11 +1137,11 @@ bool RtpWorker::startSend(int rate)
         if(!addAudioChain(rate))
         {
             delete pd_audiosrc;
-            pd_audiosrc = 0;
+            pd_audiosrc = nullptr;
             delete pd_videosrc;
-            pd_videosrc = 0;
+            pd_videosrc = nullptr;
             g_object_unref(G_OBJECT(sendbin));
-            sendbin = 0;
+            sendbin = nullptr;
 
             error = RtpSessionContext::ErrorGeneric;
             return false;
@@ -1152,11 +1152,11 @@ bool RtpWorker::startSend(int rate)
         if(!addVideoChain())
         {
             delete pd_audiosrc;
-            pd_audiosrc = 0;
+            pd_audiosrc = nullptr;
             delete pd_videosrc;
-            pd_videosrc = 0;
+            pd_videosrc = nullptr;
             g_object_unref(G_OBJECT(sendbin));
-            sendbin = 0;
+            sendbin = nullptr;
 
             error = RtpSessionContext::ErrorGeneric;
             return false;
@@ -1169,9 +1169,9 @@ bool RtpWorker::startSend(int rate)
     {
         // in the case of files, preroll
         gst_element_set_state(spipeline, GST_STATE_PAUSED);
-        gst_element_get_state(spipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+        gst_element_get_state(spipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
         //gst_element_set_state(sendbin, GST_STATE_PAUSED);
-        //gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
+        //gst_element_get_state(sendbin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
         /*if(loopFile)
         {
@@ -1184,7 +1184,7 @@ bool RtpWorker::startSend(int rate)
     {
         // in the case of live transmission, wait for it to start and signal
         //gst_element_set_state(sendbin, GST_STATE_READY);
-        //gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
+        //gst_element_get_state(sendbin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
 #ifdef RTPWORKER_DEBUG
         qDebug("changing state...\n");
@@ -1212,12 +1212,12 @@ bool RtpWorker::startSend(int rate)
         }*/
 
         //gst_element_set_state(pipeline, GST_STATE_PLAYING);
-        //gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+        //gst_element_get_state(pipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
         send_pipelineContext->activate();
 
         // 10 seconds ought to be enough time to init (video devices probing may take considerable time)
-        int ret = gst_element_get_state(spipeline, NULL, NULL, 10 * GST_SECOND);
-        //gst_element_get_state(sendbin, NULL, NULL, GST_CLOCK_TIME_NONE);
+        int ret = gst_element_get_state(spipeline, nullptr, nullptr, 10 * GST_SECOND);
+        //gst_element_get_state(sendbin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
         if(ret != GST_STATE_CHANGE_SUCCESS && ret != GST_STATE_CHANGE_NO_PREROLL)
         {
 #ifdef RTPWORKER_DEBUG
@@ -1241,7 +1241,7 @@ bool RtpWorker::startSend(int rate)
             {
                 qDebug("recv pipeline slaving to send clock\n");
                 gst_element_set_state(rpipeline, GST_STATE_READY);
-                gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+                gst_element_get_state(rpipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 gst_pipeline_use_clock(GST_PIPELINE(rpipeline), shared_clock);
                 gst_element_set_state(rpipeline, GST_STATE_PLAYING);
             }
@@ -1272,8 +1272,8 @@ bool RtpWorker::startSend(int rate)
 bool RtpWorker::startRecv()
 {
     QString acodec, vcodec;
-    GstElement *audioout = 0;
-    GstElement *asrc = 0;
+    GstElement *audioout = nullptr;
+    GstElement *asrc = nullptr;
 
     // TODO: support more than opus
     int opus_at = -1;
@@ -1338,12 +1338,12 @@ bool RtpWorker::startRecv()
             recvbin = gst_bin_new("recvbin");
 
         audiortpsrc_mutex.lock();
-        audiortpsrc = gst_element_factory_make("appsrc", NULL);
+        audiortpsrc = gst_element_factory_make("appsrc", nullptr);
         audiortpsrc_mutex.unlock();
 
         GstCaps *caps = gst_caps_new_empty();
         gst_caps_append_structure(caps, cs);
-        g_object_set(G_OBJECT(audiortpsrc), "caps", caps, NULL);
+        g_object_set(G_OBJECT(audiortpsrc), "caps", caps, nullptr);
         gst_caps_unref(caps);
 
         // FIXME: what if we don't have a name and just id?
@@ -1377,12 +1377,12 @@ bool RtpWorker::startRecv()
             recvbin = gst_bin_new("recvbin");
 
         videortpsrc_mutex.lock();
-        videortpsrc = gst_element_factory_make("appsrc", NULL);
+        videortpsrc = gst_element_factory_make("appsrc", nullptr);
         videortpsrc_mutex.unlock();
 
         GstCaps *caps = gst_caps_new_empty();
         gst_caps_append_structure(caps, cs);
-        g_object_set(G_OBJECT(videortpsrc), "caps", caps, NULL);
+        g_object_set(G_OBJECT(videortpsrc), "caps", caps, nullptr);
         gst_caps_unref(caps);
 
         // FIXME: what if we don't have a name and just id?
@@ -1431,17 +1431,17 @@ bool RtpWorker::startRecv()
             audioout = pd_audiosink->element();
         }
         else
-            audioout = gst_element_factory_make("fakesink", NULL);
+            audioout = gst_element_factory_make("fakesink", nullptr);
 
         {
             QMutexLocker locker(&volumeout_mutex);
-            volumeout = gst_element_factory_make("volume", NULL);
-            double vol = (double)outputVolume / 100;
-            g_object_set(G_OBJECT(volumeout), "volume", vol, NULL);
+            volumeout = gst_element_factory_make("volume", nullptr);
+            double vol = double(outputVolume) / 100;
+            g_object_set(G_OBJECT(volumeout), "volume", vol, nullptr);
         }
 
-        GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-        GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
+        GstElement *audioconvert = gst_element_factory_make("audioconvert", nullptr);
+        GstElement *audioresample = gst_element_factory_make("audioresample", nullptr);
         if(pd_audiosink)
             asrc = audioresample;
 
@@ -1453,7 +1453,7 @@ bool RtpWorker::startRecv()
         if(!asrc)
             gst_bin_add(GST_BIN(recvbin), audioout);
 
-        gst_element_link_many(audiortpsrc, audiodec, volumeout, audioconvert, audioresample, NULL);
+        gst_element_link_many(audiortpsrc, audiodec, volumeout, audioconvert, audioresample, nullptr);
         if(!asrc)
             gst_element_link(audioresample, audioout);
 
@@ -1466,21 +1466,21 @@ bool RtpWorker::startRecv()
         if(!videodec)
             goto fail1;
 
-        GstElement *videoconvert = gst_element_factory_make("videoconvert", NULL);
+        GstElement *videoconvert = gst_element_factory_make("videoconvert", nullptr);
         GstAppSink *appVideoSink = makeVideoPlayAppSink("netviedeoplay");
 
         GstAppSinkCallbacks sinkVideoCb;
         sinkVideoCb.new_sample = cb_show_frame_output;
         sinkVideoCb.eos = cb_packet_ready_eos_stub; // TODO
         sinkVideoCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
-        gst_app_sink_set_callbacks(appVideoSink, &sinkVideoCb, this, NULL);
+        gst_app_sink_set_callbacks(appVideoSink, &sinkVideoCb, this, nullptr);
 
         gst_bin_add(GST_BIN(recvbin), videortpsrc);
         gst_bin_add(GST_BIN(recvbin), videodec);
         gst_bin_add(GST_BIN(recvbin), videoconvert);
         gst_bin_add(GST_BIN(recvbin), (GstElement *)appVideoSink);
 
-        gst_element_link_many(videortpsrc, videodec, videoconvert, (GstElement *)appVideoSink, NULL);
+        gst_element_link_many(videortpsrc, videodec, videoconvert, (GstElement *)appVideoSink, nullptr);
 
         actual_remoteVideoPayloadInfo = remoteVideoPayloadInfo;
     }
@@ -1511,7 +1511,7 @@ bool RtpWorker::startRecv()
 #endif
 
     gst_element_set_state(rpipeline, GST_STATE_READY);
-    gst_element_get_state(rpipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+    gst_element_get_state(rpipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
     recv_pipelineContext->activate();
 
@@ -1534,7 +1534,7 @@ fail1:
     if(audiortpsrc)
     {
         g_object_unref(G_OBJECT(audiortpsrc));
-        audiortpsrc = 0;
+        audiortpsrc = nullptr;
     }
     audiortpsrc_mutex.unlock();
 
@@ -1542,18 +1542,18 @@ fail1:
     if(videortpsrc)
     {
         g_object_unref(G_OBJECT(videortpsrc));
-        videortpsrc = 0;
+        videortpsrc = nullptr;
     }
     videortpsrc_mutex.unlock();
 
     if(recvbin)
     {
         g_object_unref(G_OBJECT(recvbin));
-        recvbin = 0;
+        recvbin = nullptr;
     }
 
     delete pd_audiosink;
-    pd_audiosink = 0;
+    pd_audiosink = nullptr;
 
     recv_in_use = false;
 
@@ -1599,26 +1599,26 @@ bool RtpWorker::addAudioChain(int rate)
 
     {
         QMutexLocker locker(&volumein_mutex);
-        volumein = gst_element_factory_make("volume", NULL);
-        double vol = (double)inputVolume / 100;
-        g_object_set(G_OBJECT(volumein), "volume", vol, NULL);
+        volumein = gst_element_factory_make("volume", nullptr);
+        double vol = double(inputVolume) / 100;
+        g_object_set(G_OBJECT(volumein), "volume", vol, nullptr);
     }
 
-    GstElement *audiortpsink = gst_element_factory_make("appsink", NULL);
+    GstElement *audiortpsink = gst_element_factory_make("appsink", nullptr);
     GstAppSink *appRtpSink = reinterpret_cast<GstAppSink *>(audiortpsink);
 
     if(!fileDemux)
-        g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, NULL);
+        g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, nullptr);
 
     GstAppSinkCallbacks sinkCb;
     sinkCb.new_sample = cb_packet_ready_rtp_audio;
     sinkCb.eos = cb_packet_ready_eos_stub; // TODO
     sinkCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
-    gst_app_sink_set_callbacks(appRtpSink, &sinkCb, this, NULL);
+    gst_app_sink_set_callbacks(appRtpSink, &sinkCb, this, nullptr);
 
-    GstElement *queue = 0;
+    GstElement *queue = nullptr;
     if(fileDemux)
-        queue = gst_element_factory_make("queue", NULL);
+        queue = gst_element_factory_make("queue", nullptr);
 
     if(queue)
         gst_bin_add(GST_BIN(sendbin), queue);
@@ -1627,7 +1627,7 @@ bool RtpWorker::addAudioChain(int rate)
     gst_bin_add(GST_BIN(sendbin), audioenc);
     gst_bin_add(GST_BIN(sendbin), audiortpsink);
 
-    gst_element_link_many(volumein, audioenc, audiortpsink, NULL);
+    gst_element_link_many(volumein, audioenc, audiortpsink, nullptr);
 
     audiortppay = audioenc;
 
@@ -1698,10 +1698,10 @@ bool RtpWorker::addVideoChain()
         return false;
     }
 
-    GstElement *videotee = gst_element_factory_make("tee", NULL);
+    GstElement *videotee = gst_element_factory_make("tee", nullptr);
 
-    GstElement *playqueue = gst_element_factory_make("queue", NULL);
-    GstElement *videoconvertplay = gst_element_factory_make("videoconvert", NULL);
+    GstElement *playqueue = gst_element_factory_make("queue", nullptr);
+    GstElement *videoconvertplay = gst_element_factory_make("videoconvert", nullptr);
     GstAppSink *appVideoSink = makeVideoPlayAppSink("sourcevideoplay");
 
 
@@ -1709,25 +1709,25 @@ bool RtpWorker::addVideoChain()
     sinkPreviewCb.new_sample = cb_show_frame_preview;
     sinkPreviewCb.eos = cb_packet_ready_eos_stub; // TODO
     sinkPreviewCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
-    gst_app_sink_set_callbacks(appVideoSink, &sinkPreviewCb, this, NULL);
+    gst_app_sink_set_callbacks(appVideoSink, &sinkPreviewCb, this, nullptr);
 
 
-    GstElement *rtpqueue = gst_element_factory_make("queue", NULL);
-    GstElement *videortpsink = gst_element_factory_make("appsink", NULL); // was apprtpsink
+    GstElement *rtpqueue = gst_element_factory_make("queue", nullptr);
+    GstElement *videortpsink = gst_element_factory_make("appsink", nullptr); // was apprtpsink
     GstAppSink *appRtpSink = reinterpret_cast<GstAppSink *>(videortpsink);
     if(!fileDemux)
-        g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, NULL);
+        g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, nullptr);
 
     GstAppSinkCallbacks sinkCb;
     sinkCb.new_sample = cb_packet_ready_rtp_video;
     sinkCb.eos = cb_packet_ready_eos_stub; // TODO
     sinkCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
-    gst_app_sink_set_callbacks(appRtpSink, &sinkCb, this, NULL);
+    gst_app_sink_set_callbacks(appRtpSink, &sinkCb, this, nullptr);
 
 
-    GstElement *queue = 0;
+    GstElement *queue = nullptr;
     if(fileDemux)
-        queue = gst_element_factory_make("queue", NULL);
+        queue = gst_element_factory_make("queue", nullptr);
 
     if(queue)
         gst_bin_add(GST_BIN(sendbin), queue);
@@ -1744,8 +1744,8 @@ bool RtpWorker::addVideoChain()
 #ifdef VIDEO_PREP
     gst_element_link(videoprep, videotee);
 #endif
-    gst_element_link_many(videotee, playqueue, videoconvertplay, (GstElement *)appVideoSink, NULL);
-    gst_element_link_many(videotee, rtpqueue, videoenc, videortpsink, NULL); // FIXME!
+    gst_element_link_many(videotee, playqueue, videoconvertplay, (GstElement *)appVideoSink, nullptr);
+    gst_element_link_many(videotee, rtpqueue, videoenc, videortpsink, nullptr); // FIXME!
 
     videortppay = videoenc;
 
@@ -1914,7 +1914,7 @@ bool RtpWorker::updateTheoraConfig()
             GstCaps *caps = gst_caps_new_empty();
 
             gst_caps_append_structure(caps, cs);
-            g_object_set(G_OBJECT(videortpsrc), "caps", caps, NULL);
+            g_object_set(G_OBJECT(videortpsrc), "caps", caps, nullptr);
             gst_caps_unref(caps);
 
             actual_remoteAudioPayloadInfo[theora_at] = ri;
@@ -1944,10 +1944,10 @@ RtpWorker::Frame RtpWorker::Frame::pullFromSink(GstAppSink *appsink)
     gst_structure_get_int(capsStruct,"width",&width);
     gst_structure_get_int(capsStruct,"height",&height);
 
-    if ((gsize)(width * height * 4) == gst_buffer_get_size(buffer)) {
+    if (gsize(width * height * 4) == gst_buffer_get_size(buffer)) {
         QImage image(width, height, QImage::Format_RGB32);
 #if QT_VERSION >= QT_VERSION_CHECK(5,11,0)
-        gst_buffer_extract(buffer, 0, image.bits(), image.sizeInBytes());
+        gst_buffer_extract(buffer, 0, image.bits(), gsize(image.sizeInBytes()));
 #else
         gst_buffer_extract(buffer, 0, image.bits(), image.byteCount());
 #endif

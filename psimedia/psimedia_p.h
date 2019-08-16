@@ -158,7 +158,7 @@ public:
     RtpChannelPrivate(RtpChannel *_q) :
         QObject(_q),
         q(_q),
-        c(0),
+        c(nullptr),
         enabled(false),
         readyReadListeners(0)
     {
@@ -169,9 +169,9 @@ public:
         if(c)
         {
             c->qobject()->disconnect(this);
-            c->qobject()->setParent(0);
+            c->qobject()->setParent(nullptr);
             enabled = false;
-            c = 0;
+            c = nullptr;
         }
 
         if(!_c)
@@ -204,7 +204,7 @@ private slots:
     void c_destroyed()
     {
         enabled = false;
-        c = 0;
+        c = nullptr;
     }
 };
 
@@ -272,22 +272,22 @@ private slots:
 
     void c_stopped()
     {
-        audioRtpChannel.d->setContext(0);
-        videoRtpChannel.d->setContext(0);
+        audioRtpChannel.d->setContext(nullptr);
+        videoRtpChannel.d->setContext(nullptr);
         emit q->stopped();
     }
 
     void c_finished()
     {
-        audioRtpChannel.d->setContext(0);
-        videoRtpChannel.d->setContext(0);
+        audioRtpChannel.d->setContext(nullptr);
+        videoRtpChannel.d->setContext(nullptr);
         emit q->finished();
     }
 
     void c_error()
     {
-        audioRtpChannel.d->setContext(0);
-        videoRtpChannel.d->setContext(0);
+        audioRtpChannel.d->setContext(nullptr);
+        videoRtpChannel.d->setContext(nullptr);
         emit q->error();
     }
 };

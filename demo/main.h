@@ -88,7 +88,7 @@ public:
     bool hasAudioParams = false;
     bool hasVideoParams = false;
 
-    ConfigDlg(MainWin *parent = 0);
+    ConfigDlg(MainWin *parent = nullptr);
     int findAudioParamsData(QComboBox *cb, const PsiMedia::AudioParams &params);
     int findVideoParamsData(QComboBox *cb, const PsiMedia::VideoParams &params);
 
@@ -110,7 +110,7 @@ class RtpSocketGroup : public QObject
 public:
     QUdpSocket socket[2];
 
-    RtpSocketGroup(QObject *parent = 0);
+    RtpSocketGroup(QObject *parent = nullptr);
     bool bind(int basePort);
 
 signals:
@@ -141,7 +141,7 @@ public:
     QHostAddress sendAddress;
     int sendBasePort;
 
-    RtpBinding(Mode _mode, PsiMedia::RtpChannel *_channel, RtpSocketGroup *_socketGroup, QObject *parent = 0);
+    RtpBinding(Mode _mode, PsiMedia::RtpChannel *_channel, RtpSocketGroup *_socketGroup, QObject *parent = nullptr);
 
 private slots:
     void net_ready(int offset);

@@ -48,9 +48,9 @@ public:
     CArgs()
     {
         argc = 0;
-        argv = 0;
+        argv = nullptr;
         count = 0;
-        data = 0;
+        data = nullptr;
     }
 
     ~CArgs()
@@ -69,18 +69,18 @@ public:
         count = args.count();
         if(count == 0)
         {
-            data = 0;
+            data = nullptr;
             argc = 0;
-            argv = 0;
+            argv = nullptr;
         }
         else
         {
-            data = (char **)malloc(sizeof(char **) * count);
-            argv = (char **)malloc(sizeof(char **) * count);
+            data = static_cast<char **>(malloc(sizeof(char **) * static_cast<unsigned long>(count)));
+            argv = static_cast<char **>(malloc(sizeof(char **) * static_cast<unsigned long>(count)));
             for(int n = 0; n < count; ++n)
             {
                 QByteArray cs = args[n].toLocal8Bit();
-                data[n] = (char *)qstrdup(cs.data());
+                data[n] = static_cast<char *>(qstrdup(cs.data()));
                 argv[n] = data[n];
             }
             argc = count;
@@ -103,7 +103,7 @@ static void loadPlugins(const QString &pluginPath, bool print = false)
         if(!QLibrary::isLibrary(entry))
             continue;
         QString filePath = dir.filePath(entry);
-        GError *err = 0;
+        GError *err = nullptr;
         GstPlugin *plugin = gst_plugin_load_file(
                     filePath.toUtf8().data(), &err);
         if(!plugin)
@@ -189,7 +189,7 @@ public:
         int need_maj = 1;
         int need_min = 4;
         int need_mic = 0;
-        if(compare_gst_version(major, minor, micro, need_maj, need_min, need_mic) < 0)
+        if(compare_gst_version(int(major), int(minor), int(micro), need_maj, need_min, need_mic) < 0)
         {
             qDebug("Need GStreamer version %d.%d.%d\n", need_maj, need_min, need_mic);
             success = false;
@@ -245,7 +245,7 @@ public:
 
         foreach(const QString &name, reqelem)
         {
-            GstElement *e = gst_element_factory_make(name.toLatin1().data(), NULL);
+            GstElement *e = gst_element_factory_make(name.toLatin1().data(), nullptr);
             if(!e)
             {
                 qDebug("Unable to load element '%s'.\n", qPrintable(name));
@@ -296,16 +296,16 @@ public:
     QQueue<QPair<GstMainLoop::ContextCallback,void*>> bridgeQueue;
 
     Private(GstMainLoop *q) : q(q),
-        gstSession(0),
+        gstSession(nullptr),
         success(false),
-        mainContext(0),
-        mainLoop(0)
+        mainContext(nullptr),
+        mainLoop(nullptr)
     {
     }
 
     static gboolean cb_loop_started(gpointer data)
     {
-        return ((Private *)data)->loop_started();
+        return static_cast<Private *>(data)->loop_started();
     }
 
     gboolean loop_started()
@@ -318,7 +318,7 @@ public:
 
     static gboolean bridge_callback(gpointer data)
     {
-        auto d = (GstMainLoop::Private*)data;
+        auto d = static_cast<GstMainLoop::Private*>(data);
         while (d->bridgeQueue.size()) {
             d->m.lock();
             QPair<GstMainLoop::ContextCallback,void*> p;
@@ -336,14 +336,14 @@ public:
     static gboolean bridge_prepare(GSource *source,gint *timeout_)
     {
         *timeout_ = -1;
-        auto d = ((Private::BridgeQueueSource*)source)->d;
+        auto d = reinterpret_cast<Private::BridgeQueueSource*>(source)->d;
         QMutexLocker locker(&d->m);
         return d->bridgeQueue.size() > 0? TRUE: FALSE;
     }
 
     static gboolean bridge_check(GSource *source)
     {
-        auto d = ((Private::BridgeQueueSource*)source)->d;
+        auto d = reinterpret_cast<Private::BridgeQueueSource*>(source)->d;
         QMutexLocker locker(&d->m);
         return d->bridgeQueue.size() > 0? TRUE: FALSE;
     }
@@ -371,9 +371,9 @@ GstMainLoop::GstMainLoop(const QString &resPath) :
         Private::bridge_prepare,
         Private::bridge_check,
         Private::bridge_dispatch,
-        NULL,
-        NULL,
-        NULL
+        nullptr,
+        nullptr,
+        nullptr
     };
 
     //create a new source
@@ -453,7 +453,7 @@ void GstMainLoop::init()
     {
         d->success = false;
         delete d->gstSession;
-        d->gstSession = 0;
+        d->gstSession = nullptr;
         d->w.wakeOne();
         d->m.unlock();
         //qDebug("GStreamer thread completed (error)\n");
@@ -468,13 +468,13 @@ void GstMainLoop::init()
     d->mainLoop = g_main_loop_new(d->mainContext, FALSE);
 
     //attach bridge source to context
-    d->bridgeId = g_source_attach((GSource*)d->bridgeSource,d->mainContext);
-    g_source_set_callback ((GSource*)d->bridgeSource, GstMainLoop::Private::bridge_callback, d, NULL);
+    d->bridgeId = int(g_source_attach(reinterpret_cast<GSource*>(d->bridgeSource),d->mainContext));
+    g_source_set_callback (reinterpret_cast<GSource*>(d->bridgeSource), GstMainLoop::Private::bridge_callback, d, nullptr);
 
     // deferred call to loop_started()
     GSource *timer = g_timeout_source_new(0);
     g_source_attach(timer, d->mainContext);
-    g_source_set_callback(timer, GstMainLoop::Private::cb_loop_started, d, NULL);
+    g_source_set_callback(timer, GstMainLoop::Private::cb_loop_started, d, nullptr);
     d->m.unlock();
     emit initialized();
 }
@@ -486,11 +486,11 @@ void GstMainLoop::start()
 
     QMutexLocker locker(&d->m);
     g_main_loop_unref(d->mainLoop);
-    d->mainLoop = 0;
+    d->mainLoop = nullptr;
     g_main_context_unref(d->mainContext);
-    d->mainContext = 0;
+    d->mainContext = nullptr;
     delete d->gstSession;
-    d->gstSession = 0;
+    d->gstSession = nullptr;
 
     d->w.wakeOne();
     emit finished();

@@ -351,7 +351,7 @@ class RwControlLocal : public QObject
     Q_OBJECT
 
 public:
-    RwControlLocal(GstMainLoop *thread, QObject *parent = 0);
+    RwControlLocal(GstMainLoop *thread, QObject *parent = nullptr);
     ~RwControlLocal();
 
     void start(const RwControlConfigDevices &devices, const RwControlConfigCodecs &codecs);

@@ -61,7 +61,7 @@ public:
     VideoWidgetContext *context;
     QImage curImage;
 
-    GstVideoWidget(VideoWidgetContext *_context, QObject *parent = 0) :
+    GstVideoWidget(VideoWidgetContext *_context, QObject *parent = nullptr) :
         QObject(parent),
         context(_context)
     {
@@ -130,11 +130,12 @@ public:
     DeviceMonitor *deviceMonitor = nullptr;
     PFeatures features;
 
-    GstFeaturesContext(GstMainLoop *_gstLoop, QObject *parent = 0) :
+    GstFeaturesContext(GstMainLoop *_gstLoop, QObject *parent = nullptr) :
         QObject(parent),
         gstLoop(_gstLoop)
     {
         gstLoop->execInContext([this](void *userData){
+            Q_UNUSED(userData);
             deviceMonitor = new DeviceMonitor(gstLoop);
             connect(deviceMonitor, &DeviceMonitor::updated, this, &GstFeaturesContext::devicesUpdated);
             devicesUpdated();
@@ -152,7 +153,7 @@ public:
     }
 
     virtual void lookup(int types)
-    { }
+    { Q_UNUSED(types); }
 
     virtual PFeatures results() const
     {
@@ -344,11 +345,11 @@ public:
     bool wake_pending;
     QList<QByteArray> pending_in;
 
-    GstRecorder(QObject *parent = 0) :
+    GstRecorder(QObject *parent = nullptr) :
         QObject(parent),
-        control(0),
-        recordDevice(0),
-        nextRecordDevice(0),
+        control(nullptr),
+        recordDevice(nullptr),
+        nextRecordDevice(nullptr),
         record_cancel(false),
         wake_pending(false)
     {
@@ -383,7 +384,7 @@ public:
         {
             // if there was only a queued device, then there's
             //   nothing to do but dequeue it
-            nextRecordDevice = 0;
+            nextRecordDevice = nullptr;
         }
         else
         {
@@ -400,7 +401,7 @@ public:
         if(control && !recordDevice && nextRecordDevice)
         {
             recordDevice = nextRecordDevice;
-            nextRecordDevice = 0;
+            nextRecordDevice = nullptr;
 
             RwControlRecord record;
             record.enabled = true;
@@ -445,7 +446,7 @@ private slots:
             else // EOF
             {
                 recordDevice->close();
-                recordDevice = 0;
+                recordDevice = nullptr;
 
                 bool wasCancelled = record_cancel;
                 record_cancel = false;
@@ -493,10 +494,10 @@ public:
     QMutex write_mutex;
     bool allow_writes;
 
-    GstRtpSessionContext(GstMainLoop *_gstLoop, QObject *parent = 0) :
+    GstRtpSessionContext(GstMainLoop *_gstLoop, QObject *parent = nullptr) :
         QObject(parent),
         gstLoop(_gstLoop),
-        control(0),
+        control(nullptr),
         isStarted(false),
         isStopping(false),
         pending_status(false),
@@ -504,8 +505,8 @@ public:
         allow_writes(false)
     {
 #ifdef QT_GUI_LIB
-        outputWidget = 0;
-        previewWidget = 0;
+        outputWidget = nullptr;
+        previewWidget = nullptr;
 #endif
 
         devices.audioOutVolume = 100;
@@ -543,12 +544,12 @@ public:
         isStopping = false;
         pending_status = false;
 
-        recorder.control = 0;
+        recorder.control = nullptr;
 
         write_mutex.lock();
         allow_writes = false;
         delete control;
-        control = 0;
+        control = nullptr;
         write_mutex.unlock();
     }
 
@@ -614,7 +615,7 @@ public:
             return;
 
         delete outputWidget;
-        outputWidget = 0;
+        outputWidget = nullptr;
 
         if(widget)
             outputWidget = new GstVideoWidget(widget, this);
@@ -633,7 +634,7 @@ public:
             return;
 
         delete previewWidget;
-        previewWidget = 0;
+        previewWidget = nullptr;
 
         if(widget)
             previewWidget = new GstVideoWidget(widget, this);
@@ -826,7 +827,7 @@ public:
 
     virtual Error errorCode() const
     {
-        return (Error)lastStatus.errorCode;
+        return static_cast<Error>(lastStatus.errorCode);
     }
 
     virtual RtpChannelContext *audioRtpChannel()
@@ -941,17 +942,17 @@ private slots:
 private:
     static void cb_control_rtpAudioOut(const PRtpPacket &packet, void *app)
     {
-        ((GstRtpSessionContext *)app)->control_rtpAudioOut(packet);
+        static_cast<GstRtpSessionContext *>(app)->control_rtpAudioOut(packet);
     }
 
     static void cb_control_rtpVideoOut(const PRtpPacket &packet, void *app)
     {
-        ((GstRtpSessionContext *)app)->control_rtpVideoOut(packet);
+        static_cast<GstRtpSessionContext *>(app)->control_rtpVideoOut(packet);
     }
 
     static void cb_control_recordData(const QByteArray &packet, void *app)
     {
-        ((GstRtpSessionContext *)app)->control_recordData(packet);
+        static_cast<GstRtpSessionContext *>(app)->control_recordData(packet);
     }
 
     // note: this is executed from a different thread
