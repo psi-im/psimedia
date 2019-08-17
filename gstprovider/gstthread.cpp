@@ -75,8 +75,8 @@ public:
         }
         else
         {
-            data = static_cast<char **>(malloc(sizeof(char **) * static_cast<unsigned long>(count)));
-            argv = static_cast<char **>(malloc(sizeof(char **) * static_cast<unsigned long>(count)));
+            data = static_cast<char **>(malloc(sizeof(char *) * quintptr(count)));
+            argv = static_cast<char **>(malloc(sizeof(char *) * quintptr(count)));
             for(int n = 0; n < count; ++n)
             {
                 QByteArray cs = args[n].toLocal8Bit();
@@ -128,7 +128,7 @@ static void loadPlugins(const QString &pluginPath, bool print = false)
         qDebug("\n");
 }
 
-static int compare_gst_version(int a1, int a2, int a3, int b1, int b2, int b3)
+static int compare_gst_version(uint a1, uint a2, uint a3, uint b1, uint b2, uint b3)
 {
     if(a1 > b1)
         return 1;
@@ -186,10 +186,10 @@ public:
         version.sprintf("%d.%d.%d%s", major, minor, micro,
                         !nano_str.isEmpty() ? qPrintable(nano_str) : "");
 
-        int need_maj = 1;
-        int need_min = 4;
-        int need_mic = 0;
-        if(compare_gst_version(int(major), int(minor), int(micro), need_maj, need_min, need_mic) < 0)
+        uint need_maj = 1;
+        uint need_min = 4;
+        uint need_mic = 0;
+        if(compare_gst_version(major, minor, micro, need_maj, need_min, need_mic) < 0)
         {
             qDebug("Need GStreamer version %d.%d.%d\n", need_maj, need_min, need_mic);
             success = false;
@@ -292,7 +292,7 @@ public:
     QMutex m;
     QWaitCondition w;
     BridgeQueueSource *bridgeSource;
-    int bridgeId;
+    guint bridgeId;
     QQueue<QPair<GstMainLoop::ContextCallback,void*>> bridgeQueue;
 
     Private(GstMainLoop *q) : q(q),
@@ -468,8 +468,8 @@ void GstMainLoop::init()
     d->mainLoop = g_main_loop_new(d->mainContext, FALSE);
 
     //attach bridge source to context
-    d->bridgeId = int(g_source_attach(reinterpret_cast<GSource*>(d->bridgeSource),d->mainContext));
-    g_source_set_callback (reinterpret_cast<GSource*>(d->bridgeSource), GstMainLoop::Private::bridge_callback, d, nullptr);
+    d->bridgeId = g_source_attach(&d->bridgeSource->parent,d->mainContext);
+    g_source_set_callback (&d->bridgeSource->parent, GstMainLoop::Private::bridge_callback, d, nullptr);
 
     // deferred call to loop_started()
     GSource *timer = g_timeout_source_new(0);

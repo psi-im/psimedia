@@ -65,7 +65,7 @@ static QByteArray hexDecode(const QString &in)
         int value = hexByte(in[n].toLatin1(), in[n + 1].toLatin1());
         if(value < 0)
             return QByteArray(); // error
-        out += static_cast<char>(value);
+        out += char(value);
     }
     return out;
 }

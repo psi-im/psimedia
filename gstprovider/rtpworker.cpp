@@ -102,7 +102,7 @@ public:
 
         if(sizes_at >= 30)
         {
-            memmove(sizes, sizes + 1, sizeof(int) * static_cast<unsigned long>(sizes_at - 1));
+            memmove(sizes, sizes + 1, sizeof(int) * quintptr(sizes_at - 1));
             --sizes_at;
         }
         sizes[sizes_at++] = current_size;
@@ -711,10 +711,10 @@ void RtpWorker::fileDemux_pad_added(GstElement *element, GstPad *pad)
     qDebug("  caps: [%s]\n", qPrintable(capsString));
 #endif
 
-    int num = int(gst_caps_get_size(caps));
-    for(int n = 0; n < num; ++n)
+    guint num = gst_caps_get_size(caps);
+    for(guint n = 0; n < num; ++n)
     {
-        GstStructure *cs = gst_caps_get_structure(caps, guint(n));
+        GstStructure *cs = gst_caps_get_structure(caps, n);
         QString mime = gst_structure_get_name(cs);
 
         QStringList parts = mime.split('/');

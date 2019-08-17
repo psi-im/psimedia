@@ -43,7 +43,7 @@ static QString urlishEncode(const QString &in)
     {
         if(in[n] == '%' || in[n] == ',' ||  in[n] == ';' || in[n] == ':' || in[n] == '\n')
         {
-            unsigned char c = static_cast<unsigned char>(in[n].toLatin1());
+            unsigned char c = quint8(in[n].toLatin1());
             out += QString().sprintf("%%%02x", c);
         }
         else
@@ -68,7 +68,7 @@ static QString urlishDecode(const QString &in)
             if(!ok)
                 return QString();
 
-            unsigned char c = static_cast<unsigned char>(x);
+            unsigned char c = quint8(x);
             out += char(c);
             n += 2;
         }
@@ -448,7 +448,8 @@ void RtpBinding::net_ready(int offset)
     while(socketGroup->socket[offset].hasPendingDatagrams())
     {
         int size = int(socketGroup->socket[offset].pendingDatagramSize());
-        QByteArray rawValue(size, char(offset));
+        QByteArray rawValue;
+        rawValue.resize(size);
         QHostAddress fromAddr;
         quint16 fromPort;
         if(socketGroup->socket[offset].readDatagram(rawValue.data(), size, &fromAddr, &fromPort) == -1)
