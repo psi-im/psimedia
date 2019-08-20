@@ -46,15 +46,15 @@ QList<GstDevice> PlatformDeviceMonitor::getDevices()
 // FIXME: why do we have both this function and test_video() ?
 static bool test_element(const QString &element_name)
 {
-    GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), NULL);
+    GstElement *e = gst_element_factory_make(element_name.toLatin1().data(), nullptr);
     if(!e)
         return 0;
 
     gst_element_set_state(e, GST_STATE_READY);
-    int ret = gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
+    int ret = gst_element_get_state(e, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
     gst_element_set_state(e, GST_STATE_NULL);
-    gst_element_get_state(e, NULL, NULL, GST_CLOCK_TIME_NONE);
+    gst_element_get_state(e, nullptr, nullptr, GST_CLOCK_TIME_NONE);
     g_object_unref(G_OBJECT(e));
 
     if(ret != GST_STATE_CHANGE_SUCCESS)
@@ -69,7 +69,7 @@ static gchar *
 get_launch_line (::GstDevice * device)
 {
     static const char *const ignored_propnames[] =
-    { "name", "parent", "direction", "template", "caps", NULL };
+    { "name", "parent", "direction", "template", "caps", nullptr };
     GString *launch_line;
     GstElement *element;
     GstElement *pureelement;
@@ -79,25 +79,25 @@ get_launch_line (::GstDevice * device)
     guint i, number_of_properties;
     GstElementFactory *factory;
 
-    element = gst_device_create_element (device, NULL);
+    element = gst_device_create_element (device, nullptr);
 
     if (!element)
-        return NULL;
+        return nullptr;
 
     factory = gst_element_get_factory (element);
     if (!factory) {
         gst_object_unref (element);
-        return NULL;
+        return nullptr;
     }
 
     if (!gst_plugin_feature_get_name (factory)) {
         gst_object_unref (element);
-        return NULL;
+        return nullptr;
     }
 
     launch_line = g_string_new (gst_plugin_feature_get_name (factory));
 
-    pureelement = gst_element_factory_create (factory, NULL);
+    pureelement = gst_element_factory_create (factory, nullptr);
 
     /* get paramspecs and show non-default properties */
     properties =
@@ -178,7 +178,7 @@ public:
 
         gchar *ll = get_launch_line(gdev);
         if (ll) {
-            auto e = gst_parse_launch(ll, NULL);
+            auto e = gst_parse_launch(ll, nullptr);
             if (e) {
                 d.id = QString::fromUtf8(ll);
                 gst_object_unref(e);
@@ -245,8 +245,8 @@ void DeviceMonitor::updateDevList()
     GList *devs = gst_device_monitor_get_devices(d->_monitor);
     GList *dev = devs;
 
-    for (; dev != NULL; dev = dev->next) {
-        PsiMedia::GstDevice pdev = Private::gstDevConvert((::GstDevice*)(dev->data));
+    for (; dev != nullptr; dev = dev->next) {
+        PsiMedia::GstDevice pdev = Private::gstDevConvert(static_cast<::GstDevice*>(dev->data));
         if (pdev.id.isEmpty()) continue;
         d->_devices.insert(pdev.id, pdev);
     }
@@ -318,14 +318,14 @@ DeviceMonitor::DeviceMonitor(GstMainLoop *mainLoop) :
     gst_bus_add_watch(bus, Private::onChangeGstCB, d);
 
     //GSource *source = gst_bus_create_watch(bus);
-    //g_source_set_callback (source, (GSourceFunc)Private::onChangeGstCB, d, NULL);
+    //g_source_set_callback (source, (GSourceFunc)Private::onChangeGstCB, d, nullptr);
     //g_source_attach(source, context);
     //g_source_unref(source);
 
     gst_object_unref (bus);
 
-    gst_device_monitor_add_filter (d->_monitor, "Audio/Sink", NULL);
-    gst_device_monitor_add_filter (d->_monitor, "Audio/Source", NULL);
+    gst_device_monitor_add_filter (d->_monitor, "Audio/Sink", nullptr);
+    gst_device_monitor_add_filter (d->_monitor, "Audio/Source", nullptr);
 
     GstCaps *caps;
     caps = gst_caps_new_empty_simple ("video/x-raw");
@@ -361,7 +361,9 @@ QList<GstDevice> DeviceMonitor::devices(PDevice::Type type)
 
 GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *captureSize)
 {
-    return gst_parse_launch(id.toLatin1().data(), NULL);
+    Q_UNUSED(type);
+    Q_UNUSED(captureSize);
+    return gst_parse_launch(id.toLatin1().data(), nullptr);
     // TODO check if it correponds to passed type.
     // TODO drop captureSize
 }

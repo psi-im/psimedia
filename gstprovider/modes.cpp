@@ -28,7 +28,7 @@ namespace PsiMedia {
 
 /*static bool have_element(const QString &name)
 {
-    GstElement *e = gst_element_factory_make(name.toLatin1().data(), NULL);
+    GstElement *e = gst_element_factory_make(name.toLatin1().data(), nullptr);
     if(!e)
         return false;
 

@@ -71,7 +71,7 @@ public:
     QList<GstDevice> devices(PDevice::Type type);
 };
 
-GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *captureSize = 0);
+GstElement *devices_makeElement(const QString &id, PDevice::Type type, QSize *captureSize = nullptr);
 
 }
 

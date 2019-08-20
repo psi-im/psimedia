@@ -43,7 +43,7 @@ static QString urlishEncode(const QString &in)
     {
         if(in[n] == '%' || in[n] == ',' ||  in[n] == ';' || in[n] == ':' || in[n] == '\n')
         {
-            unsigned char c = (unsigned char)in[n].toLatin1();
+            unsigned char c = quint8(in[n].toLatin1());
             out += QString().sprintf("%%%02x", c);
         }
         else
@@ -68,8 +68,8 @@ static QString urlishDecode(const QString &in)
             if(!ok)
                 return QString();
 
-            unsigned char c = (unsigned char)x;
-            out += c;
+            unsigned char c = quint8(x);
+            out += char(c);
             n += 2;
         }
         else
@@ -399,9 +399,9 @@ RtpSocketGroup::RtpSocketGroup(QObject *parent) :
 
 bool RtpSocketGroup::bind(int basePort)
 {
-    if(!socket[0].bind(basePort))
+    if(!socket[0].bind(quint16(basePort)))
         return false;
-    if(!socket[1].bind(basePort + 1))
+    if(!socket[1].bind(quint16(basePort + 1)))
         return false;
     return true;
 }
@@ -447,8 +447,9 @@ void RtpBinding::net_ready(int offset)
 
     while(socketGroup->socket[offset].hasPendingDatagrams())
     {
-        int size = (int)socketGroup->socket[offset].pendingDatagramSize();
-        QByteArray rawValue(size, offset);
+        int size = int(socketGroup->socket[offset].pendingDatagramSize());
+        QByteArray rawValue;
+        rawValue.resize(size);
         QHostAddress fromAddr;
         quint16 fromPort;
         if(socketGroup->socket[offset].readDatagram(rawValue.data(), size, &fromAddr, &fromPort) == -1)
@@ -490,7 +491,7 @@ void RtpBinding::app_ready()
         if(sendAddress.isNull() || sendBasePort < BASE_PORT_MIN || sendBasePort > BASE_PORT_MAX)
             continue;
 
-        socketGroup->socket[offset].writeDatagram(packet.rawValue(), sendAddress, sendBasePort + offset);
+        socketGroup->socket[offset].writeDatagram(packet.rawValue(), sendAddress, quint16(sendBasePort + offset));
     }
 }
 
@@ -501,15 +502,15 @@ void RtpBinding::app_written(int count)
 }
 
 MainWin::MainWin() :
-    action_AboutProvider(0),
+    action_AboutProvider(nullptr),
     producer(this),
     receiver(this),
-    sendAudioRtp(0),
-    sendVideoRtp(0),
-    receiveAudioRtp(0),
-    receiveVideoRtp(0),
+    sendAudioRtp(nullptr),
+    sendVideoRtp(nullptr),
+    receiveAudioRtp(nullptr),
+    receiveVideoRtp(nullptr),
     recording(false),
-    recordFile(0)
+    recordFile(nullptr)
 {
     ui.setupUi(this);
     setWindowTitle(tr("PsiMedia Demo"));
@@ -670,17 +671,17 @@ QString MainWin::rtpSessionErrorToString(PsiMedia::RtpSession::Error e)
 void MainWin::cleanup_send_rtp()
 {
     delete sendAudioRtp;
-    sendAudioRtp = 0;
+    sendAudioRtp = nullptr;
     delete sendVideoRtp;
-    sendVideoRtp = 0;
+    sendVideoRtp = nullptr;
 }
 
 void MainWin::cleanup_receive_rtp()
 {
     delete receiveAudioRtp;
-    receiveAudioRtp = 0;
+    receiveAudioRtp = nullptr;
     delete receiveVideoRtp;
-    receiveVideoRtp = 0;
+    receiveVideoRtp = nullptr;
 }
 
 void MainWin::cleanup_record()
@@ -688,7 +689,7 @@ void MainWin::cleanup_record()
     if(recording)
     {
         delete recordFile;
-        recordFile = 0;
+        recordFile = nullptr;
         recording = false;
     }
 }
@@ -923,9 +924,9 @@ void MainWin::start_receive()
     if(!audioSocketGroup->bind(audioPort))
     {
         delete audioSocketGroup;
-        audioSocketGroup = 0;
+        audioSocketGroup = nullptr;
         delete videoSocketGroup;
-        videoSocketGroup = 0;
+        videoSocketGroup = nullptr;
 
         QMessageBox::critical(this, tr("Error"), tr(
                                   "Unable to bind to receive audio ports."
@@ -935,9 +936,9 @@ void MainWin::start_receive()
     if(!videoSocketGroup->bind(videoPort))
     {
         delete audioSocketGroup;
-        audioSocketGroup = 0;
+        audioSocketGroup = nullptr;
         delete videoSocketGroup;
-        videoSocketGroup = 0;
+        videoSocketGroup = nullptr;
 
         QMessageBox::critical(this, tr("Error"), tr(
                                   "Unable to bind to receive video ports."
@@ -975,8 +976,8 @@ void MainWin::producer_started()
     PsiMedia::PayloadInfo audio, *pAudio;
     PsiMedia::PayloadInfo video, *pVideo;
 
-    pAudio = 0;
-    pVideo = 0;
+    pAudio = nullptr;
+    pVideo = nullptr;
     if(transmitAudio)
     {
         // confirm transmitting of audio is actually possible,
@@ -1170,7 +1171,7 @@ int main(int argc, char **argv)
 
     if(!PsiMedia::isSupported())
     {
-        QMessageBox::critical(0, MainWin::tr("PsiMedia Demo"),
+        QMessageBox::critical(nullptr, MainWin::tr("PsiMedia Demo"),
                               MainWin::tr(
                                   "Error: Could not load PsiMedia subsystem."
                                   ));
@@ -1191,6 +1192,7 @@ int main(int argc, char **argv)
 //----------------------------------------------------
 FeaturesWatcher::FeaturesWatcher(QObject *parent)
 {
+    Q_UNUSED(parent);
     QSettings s;
 
     connect(&_features, &PsiMedia::Features::updated, this, &FeaturesWatcher::featuresUpdated);

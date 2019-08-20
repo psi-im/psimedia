@@ -29,7 +29,7 @@ static QString hexEncode(const QByteArray &in)
 {
     QString out;
     for(int n = 0; n < in.size(); ++n)
-        out += QString().sprintf("%02x", (unsigned char)in[n]);
+        out += QString().sprintf("%02x", static_cast<unsigned char>(in[n]));
     return out;
 }
 
@@ -65,7 +65,7 @@ static QByteArray hexDecode(const QString &in)
         int value = hexByte(in[n].toLatin1(), in[n + 1].toLatin1());
         if(value < 0)
             return QByteArray(); // error
-        out += (unsigned char)value;
+        out += char(value);
     }
     return out;
 }
@@ -80,7 +80,7 @@ public:
 
 gboolean my_foreach_func(GQuark field_id, const GValue *value, gpointer user_data)
 {
-    my_foreach_state &state = *((my_foreach_state *)user_data);
+    my_foreach_state &state = *(static_cast<my_foreach_state *>(user_data));
 
     QString name = QString::fromLatin1(g_quark_to_string(field_id));
     if(G_VALUE_TYPE(value) == G_TYPE_STRING && state.whitelist->contains(name))
@@ -119,7 +119,7 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
     if(info.id == -1)
     {
         gst_structure_free(out);
-        return 0;
+        return nullptr;
     }
 
     {
@@ -134,7 +134,7 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
     if(info.id >= 96 && info.name.isEmpty())
     {
         gst_structure_free(out);
-        return 0;
+        return nullptr;
     }
 
     {
@@ -174,7 +174,7 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
             if(config.isEmpty())
             {
                 gst_structure_free(out);
-                return 0;
+                return nullptr;
             }
 
             value = QString::fromLatin1(config.toBase64());

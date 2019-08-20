@@ -28,7 +28,7 @@
 namespace PsiMedia {
 
 GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &media);
-PPayloadInfo structureToPayloadInfo(GstStructure *structure, QString *media = 0);
+PPayloadInfo structureToPayloadInfo(GstStructure *structure, QString *media = nullptr);
 
 }
 

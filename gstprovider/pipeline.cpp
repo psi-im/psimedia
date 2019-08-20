@@ -83,7 +83,7 @@ static const char *type_to_str(PDevice::Type type)
     case PDevice::VideoIn:  return "VideoIn";
     default:
         Q_ASSERT(0);
-        return 0;
+        return nullptr;
     }
 }
 
@@ -120,11 +120,11 @@ static GstCaps *filter_for_capture_size(const QSize &size)
     return gst_caps_new_full (
                 gst_structure_new("video/x-raw",
                                   "width", G_TYPE_INT, size.width(),
-                                  "height", G_TYPE_INT, size.height(), NULL),
+                                  "height", G_TYPE_INT, size.height(), nullptr),
                 gst_structure_new("image/jpeg",
                                   "width", G_TYPE_INT, size.width(),
-                                  "height", G_TYPE_INT, size.height(), NULL),
-                NULL
+                                  "height", G_TYPE_INT, size.height(), nullptr),
+                nullptr
                 );
 }
 
@@ -142,7 +142,7 @@ static GstCaps *filter_for_desired_size(const QSize &size)
     //		}
     //	}
 
-    //	GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
+    //	GstElement *capsfilter = gst_element_factory_make("capsfilter", nullptr);
     //	GstCaps *caps = gst_caps_new_empty();
 
     // 	for(int n = 0; n < widths.count(); ++n)
@@ -150,18 +150,18 @@ static GstCaps *filter_for_desired_size(const QSize &size)
     // 		GstStructure *cs;
     // 		cs = gst_structure_new("video/x-raw-yuv",
     // 			"width", GST_TYPE_INT_RANGE, 1, widths[n],
-    // 			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
+    // 			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, nullptr);
     // 		gst_caps_append_structure(caps, cs);
     //
     // 		cs = gst_structure_new("video/x-raw-rgb",
     // 			"width", GST_TYPE_INT_RANGE, 1, widths[n],
-    // 			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, NULL);
+    // 			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, nullptr);
     // 		gst_caps_append_structure(caps, cs);
     // 	}
     return gst_caps_new_simple("video/x-raw",
                                "width", G_TYPE_INT, 640,
                                "height", G_TYPE_INT, 480,
-                               "framerate", GST_TYPE_FRACTION, 30, 1, NULL);
+                               "framerate", GST_TYPE_FRACTION, 30, 1, nullptr);
 
 }
 
@@ -173,10 +173,10 @@ static GstElement *make_webrtcdsp_filter()
                            "rate", G_TYPE_INT, WEBRTCDSP_RATE,
                            "format", G_TYPE_STRING, "S16LE",
                            "channels", G_TYPE_INT, 1,
-                           "channel-mask", GST_TYPE_BITMASK, 1, NULL);
+                           "channel-mask", GST_TYPE_BITMASK, 1, nullptr);
     gst_caps_append_structure(caps, cs);
-    GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
-    g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
+    GstElement *capsfilter = gst_element_factory_make("capsfilter", nullptr);
+    g_object_set(G_OBJECT(capsfilter), "caps", caps, nullptr);
     gst_caps_unref(caps);
     return capsfilter;
 }
@@ -229,7 +229,7 @@ private:
         QSize captureSize;
         GstElement *e = devices_makeElement(id, type, &captureSize);
         if(!e)
-            return 0;
+            return nullptr;
 
         // explicitly set audio devices to be low-latency
         if(/*type == PDevice::AudioIn ||*/ type == PDevice::AudioOut)
@@ -238,12 +238,12 @@ private:
             if(latency_ms > 0)
             {
                 gint64 lt = latency_ms * 1000; // microseconds
-                g_object_set(G_OBJECT(e), "latency-time", lt, NULL);
-                //g_object_set(G_OBJECT(e), "buffer-time", 2 * lt, NULL);
+                g_object_set(G_OBJECT(e), "latency-time", lt, nullptr);
+                //g_object_set(G_OBJECT(e), "buffer-time", 2 * lt, nullptr);
             }
         }
 
-        GstElement *bin = gst_bin_new(NULL); // FIXME not necessary for audio?
+        GstElement *bin = gst_bin_new(nullptr); // FIXME not necessary for audio?
 
         if(type == PDevice::AudioIn)
         {
@@ -254,18 +254,18 @@ private:
 
             if (options.aec) {
 
-                GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-                GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
+                GstElement *audioconvert = gst_element_factory_make("audioconvert", nullptr);
+                GstElement *audioresample = gst_element_factory_make("audioresample", nullptr);
                 GstElement *capsfilter = make_webrtcdsp_filter();
                 GstElement *webrtcdsp = gst_element_factory_make("webrtcdsp", nullptr);
-                g_object_set (webrtcdsp, "probe", options.echoProberName.toLatin1().constData(), NULL);
+                g_object_set (webrtcdsp, "probe", options.echoProberName.toLatin1().constData(), nullptr);
 
                 gst_bin_add(GST_BIN(bin), audioconvert);
                 gst_bin_add(GST_BIN(bin), audioresample);
                 gst_bin_add(GST_BIN(bin), capsfilter);
                 gst_bin_add(GST_BIN(bin), webrtcdsp);
 
-                gst_element_link_many(e, audioconvert, audioresample, capsfilter, webrtcdsp, NULL);
+                gst_element_link_many(e, audioconvert, audioresample, capsfilter, webrtcdsp, nullptr);
                 pad = gst_element_get_static_pad(webrtcdsp, "src");
 
                 webrtcdspInitialized = true;
@@ -277,7 +277,7 @@ private:
         }
         else if(type == PDevice::VideoIn)
         {
-            GstCaps *capsfilter = 0;
+            GstCaps *capsfilter = nullptr;
 
 #ifdef Q_OS_MAC
             // FIXME: hardcode resolution because filter_for_desired_size
@@ -301,7 +301,7 @@ private:
 
             gst_bin_add(GST_BIN(bin), e);
 
-            GstElement *decodebin = gst_element_factory_make("decodebin", NULL);
+            GstElement *decodebin = gst_element_factory_make("decodebin", nullptr);
             gst_bin_add(GST_BIN(bin), decodebin);
 
             GstPad *pad = gst_ghost_pad_new_no_target_from_template("src",
@@ -321,12 +321,12 @@ private:
         }
         else // AudioOut
         {
-            GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-            GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
+            GstElement *audioconvert = gst_element_factory_make("audioconvert", nullptr);
+            GstElement *audioresample = gst_element_factory_make("audioresample", nullptr);
 
             gchar *name_value = nullptr;
-            webrtcprobe = gst_element_factory_make("webrtcechoprobe", NULL);
-            g_object_get(G_OBJECT(webrtcprobe), "name", &name_value, NULL);
+            webrtcprobe = gst_element_factory_make("webrtcechoprobe", nullptr);
+            g_object_get(G_OBJECT(webrtcprobe), "name", &name_value, nullptr);
             webrtcEchoProbeName = QString::fromLatin1(name_value);
             g_free(name_value);
 
@@ -337,10 +337,10 @@ private:
                                    "rate", G_TYPE_INT, WEBRTCDSP_RATE,
                                    "format", G_TYPE_STRING, "S16LE",
                                    "channels", G_TYPE_INT, 1,
-                                   "channel-mask", GST_TYPE_BITMASK, 1, NULL);
+                                   "channel-mask", GST_TYPE_BITMASK, 1, nullptr);
             gst_caps_append_structure(caps, cs);
-            GstElement *capsfilter = gst_element_factory_make("capsfilter", NULL);
-            g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
+            GstElement *capsfilter = gst_element_factory_make("capsfilter", nullptr);
+            g_object_set(G_OBJECT(capsfilter), "caps", caps, nullptr);
             gst_caps_unref(caps);
 
             gst_bin_add(GST_BIN(bin), audioconvert);
@@ -349,7 +349,7 @@ private:
             gst_bin_add(GST_BIN(bin), webrtcprobe);
             gst_bin_add(GST_BIN(bin), e);
 
-            gst_element_link_many(audioconvert, audioresample, capsfilter, webrtcprobe, e, NULL);
+            gst_element_link_many(audioconvert, audioresample, capsfilter, webrtcprobe, e, nullptr);
 
             GstPad *pad = gst_element_get_static_pad(audioconvert, "sink");
             gst_element_add_pad(bin, gst_ghost_pad_new("sink", pad));
@@ -378,7 +378,7 @@ public:
 
         if(type == PDevice::AudioIn || type == PDevice::VideoIn)
         {
-            tee = gst_element_factory_make("tee", NULL);
+            tee = gst_element_factory_make("tee", nullptr);
             //gst_element_set_locked_state(tee, TRUE);
             gst_bin_add(GST_BIN(pipeline), tee);
 
@@ -389,13 +389,13 @@ public:
         else // AudioOut
         {
 #ifdef USE_LIVEADDER
-            adder = gst_element_factory_make("audiomixer", NULL);
+            adder = gst_element_factory_make("audiomixer", nullptr);
 
-            audioconvert = gst_element_factory_make("audioconvert", NULL);
-            audioresample = gst_element_factory_make("audioresample", NULL);
+            audioconvert = gst_element_factory_make("audioconvert", nullptr);
+            audioresample = gst_element_factory_make("audioresample", nullptr);
 #endif
 
-            capsfilter = gst_element_factory_make("capsfilter", NULL);
+            capsfilter = gst_element_factory_make("capsfilter", nullptr);
             GstCaps *caps = gst_caps_new_empty();
             int rate = get_fixed_rate();
             GstStructure *cs;
@@ -405,18 +405,18 @@ public:
                                        "rate", G_TYPE_INT, rate,
                                        "width", G_TYPE_INT, 16,
                                        "channels", G_TYPE_INT, 1,
-                                       "channel-mask", GST_TYPE_BITMASK, 1, NULL);
+                                       "channel-mask", GST_TYPE_BITMASK, 1, nullptr);
             }
             else
             {
                 cs = gst_structure_new("audio/x-raw",
                                        "width", G_TYPE_INT, 16,
                                        "channels", G_TYPE_INT, 1,
-                                       "channel-mask", GST_TYPE_BITMASK, 1, NULL);
+                                       "channel-mask", GST_TYPE_BITMASK, 1, nullptr);
             }
 
             gst_caps_append_structure(caps, cs);
-            g_object_set(G_OBJECT(capsfilter), "caps", caps, NULL);
+            g_object_set(G_OBJECT(capsfilter), "caps", caps, nullptr);
             gst_caps_unref(caps);
 
             // get element to ous decoder here? REVIEW
@@ -430,7 +430,7 @@ public:
             gst_bin_add(GST_BIN(pipeline), capsfilter);
 
 #ifdef USE_LIVEADDER
-            gst_element_link_many(adder, audioconvert, audioresample, capsfilter, NULL);
+            gst_element_link_many(adder, audioconvert, audioresample, capsfilter, nullptr);
 #endif
 
             gst_element_link(capsfilter, device_bin);
@@ -478,16 +478,16 @@ public:
 
             if(adder)
             {
-                /*gst_element_get_state(adder, NULL, NULL, GST_CLOCK_TIME_NONE);
+                /*gst_element_get_state(adder, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 gst_bin_remove(GST_BIN(pipeline), adder);
 
-                gst_element_get_state(audioconvert, NULL, NULL, GST_CLOCK_TIME_NONE);
+                gst_element_get_state(audioconvert, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 gst_bin_remove(GST_BIN(pipeline), audioconvert);
 
-                gst_element_get_state(audioresample, NULL, NULL, GST_CLOCK_TIME_NONE);
+                gst_element_get_state(audioresample, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 gst_bin_remove(GST_BIN(pipeline), audioresample);*/
 
-                gst_element_get_state(capsfilter, NULL, NULL, GST_CLOCK_TIME_NONE);
+                gst_element_get_state(capsfilter, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 gst_bin_remove(GST_BIN(pipeline), capsfilter);
 
                 // deinit opus decoder? REVIEW
@@ -508,7 +508,7 @@ public:
             // create a queue from the tee, and hand it off.  app
             //   uses this queue element as if it were the actual
             //   device
-            GstElement *queue = gst_element_factory_make("queue", NULL);
+            GstElement *queue = gst_element_factory_make("queue", nullptr);
             context->element = queue;
             //gst_element_set_locked_state(queue, TRUE);
             gst_bin_add(GST_BIN(pipeline), queue);
@@ -598,19 +598,19 @@ public:
             if(type == PDevice::AudioIn || type == PDevice::VideoIn)
             {
                 gst_element_set_state(bin, GST_STATE_NULL);
-                gst_element_get_state(bin, NULL, NULL, GST_CLOCK_TIME_NONE);
+                gst_element_get_state(bin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
                 //qDebug("set to null\n");
                 if(speexdsp)
                 {
                     gst_element_set_state(speexdsp, GST_STATE_NULL);
-                    gst_element_get_state(speexdsp, NULL, NULL, GST_CLOCK_TIME_NONE);
+                    gst_element_get_state(speexdsp, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 }
-
+NULL
                 if(tee)
                 {
                     gst_element_set_state(tee, GST_STATE_NULL);
-                    gst_element_get_state(tee, NULL, NULL, GST_CLOCK_TIME_NONE);
+                    gst_element_get_state(tee, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 }
             }
         }
@@ -631,7 +631,7 @@ public:
 
                 // set queue to null state
                 gst_element_set_state(queue, GST_STATE_NULL);
-                gst_element_get_state(queue, NULL, NULL, GST_CLOCK_TIME_NONE);
+                gst_element_get_state(queue, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
                 context->activated = false;
             }
@@ -669,11 +669,11 @@ public:
                     // useful article:
                     // https://gstreamer.freedesktop.org/documentation/application-development/advanced/pipeline-manipulation.html?gi-language=c#dynamically-changing-the-pipeline
 
-                    GstElement *audioconvert = gst_element_factory_make("audioconvert", NULL);
-                    GstElement *audioresample = gst_element_factory_make("audioresample", NULL);
+                    GstElement *audioconvert = gst_element_factory_make("audioconvert", nullptr);
+                    GstElement *audioresample = gst_element_factory_make("audioresample", nullptr);
                     GstElement *capsfilter = make_webrtcdsp_filter();
                     GstElement *webrtcdsp = gst_element_factory_make("webrtcdsp", nullptr);
-                    g_object_set (webrtcdsp, "probe", pipeline->webrtcEchoProbeName.toLatin1().constData(), NULL);
+                    g_object_set (webrtcdsp, "probe", pipeline->webrtcEchoProbeName.toLatin1().constData(), nullptr);
 
                     gst_bin_add(GST_BIN(pipeline->device_bin), audioconvert);
                     gst_bin_add(GST_BIN(pipeline->device_bin), audioresample);
@@ -684,7 +684,7 @@ public:
                     GstPad *binPad = gst_element_get_static_pad(pipeline->device_bin, "src");
                     gst_ghost_pad_set_target((GstGhostPad*)binPad, pad);
                     g_object_unref(G_OBJECT(binPad));
-                    gst_element_link_many(pipeline->aindev, audioconvert, audioresample, capsfilter, webrtcdsp, NULL);
+                    gst_element_link_many(pipeline->aindev, audioconvert, audioresample, capsfilter, webrtcdsp, nullptr);
 
                     gst_element_sync_state_with_parent(audioconvert);
                     gst_element_sync_state_with_parent(audioresample);
@@ -715,7 +715,7 @@ public:
     Private() :
         activated(false)
     {
-        pipeline = gst_pipeline_new(NULL);
+        pipeline = gst_pipeline_new(nullptr);
     }
 
     ~Private()
@@ -731,7 +731,7 @@ public:
         {
             GstStateChangeReturn ret = gst_element_set_state(pipeline, GST_STATE_PLAYING);
             //qDebug("gst_element_set_state pipline GST_STATE_PLAYING => %d", ret);
-            //gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+            //gst_element_get_state(pipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
             if (ret != GST_STATE_CHANGE_FAILURE)
                 activated = true;
         }
@@ -742,7 +742,7 @@ public:
         if(activated)
         {
             gst_element_set_state(pipeline, GST_STATE_NULL);
-            gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+            gst_element_get_state(pipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
             activated = false;
         }
     }
@@ -779,7 +779,7 @@ GstElement *PipelineContext::element()
 PipelineDeviceContext::PipelineDeviceContext()
 {
     d = new PipelineDeviceContextPrivate;
-    d->device = 0;
+    d->device = nullptr;
 }
 
 PipelineDeviceContext *PipelineDeviceContext::create(PipelineContext *pipeline, const QString &id, PDevice::Type type, const PipelineDeviceOptions &opts)
@@ -791,7 +791,7 @@ PipelineDeviceContext *PipelineDeviceContext::create(PipelineContext *pipeline, 
     that->d->activated = false;
 
     // see if we're already using this device, so we can attempt to share
-    PipelineDevice *dev = 0;
+    PipelineDevice *dev = nullptr;
     foreach(PipelineDevice *i, pipeline->d->devices)
     {
         if(i->id == id && i->type == type)
@@ -808,7 +808,7 @@ PipelineDeviceContext *PipelineDeviceContext::create(PipelineContext *pipeline, 
         {
             delete dev;
             delete that;
-            return 0;
+            return nullptr;
         }
         that->d->opts.echoProberName = dev->echoProbeName();
 
@@ -820,7 +820,7 @@ PipelineDeviceContext *PipelineDeviceContext::create(PipelineContext *pipeline, 
         //dev->addRef(that->d);
 
         delete that;
-        return 0;
+        return nullptr;
     }
 
     that->d->device = dev;
