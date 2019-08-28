@@ -20,7 +20,7 @@
 
 #include "deviceenum.h"
 
-namespace DeviceEnum {
+namespace PsiMedia {
 
 QList<Item> audioOutputItems(const QString &driver)
 {
@@ -76,4 +76,4 @@ QList<Item> videoInputItems(const QString &driver)
 	return out;
 }
 
-}
+} //namespace PsiMedia

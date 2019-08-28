@@ -2,6 +2,8 @@ project(gstprovider LANGUAGES CXX)
 
 cmake_minimum_required(VERSION 3.1.0)
 
+get_directory_property(IS_SUBPROJECT PARENT_DIRECTORY)
+
 #Detect MXE cross-compilation
 if( (CMAKE_CROSSCOMPILING) AND (DEFINED MSYS) )
     message(STATUS "MXE environment detected")
@@ -65,6 +67,13 @@ else(WIN32)
     set(BIN_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE STRING "Directory where binary will be installed")
     set(LIB_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}/${CLIENT_NAME}/plugins" CACHE STRING "Directory where plugin will be installed")
 endif(WIN32)
+
+if(IS_SUBPROJECT)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/")
+else()
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/psimedia")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/")
+endif()
 
 if(BUILD_DEMO)
   add_subdirectory(demo)

@@ -88,7 +88,8 @@ if(WIN32)
     endif()
 endif()
 
-include_directories(${GST_INCLUDES} ${CMAKE_SOURCE_DIR}/psimedia)
+get_filename_component(ABS_PARENT_DIR "${CMAKE_CURRENT_LIST_DIR}/../psimedia" ABSOLUTE)
+include_directories(${GST_INCLUDES} ${ABS_PARENT_DIR})
 
 add_library(gstprovider MODULE ${SOURCES})
 target_link_libraries(${PROJECT_NAME}
