@@ -28,18 +28,18 @@ namespace PsiMedia {
 static QString hexEncode(const QByteArray &in)
 {
     QString out;
-    for(int n = 0; n < in.size(); ++n)
+    for (int n = 0; n < in.size(); ++n)
         out += QString().sprintf("%02x", static_cast<unsigned char>(in[n]));
     return out;
 }
 
 static int hexValue(char c)
 {
-    if(c >= '0' && c <= '9')
+    if (c >= '0' && c <= '9')
         return c - '0';
-    else if(c >= 'a' && c <= 'f')
+    else if (c >= 'a' && c <= 'f')
         return c - 'a' + 10;
-    else if(c >= 'A' && c <= 'F')
+    else if (c >= 'A' && c <= 'F')
         return c - 'A' + 10;
     else
         return -1;
@@ -48,10 +48,10 @@ static int hexValue(char c)
 static int hexByte(char hi, char lo)
 {
     int nhi = hexValue(hi);
-    if(nhi < 0)
+    if (nhi < 0)
         return -1;
     int nlo = hexValue(lo);
-    if(nlo < 0)
+    if (nlo < 0)
         return -1;
     int value = (hexValue(hi) << 4) + hexValue(lo);
     return value;
@@ -60,21 +60,19 @@ static int hexByte(char hi, char lo)
 static QByteArray hexDecode(const QString &in)
 {
     QByteArray out;
-    for(int n = 0; n + 1 < in.length(); n += 2)
-    {
+    for (int n = 0; n + 1 < in.length(); n += 2) {
         int value = hexByte(in[n].toLatin1(), in[n + 1].toLatin1());
-        if(value < 0)
+        if (value < 0)
             return QByteArray(); // error
         out += char(value);
     }
     return out;
 }
 
-class my_foreach_state
-{
+class my_foreach_state {
 public:
-    PPayloadInfo *out;
-    QStringList *whitelist;
+    PPayloadInfo *                  out;
+    QStringList *                   whitelist;
     QList<PPayloadInfo::Parameter> *list;
 };
 
@@ -83,19 +81,17 @@ gboolean my_foreach_func(GQuark field_id, const GValue *value, gpointer user_dat
     my_foreach_state &state = *(static_cast<my_foreach_state *>(user_data));
 
     QString name = QString::fromLatin1(g_quark_to_string(field_id));
-    if(G_VALUE_TYPE(value) == G_TYPE_STRING && state.whitelist->contains(name))
-    {
+    if (G_VALUE_TYPE(value) == G_TYPE_STRING && state.whitelist->contains(name)) {
         QString svalue = QString::fromLatin1(g_value_get_string(value));
 
         // FIXME: is there a better way to detect when we should do this conversion?
-        if(name == "configuration" && (state.out->name == "THEORA" || state.out->name == "VORBIS"))
-        {
+        if (name == "configuration" && (state.out->name == "THEORA" || state.out->name == "VORBIS")) {
             QByteArray config = QByteArray::fromBase64(svalue.toLatin1());
-            svalue = hexEncode(config);
+            svalue            = hexEncode(config);
         }
 
         PPayloadInfo::Parameter i;
-        i.name = name;
+        i.name  = name;
         i.value = svalue;
         state.list->append(i);
     }
@@ -116,8 +112,7 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
     }
 
     // payload id field required
-    if(info.id == -1)
-    {
+    if (info.id == -1) {
         gst_structure_free(out);
         return nullptr;
     }
@@ -131,8 +126,7 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
     }
 
     // name required for payload values 96 or greater
-    if(info.id >= 96 && info.name.isEmpty())
-    {
+    if (info.id >= 96 && info.name.isEmpty()) {
         gst_structure_free(out);
         return nullptr;
     }
@@ -145,8 +139,7 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
         gst_structure_set_value(out, "encoding-name", &gv);
     }
 
-    if(info.clockrate != -1)
-    {
+    if (info.clockrate != -1) {
         GValue gv;
         memset(&gv, 0, sizeof(GValue));
         g_value_init(&gv, G_TYPE_INT);
@@ -154,8 +147,7 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
         gst_structure_set_value(out, "clock-rate", &gv);
     }
 
-    if(info.channels != -1)
-    {
+    if (info.channels != -1) {
         GValue gv;
         memset(&gv, 0, sizeof(GValue));
         g_value_init(&gv, G_TYPE_STRING);
@@ -163,16 +155,13 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
         gst_structure_set_value(out, "encoding-params", &gv);
     }
 
-    foreach(const PPayloadInfo::Parameter &i, info.parameters)
-    {
+    foreach (const PPayloadInfo::Parameter &i, info.parameters) {
         QString value = i.value;
 
         // FIXME: is there a better way to detect when we should do this conversion?
-        if(i.name == "configuration" && (info.name.toUpper() == "THEORA" || info.name.toUpper() == "VORBIS"))
-        {
+        if (i.name == "configuration" && (info.name.toUpper() == "THEORA" || info.name.toUpper() == "VORBIS")) {
             QByteArray config = hexDecode(value);
-            if(config.isEmpty())
-            {
+            if (config.isEmpty()) {
                 gst_structure_free(out);
                 return nullptr;
             }
@@ -193,49 +182,45 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
 PPayloadInfo structureToPayloadInfo(GstStructure *structure, QString *media)
 {
     PPayloadInfo out;
-    QString media_;
+    QString      media_;
 
-    gint x;
+    gint         x;
     const gchar *str;
 
-    str = gst_structure_get_name(structure);
+    str           = gst_structure_get_name(structure);
     QString sname = QString::fromLatin1(str);
-    if(sname != "application/x-rtp")
+    if (sname != "application/x-rtp")
         return PPayloadInfo();
 
     str = gst_structure_get_string(structure, "media");
-    if(!str)
+    if (!str)
         return PPayloadInfo();
     media_ = QString::fromLatin1(str);
 
     // payload field is required
-    if(!gst_structure_get_int(structure, "payload", &x))
+    if (!gst_structure_get_int(structure, "payload", &x))
         return PPayloadInfo();
 
     out.id = x;
 
     str = gst_structure_get_string(structure, "encoding-name");
-    if(str)
-    {
+    if (str) {
         out.name = QString::fromLatin1(str);
-    }
-    else
-    {
+    } else {
         // encoding-name field is required for payload values 96 or greater
-        if(out.id >= 96)
+        if (out.id >= 96)
             return PPayloadInfo();
     }
 
-    if(gst_structure_get_int(structure, "clock-rate", &x))
+    if (gst_structure_get_int(structure, "clock-rate", &x))
         out.clockrate = x;
 
     str = gst_structure_get_string(structure, "encoding-params");
-    if(str)
-    {
+    if (str) {
         QString qstr = QString::fromLatin1(str);
-        bool ok;
-        int n = qstr.toInt(&ok);
-        if(!ok)
+        bool    ok;
+        int     n = qstr.toInt(&ok);
+        if (!ok)
             return PPayloadInfo();
         out.channels = n;
     }
@@ -244,20 +229,24 @@ PPayloadInfo structureToPayloadInfo(GstStructure *structure, QString *media)
     //   not to grab the earlier static fields (e.g. clock-rate) as
     //   dynamic parameters
     QStringList whitelist;
-    whitelist << "sampling" << "width" << "height" << "delivery-method" << "configuration";
+    whitelist << "sampling"
+              << "width"
+              << "height"
+              << "delivery-method"
+              << "configuration";
 
     QList<PPayloadInfo::Parameter> list;
 
     my_foreach_state state;
-    state.out = &out;
+    state.out       = &out;
     state.whitelist = &whitelist;
-    state.list = &list;
-    if(!gst_structure_foreach(structure, my_foreach_func, &state))
+    state.list      = &list;
+    if (!gst_structure_foreach(structure, my_foreach_func, &state))
         return PPayloadInfo();
 
     out.parameters = list;
 
-    if(media)
+    if (media)
         *media = media_;
 
     return out;

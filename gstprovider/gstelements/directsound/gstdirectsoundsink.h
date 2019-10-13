@@ -27,48 +27,42 @@
 #ifndef __GST_DIRECTSOUNDSINK_H__
 #define __GST_DIRECTSOUNDSINK_H__
 
-#include <gst/gst.h>
-#include <gst/audio/gstbaseaudiosink.h>
 #include "gstdirectsound.h"
 #include "gstdirectsoundringbuffer.h"
+#include <gst/audio/gstbaseaudiosink.h>
+#include <gst/gst.h>
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_DIRECTSOUND_SINK \
-    (gst_directsound_sink_get_type())
-#define GST_DIRECTSOUND_SINK(obj) \
-    (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_DIRECTSOUND_SINK,GstDirectSoundSink))
-#define GST_DIRECTSOUND_SINK_CLASS(klass) \
-    (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_DIRECTSOUND_SINK,GstDirectSoundSinkClass))
-#define GST_IS_DIRECTSOUND_SINK(obj) \
-    (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_DIRECTSOUND_SINK))
-#define GST_IS_DIRECTSOUND_SINK_CLASS(klass) \
-    (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_DIRECTSOUND_SINK))
+#define GST_TYPE_DIRECTSOUND_SINK (gst_directsound_sink_get_type())
+#define GST_DIRECTSOUND_SINK(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_DIRECTSOUND_SINK, GstDirectSoundSink))
+#define GST_DIRECTSOUND_SINK_CLASS(klass)                                                                              \
+    (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_DIRECTSOUND_SINK, GstDirectSoundSinkClass))
+#define GST_IS_DIRECTSOUND_SINK(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_DIRECTSOUND_SINK))
+#define GST_IS_DIRECTSOUND_SINK_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_DIRECTSOUND_SINK))
 
-typedef struct _GstDirectSoundSink GstDirectSoundSink;
+typedef struct _GstDirectSoundSink      GstDirectSoundSink;
 typedef struct _GstDirectSoundSinkClass GstDirectSoundSinkClass;
 
-struct _GstDirectSoundSink
-{
-  /* base audio sink */
-  GstBaseAudioSink sink;
+struct _GstDirectSoundSink {
+    /* base audio sink */
+    GstBaseAudioSink sink;
 
-  /* ringbuffer */
-  GstDirectSoundRingBuffer * dsoundbuffer;
+    /* ringbuffer */
+    GstDirectSoundRingBuffer *dsoundbuffer;
 
-  /* current volume */
-  gdouble volume;
+    /* current volume */
+    gdouble volume;
 
-  gchar * device_id;
-  gchar * device_name;
+    gchar *device_id;
+    gchar *device_name;
 };
 
-struct _GstDirectSoundSinkClass
-{
-  GstBaseAudioSinkClass parent_class;
+struct _GstDirectSoundSinkClass {
+    GstBaseAudioSinkClass parent_class;
 };
 
-GType gst_directsound_sink_get_type (void);
+GType gst_directsound_sink_get_type(void);
 
 G_END_DECLS
 

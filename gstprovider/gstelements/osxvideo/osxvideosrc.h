@@ -22,52 +22,45 @@
 #ifndef __GST_OSX_VIDEO_SRC_H__
 #define __GST_OSX_VIDEO_SRC_H__
 
-#include <gst/gst.h>
-#include <gst/base/gstpushsrc.h>
 #include <QuickTime/QuickTime.h>
+#include <gst/base/gstpushsrc.h>
+#include <gst/gst.h>
 
-GST_DEBUG_CATEGORY_EXTERN (gst_debug_osx_video_src);
+GST_DEBUG_CATEGORY_EXTERN(gst_debug_osx_video_src);
 
 G_BEGIN_DECLS
 
 /* #defines don't like whitespacey bits */
-#define GST_TYPE_OSX_VIDEO_SRC \
-  (gst_osx_video_src_get_type())
-#define GST_OSX_VIDEO_SRC(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_OSX_VIDEO_SRC,GstOSXVideoSrc))
-#define GST_OSX_VIDEO_SRC_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_OSX_VIDEO_SRC,GstOSXVideoSrcClass))
-#define GST_IS_OSX_VIDEO_SRC(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_OSX_VIDEO_SRC))
-#define GST_IS_OSX_VIDEO_SRC_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_OSX_VIDEO_SRC))
+#define GST_TYPE_OSX_VIDEO_SRC (gst_osx_video_src_get_type())
+#define GST_OSX_VIDEO_SRC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_OSX_VIDEO_SRC, GstOSXVideoSrc))
+#define GST_OSX_VIDEO_SRC_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_OSX_VIDEO_SRC, GstOSXVideoSrcClass))
+#define GST_IS_OSX_VIDEO_SRC(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_OSX_VIDEO_SRC))
+#define GST_IS_OSX_VIDEO_SRC_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_OSX_VIDEO_SRC))
 
-typedef struct _GstOSXVideoSrc GstOSXVideoSrc;
+typedef struct _GstOSXVideoSrc      GstOSXVideoSrc;
 typedef struct _GstOSXVideoSrcClass GstOSXVideoSrcClass;
 
-struct _GstOSXVideoSrc
-{
-  GstPushSrc pushsrc;
+struct _GstOSXVideoSrc {
+    GstPushSrc pushsrc;
 
-  gchar * device_id;
-  gchar * device_name;
-  SeqGrabComponent seq_grab;
-  SGChannel video_chan;
-  GWorldPtr world;
-  Rect rect;
-  ImageSequence dec_seq;
+    gchar *          device_id;
+    gchar *          device_name;
+    SeqGrabComponent seq_grab;
+    SGChannel        video_chan;
+    GWorldPtr        world;
+    Rect             rect;
+    ImageSequence    dec_seq;
 
-  GstBuffer * buffer;
-  guint seq_num;
+    GstBuffer *buffer;
+    guint      seq_num;
 };
 
-struct _GstOSXVideoSrcClass
-{
-  GstPushSrcClass parent_class;
-  gboolean movies_enabled;
+struct _GstOSXVideoSrcClass {
+    GstPushSrcClass parent_class;
+    gboolean        movies_enabled;
 };
 
-GType gst_osx_video_src_get_type (void);
+GType gst_osx_video_src_get_type(void);
 
 G_END_DECLS
 

@@ -21,39 +21,32 @@
 #ifndef __GST_VIDEOMAXRATE_H__
 #define __GST_VIDEOMAXRATE_H__
 
-#include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+#include <gst/gst.h>
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_VIDEOMAXRATE \
-  (gst_videomaxrate_get_type())
-#define GST_VIDEOMAXRATE(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_VIDEOMAXRATE,GstVideoMaxRate))
-#define GST_VIDEOMAXRATE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_VIDEOMAXRATE,GstVideoMaxRateClass))
-#define GST_IS_VIDEOMAXRATE(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_VIDEOMAXRATE))
-#define GST_IS_VIDEOMAXRATE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_VIDEOMAXRATE))
+#define GST_TYPE_VIDEOMAXRATE (gst_videomaxrate_get_type())
+#define GST_VIDEOMAXRATE(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_VIDEOMAXRATE, GstVideoMaxRate))
+#define GST_VIDEOMAXRATE_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_VIDEOMAXRATE, GstVideoMaxRateClass))
+#define GST_IS_VIDEOMAXRATE(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_VIDEOMAXRATE))
+#define GST_IS_VIDEOMAXRATE_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_VIDEOMAXRATE))
 
 typedef struct _GstVideoMaxRate      GstVideoMaxRate;
 typedef struct _GstVideoMaxRateClass GstVideoMaxRateClass;
 
-struct _GstVideoMaxRate
-{
-  GstBaseTransform parent;
+struct _GstVideoMaxRate {
+    GstBaseTransform parent;
 
-  gint to_rate_numerator;
-  gint to_rate_denominator;
+    gint to_rate_numerator;
+    gint to_rate_denominator;
 
-  gboolean have_last_ts;
-  GstClockTime last_ts;
+    gboolean     have_last_ts;
+    GstClockTime last_ts;
 };
 
-struct _GstVideoMaxRateClass
-{
-  GstBaseTransformClass parent_class;
+struct _GstVideoMaxRateClass {
+    GstBaseTransformClass parent_class;
 };
 
 GType gst_videomaxrate_get_type(void);

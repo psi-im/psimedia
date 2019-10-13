@@ -21,14 +21,14 @@
 #ifndef PAYLOADINFO_H
 #define PAYLOADINFO_H
 
+#include "psimediaprovider.h"
 #include <QString>
 #include <gst/gststructure.h>
-#include "psimediaprovider.h"
 
 namespace PsiMedia {
 
 GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &media);
-PPayloadInfo structureToPayloadInfo(GstStructure *structure, QString *media = nullptr);
+PPayloadInfo  structureToPayloadInfo(GstStructure *structure, QString *media = nullptr);
 
 }
 

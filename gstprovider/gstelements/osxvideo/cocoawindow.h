@@ -17,12 +17,12 @@
  * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301, USA.
  *
- * The development of this code was made possible due to the involvement of Pioneers 
+ * The development of this code was made possible due to the involvement of Pioneers
  * of the Inevitable, the creators of the Songbird Music player
- * 
+ *
  */
 
-/* inspiration gained from looking at source of osx video out of xine and vlc 
+/* inspiration gained from looking at source of osx video out of xine and vlc
  * and is reflected in the code
  */
 
@@ -32,39 +32,42 @@
 
 struct _GstOSXImage;
 
-@interface GstGLView : NSOpenGLView
-{
-    int i_effect;
-    unsigned int pi_texture;
-    float f_x;
-    float f_y;
-    int initDone;
-    char* data;
-    int width, height;
-    BOOL fullscreen;
-    NSOpenGLContext* fullScreenContext; 
-    NSOpenGLContext* actualContext;
+@interface GstGLView : NSOpenGLView {
+    int              i_effect;
+    unsigned int     pi_texture;
+    float            f_x;
+    float            f_y;
+    int              initDone;
+    char *           data;
+    int              width, height;
+    BOOL             fullscreen;
+    NSOpenGLContext *fullScreenContext;
+    NSOpenGLContext *actualContext;
 }
-- (void) drawQuad;
-- (void) drawRect: (NSRect) rect;
-- (id) initWithFrame: (NSRect) frame;
-- (void) initTextures;
-- (void) reloadTexture;
-- (void) cleanUp;
-- (void) displayTexture;
-- (char*) getTextureBuffer;
-- (void) setFullScreen: (BOOL) flag;
-- (void) reshape;
-- (void) setVideoSize: (int) w: (int) h;
+- (void)drawQuad;
+- (void)drawRect:(NSRect)rect;
+- (id)initWithFrame:(NSRect)frame;
+- (void)initTextures;
+- (void)reloadTexture;
+- (void)cleanUp;
+- (void)displayTexture;
+- (char *)getTextureBuffer;
+- (void)setFullScreen:(BOOL)flag;
+- (void)reshape;
+- (void)setVideoSize:(int)w:(int)h;
 
 @end
 
-@interface GstOSXVideoSinkWindow: NSWindow {
-   int width, height;
-   GstGLView *gstview;
+@interface GstOSXVideoSinkWindow : NSWindow {
+    int        width, height;
+    GstGLView *gstview;
 }
 
-- (void) setContentSize: (NSSize) size;
-- (GstGLView *) gstView;
-- (id)initWithContentRect:(NSRect)contentRect styleMask:(unsigned int)styleMask backing:(NSBackingStoreType)bufferingType defer:(BOOL)flag screen:(NSScreen *)aScreen;
+- (void)setContentSize:(NSSize)size;
+- (GstGLView *)gstView;
+- (id)initWithContentRect:(NSRect)contentRect
+                styleMask:(unsigned int)styleMask
+                  backing:(NSBackingStoreType)bufferingType
+                    defer:(BOOL)flag
+                   screen:(NSScreen *)aScreen;
 @end

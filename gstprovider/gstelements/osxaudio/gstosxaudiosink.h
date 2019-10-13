@@ -49,37 +49,33 @@
 #ifndef __GST_OSXAUDIOSINK_H__
 #define __GST_OSXAUDIOSINK_H__
 
-#include <gst/gst.h>
-#include <gst/audio/gstbaseaudiosink.h>
 #include "gstosxringbuffer.h"
+#include <gst/audio/gstbaseaudiosink.h>
+#include <gst/gst.h>
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_OSX_AUDIO_SINK \
-  (gst_osx_audio_sink_get_type())
-#define GST_OSX_AUDIO_SINK(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_OSX_AUDIO_SINK,GstOsxAudioSink))
-#define GST_OSX_AUDIO_SINK_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_OSX_AUDIO_SINK,GstOsxAudioSinkClass))
+#define GST_TYPE_OSX_AUDIO_SINK (gst_osx_audio_sink_get_type())
+#define GST_OSX_AUDIO_SINK(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_OSX_AUDIO_SINK, GstOsxAudioSink))
+#define GST_OSX_AUDIO_SINK_CLASS(klass)                                                                                \
+    (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_OSX_AUDIO_SINK, GstOsxAudioSinkClass))
 
-typedef struct _GstOsxAudioSink GstOsxAudioSink;
+typedef struct _GstOsxAudioSink      GstOsxAudioSink;
 typedef struct _GstOsxAudioSinkClass GstOsxAudioSinkClass;
 
-struct _GstOsxAudioSink
-{
-  GstBaseAudioSink sink;
+struct _GstOsxAudioSink {
+    GstBaseAudioSink sink;
 
-  AudioDeviceID device_id;
-  AudioUnit audiounit;
-  double volume;
+    AudioDeviceID device_id;
+    AudioUnit     audiounit;
+    double        volume;
 };
 
-struct _GstOsxAudioSinkClass 
-{
-  GstBaseAudioSinkClass parent_class;
+struct _GstOsxAudioSinkClass {
+    GstBaseAudioSinkClass parent_class;
 };
 
-GType gst_osx_audio_sink_get_type (void);
+GType gst_osx_audio_sink_get_type(void);
 
 G_END_DECLS
 

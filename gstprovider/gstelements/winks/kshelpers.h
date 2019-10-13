@@ -21,41 +21,43 @@
 #define __KSHELPERS_H__
 
 #include <glib.h>
-#include <windows.h>
 #include <ks.h>
+#include <windows.h>
 #include <winioctl.h>
 
 G_BEGIN_DECLS
 
 typedef struct _KsDeviceEntry KsDeviceEntry;
 
-struct _KsDeviceEntry
-{
-  guint index;
-  gchar * name;
-  gchar * path;
+struct _KsDeviceEntry {
+    guint  index;
+    gchar *name;
+    gchar *path;
 };
 
-gboolean ks_is_valid_handle (HANDLE h);
+gboolean ks_is_valid_handle(HANDLE h);
 
-GList * ks_enumerate_devices (const GUID * category);
-void ks_device_entry_free (KsDeviceEntry * entry);
-void ks_device_list_free (GList * devices);
+GList *ks_enumerate_devices(const GUID *category);
+void   ks_device_entry_free(KsDeviceEntry *entry);
+void   ks_device_list_free(GList *devices);
 
-gboolean ks_filter_get_pin_property (HANDLE filter_handle, gulong pin_id, GUID prop_set, gulong prop_id, gpointer value, gulong value_size);
-gboolean ks_filter_get_pin_property_multi (HANDLE filter_handle, gulong pin_id, GUID prop_set, gulong prop_id, KSMULTIPLE_ITEM ** items);
+gboolean ks_filter_get_pin_property(HANDLE filter_handle, gulong pin_id, GUID prop_set, gulong prop_id, gpointer value,
+                                    gulong value_size);
+gboolean ks_filter_get_pin_property_multi(HANDLE filter_handle, gulong pin_id, GUID prop_set, gulong prop_id,
+                                          KSMULTIPLE_ITEM **items);
 
-gboolean ks_object_query_property (HANDLE handle, GUID prop_set, gulong prop_id, gulong prop_flags, gpointer * value, gulong * value_size);
-gboolean ks_object_get_property (HANDLE handle, GUID prop_set, gulong prop_id, gpointer * value, gulong * value_size);
-gboolean ks_object_set_property (HANDLE handle, GUID prop_set, gulong prop_id, gpointer value, gulong value_size);
+gboolean ks_object_query_property(HANDLE handle, GUID prop_set, gulong prop_id, gulong prop_flags, gpointer *value,
+                                  gulong *value_size);
+gboolean ks_object_get_property(HANDLE handle, GUID prop_set, gulong prop_id, gpointer *value, gulong *value_size);
+gboolean ks_object_set_property(HANDLE handle, GUID prop_set, gulong prop_id, gpointer value, gulong value_size);
 
-gboolean ks_object_get_supported_property_sets (HANDLE handle, GUID ** propsets, gulong * len);
+gboolean ks_object_get_supported_property_sets(HANDLE handle, GUID **propsets, gulong *len);
 
-gboolean ks_object_set_connection_state (HANDLE handle, KSSTATE state);
+gboolean ks_object_set_connection_state(HANDLE handle, KSSTATE state);
 
-const gchar * ks_state_to_string (KSSTATE state);
-gchar * ks_options_flags_to_string (gulong flags);
-gchar * ks_property_set_to_string (const GUID * guid);
+const gchar *ks_state_to_string(KSSTATE state);
+gchar *      ks_options_flags_to_string(gulong flags);
+gchar *      ks_property_set_to_string(const GUID *guid);
 
 G_END_DECLS
 

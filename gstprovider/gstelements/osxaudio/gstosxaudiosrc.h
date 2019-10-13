@@ -44,38 +44,33 @@
 #ifndef __GST_OSXAUDIOSRC_H__
 #define __GST_OSXAUDIOSRC_H__
 
-#include <gst/gst.h>
-#include <gst/audio/gstbaseaudiosrc.h>
 #include "gstosxringbuffer.h"
+#include <gst/audio/gstbaseaudiosrc.h>
+#include <gst/gst.h>
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_OSX_AUDIO_SRC \
-  (gst_osx_audio_src_get_type())
-#define GST_OSX_AUDIO_SRC(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_OSX_AUDIO_SRC,GstOsxAudioSrc))
-#define GST_OSX_AUDIO_SRC_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_OSX_AUDIO_SRC,GstOsxAudioSrcClass))
+#define GST_TYPE_OSX_AUDIO_SRC (gst_osx_audio_src_get_type())
+#define GST_OSX_AUDIO_SRC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_OSX_AUDIO_SRC, GstOsxAudioSrc))
+#define GST_OSX_AUDIO_SRC_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_OSX_AUDIO_SRC, GstOsxAudioSrcClass))
 
-typedef struct _GstOsxAudioSrc GstOsxAudioSrc;
+typedef struct _GstOsxAudioSrc      GstOsxAudioSrc;
 typedef struct _GstOsxAudioSrcClass GstOsxAudioSrcClass;
 
-struct _GstOsxAudioSrc
-{
-  GstBaseAudioSrc src;
+struct _GstOsxAudioSrc {
+    GstBaseAudioSrc src;
 
-  AudioDeviceID device_id;
+    AudioDeviceID device_id;
 
-  /* actual number of channels reported by input device */
-  int deviceChannels;
+    /* actual number of channels reported by input device */
+    int deviceChannels;
 };
 
-struct _GstOsxAudioSrcClass 
-{
-  GstBaseAudioSrcClass parent_class;
+struct _GstOsxAudioSrcClass {
+    GstBaseAudioSrcClass parent_class;
 };
 
-GType gst_osx_audio_src_get_type (void);
+GType gst_osx_audio_src_get_type(void);
 
 G_END_DECLS
 

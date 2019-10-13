@@ -49,35 +49,29 @@
 #ifndef __GST_OSX_AUDIO_ELEMENT_H__
 #define __GST_OSX_AUDIO_ELEMENT_H__
 
-#include <gst/gst.h>
-#include <CoreAudio/CoreAudio.h>
 #include <AudioUnit/AudioUnit.h>
+#include <CoreAudio/CoreAudio.h>
+#include <gst/gst.h>
 
 G_BEGIN_DECLS
 
-#define GST_OSX_AUDIO_ELEMENT_TYPE \
-  (gst_osx_audio_element_get_type())
-#define GST_OSX_AUDIO_ELEMENT(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_OSX_AUDIO_ELEMENT_TYPE,GstOsxAudioElementInterface))
-#define GST_IS_OSX_AUDIO_ELEMENT(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_OSX_AUDIO_ELEMENT_TYPE))
-#define GST_OSX_AUDIO_ELEMENT_GET_INTERFACE(inst) \
-  (G_TYPE_INSTANCE_GET_INTERFACE((inst),GST_OSX_AUDIO_ELEMENT_TYPE,GstOsxAudioElementInterface))
+#define GST_OSX_AUDIO_ELEMENT_TYPE (gst_osx_audio_element_get_type())
+#define GST_OSX_AUDIO_ELEMENT(obj)                                                                                     \
+    (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_OSX_AUDIO_ELEMENT_TYPE, GstOsxAudioElementInterface))
+#define GST_IS_OSX_AUDIO_ELEMENT(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_OSX_AUDIO_ELEMENT_TYPE))
+#define GST_OSX_AUDIO_ELEMENT_GET_INTERFACE(inst)                                                                      \
+    (G_TYPE_INSTANCE_GET_INTERFACE((inst), GST_OSX_AUDIO_ELEMENT_TYPE, GstOsxAudioElementInterface))
 
 typedef struct _GstOsxAudioElementInterface GstOsxAudioElementInterface;
 
-struct _GstOsxAudioElementInterface
-{
-  GTypeInterface parent;
+struct _GstOsxAudioElementInterface {
+    GTypeInterface parent;
 
-  OSStatus (*io_proc) (void * userdata,
-      AudioUnitRenderActionFlags * ioActionFlags,
-      const AudioTimeStamp * inTimeStamp,
-      UInt32 inBusNumber, UInt32 inNumberFrames,
-      AudioBufferList * bufferList);
+    OSStatus (*io_proc)(void *userdata, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp,
+                        UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *bufferList);
 };
 
-GType gst_osx_audio_element_get_type (void);
+GType gst_osx_audio_element_get_type(void);
 
 G_END_DECLS
 

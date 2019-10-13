@@ -24,31 +24,24 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_KS_VIDEO_SRC \
-  (gst_ks_video_src_get_type ())
-#define GST_KS_VIDEO_SRC(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_KS_VIDEO_SRC, GstKsVideoSrc))
-#define GST_KS_VIDEO_SRC_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_KS_VIDEO_SRC, GstKsVideoSrcClass))
-#define GST_IS_KS_VIDEO_SRC(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_KS_VIDEO_SRC))
-#define GST_IS_KS_VIDEO_SRC_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_KS_VIDEO_SRC))
+#define GST_TYPE_KS_VIDEO_SRC (gst_ks_video_src_get_type())
+#define GST_KS_VIDEO_SRC(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_KS_VIDEO_SRC, GstKsVideoSrc))
+#define GST_KS_VIDEO_SRC_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_KS_VIDEO_SRC, GstKsVideoSrcClass))
+#define GST_IS_KS_VIDEO_SRC(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_KS_VIDEO_SRC))
+#define GST_IS_KS_VIDEO_SRC_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_KS_VIDEO_SRC))
 
 typedef struct _GstKsVideoSrc      GstKsVideoSrc;
 typedef struct _GstKsVideoSrcClass GstKsVideoSrcClass;
 
-struct _GstKsVideoSrc
-{
-  GstPushSrc push_src;
+struct _GstKsVideoSrc {
+    GstPushSrc push_src;
 };
 
-struct _GstKsVideoSrcClass
-{
-  GstPushSrcClass parent_class;
+struct _GstKsVideoSrcClass {
+    GstPushSrcClass parent_class;
 };
 
-GType gst_ks_video_src_get_type (void);
+GType gst_ks_video_src_get_type(void);
 
 G_END_DECLS
 

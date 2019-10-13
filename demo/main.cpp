@@ -18,18 +18,17 @@
  *
  */
 
+#include "psimedia.h"
 #include <QApplication>
+#include <QDir>
+#include <QFileDialog>
+#include <QLibrary>
 #include <QMainWindow>
 #include <QMessageBox>
+#include <QSettings>
 #include <QTimer>
 #include <QVariant>
-#include <QFileDialog>
-#include <QDir>
 #include <QtPlugin>
-#include <QLibrary>
-#include <QSettings>
-#include "psimedia.h"
-
 
 #include "main.h"
 
@@ -39,14 +38,11 @@
 static QString urlishEncode(const QString &in)
 {
     QString out;
-    for(int n = 0; n < in.length(); ++n)
-    {
-        if(in[n] == '%' || in[n] == ',' ||  in[n] == ';' || in[n] == ':' || in[n] == '\n')
-        {
+    for (int n = 0; n < in.length(); ++n) {
+        if (in[n] == '%' || in[n] == ',' || in[n] == ';' || in[n] == ':' || in[n] == '\n') {
             unsigned char c = quint8(in[n].toLatin1());
             out += QString().sprintf("%%%02x", c);
-        }
-        else
+        } else
             out += in[n];
     }
     return out;
@@ -55,24 +51,21 @@ static QString urlishEncode(const QString &in)
 static QString urlishDecode(const QString &in)
 {
     QString out;
-    for(int n = 0; n < in.length(); ++n)
-    {
-        if(in[n] == '%')
-        {
-            if(n + 2 >= in.length())
+    for (int n = 0; n < in.length(); ++n) {
+        if (in[n] == '%') {
+            if (n + 2 >= in.length())
                 return QString();
 
             QString hex = in.mid(n + 1, 2);
-            bool ok;
-            int x = hex.toInt(&ok, 16);
-            if(!ok)
+            bool    ok;
+            int     x = hex.toInt(&ok, 16);
+            if (!ok)
                 return QString();
 
             unsigned char c = quint8(x);
             out += char(c);
             n += 2;
-        }
-        else
+        } else
             out += in[n];
     }
     return out;
@@ -87,10 +80,10 @@ static QString payloadInfoToString(const PsiMedia::PayloadInfo &info)
     list += QString::number(info.channels());
     list += QString::number(info.ptime());
     list += QString::number(info.maxptime());
-    foreach(const PsiMedia::PayloadInfo::Parameter &p, info.parameters())
+    foreach (const PsiMedia::PayloadInfo::Parameter &p, info.parameters())
         list += p.name + '=' + p.value;
 
-    for(int n = 0; n < list.count(); ++n)
+    for (int n = 0; n < list.count(); ++n)
         list[n] = urlishEncode(list[n]);
     return list.join(",");
 }
@@ -98,56 +91,54 @@ static QString payloadInfoToString(const PsiMedia::PayloadInfo &info)
 static PsiMedia::PayloadInfo stringToPayloadInfo(const QString &in)
 {
     QStringList list = in.split(',');
-    if(list.count() < 6)
+    if (list.count() < 6)
         return PsiMedia::PayloadInfo();
 
-    for(int n = 0; n < list.count(); ++n)
-    {
+    for (int n = 0; n < list.count(); ++n) {
         QString str = urlishDecode(list[n]);
-        if(str.isEmpty())
+        if (str.isEmpty())
             return PsiMedia::PayloadInfo();
         list[n] = str;
     }
 
     PsiMedia::PayloadInfo out;
-    bool ok;
-    int x;
+    bool                  ok;
+    int                   x;
 
     x = list[0].toInt(&ok);
-    if(!ok)
+    if (!ok)
         return PsiMedia::PayloadInfo();
     out.setId(x);
 
     out.setName(list[1]);
 
     x = list[2].toInt(&ok);
-    if(!ok)
+    if (!ok)
         return PsiMedia::PayloadInfo();
     out.setClockrate(x);
 
     x = list[3].toInt(&ok);
-    if(!ok)
+    if (!ok)
         return PsiMedia::PayloadInfo();
     out.setChannels(x);
 
     x = list[4].toInt(&ok);
-    if(!ok)
+    if (!ok)
         return PsiMedia::PayloadInfo();
     out.setPtime(x);
 
     x = list[5].toInt(&ok);
-    if(!ok)
+    if (!ok)
         return PsiMedia::PayloadInfo();
     out.setMaxptime(x);
 
     QList<PsiMedia::PayloadInfo::Parameter> plist;
-    for(int n = 6; n < list.count(); ++n)
-    {
+    for (int n = 6; n < list.count(); ++n) {
         x = list[n].indexOf('=');
-        if(x == -1)
+        if (x == -1)
             return PsiMedia::PayloadInfo();
         PsiMedia::PayloadInfo::Parameter p;
-        p.name = list[n].mid(0, x);
+        p.name  = list[n].mid(0, x);
         p.value = list[n].mid(x + 1);
         plist += p;
     }
@@ -159,9 +150,9 @@ static PsiMedia::PayloadInfo stringToPayloadInfo(const QString &in)
 static QString payloadInfoToCodecString(const PsiMedia::PayloadInfo *audio, const PsiMedia::PayloadInfo *video)
 {
     QStringList list;
-    if(audio)
+    if (audio)
         list += QString("A:") + payloadInfoToString(*audio);
-    if(video)
+    if (video)
         list += QString("V:") + payloadInfoToString(*video);
     return list.join(";");
 }
@@ -169,42 +160,45 @@ static QString payloadInfoToCodecString(const PsiMedia::PayloadInfo *audio, cons
 static bool codecStringToPayloadInfo(const QString &in, PsiMedia::PayloadInfo *audio, PsiMedia::PayloadInfo *video)
 {
     QStringList list = in.split(';');
-    foreach(const QString &s, list)
-    {
+    foreach (const QString &s, list) {
         int x = s.indexOf(':');
-        if(x == -1)
+        if (x == -1)
             return false;
 
         QString var = s.mid(0, x);
         QString val = s.mid(x + 1);
-        if(val.isEmpty())
+        if (val.isEmpty())
             return false;
 
         PsiMedia::PayloadInfo info = stringToPayloadInfo(val);
-        if(info.isNull())
+        if (info.isNull())
             return false;
 
-        if(var == "A" && audio)
+        if (var == "A" && audio)
             *audio = info;
-        else if(var == "V" && video)
+        else if (var == "V" && video)
             *video = info;
     }
 
     return true;
 }
 
-ConfigDlg::ConfigDlg(MainWin *parent) :
-    QDialog(parent)
+ConfigDlg::ConfigDlg(MainWin *parent) : QDialog(parent)
 {
     ui.setupUi(this);
     setWindowTitle(tr("Configure Audio/Video"));
 
     // with qt-5.7 and above we can use qOverlaod instead of these awful casts
-    connect(ui.cb_audioInDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasAudioInPref = true; });
-    connect(ui.cb_audioOutDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasAudioOutPref = true; });
-    connect(ui.cb_videoInDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasVideoInPref = true; });
-    connect(ui.cb_audioMode, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasAudioParams = true; });
-    connect(ui.cb_videoMode, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, [this](int){ hasVideoParams = true; });
+    connect(ui.cb_audioInDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
+            [this](int) { hasAudioInPref = true; });
+    connect(ui.cb_audioOutDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
+            [this](int) { hasAudioOutPref = true; });
+    connect(ui.cb_videoInDevice, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
+            [this](int) { hasVideoInPref = true; });
+    connect(ui.cb_audioMode, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
+            [this](int) { hasAudioParams = true; });
+    connect(ui.cb_videoMode, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this,
+            [this](int) { hasVideoParams = true; });
 
     ui.lb_audioInDevice->setEnabled(false);
     ui.cb_audioInDevice->setEnabled(false);
@@ -232,40 +226,39 @@ void ConfigDlg::featuresUpdated()
     ui.cb_audioMode->blockSignals(true);
     ui.cb_videoMode->blockSignals(true);
 
-    QString audioInPref = ui.cb_audioInDevice->currentData().toString();
+    QString audioInPref  = ui.cb_audioInDevice->currentData().toString();
     QString audioOutPref = ui.cb_audioOutDevice->currentData().toString();
-    QString videoInPref = ui.cb_videoInDevice->currentData().toString();
-    auto audioMode = ui.cb_audioMode->currentData().value<PsiMedia::AudioParams>();
-    auto videoMode = ui.cb_videoMode->currentData().value<PsiMedia::VideoParams>();
+    QString videoInPref  = ui.cb_videoInDevice->currentData().toString();
+    auto    audioMode    = ui.cb_audioMode->currentData().value<PsiMedia::AudioParams>();
+    auto    videoMode    = ui.cb_videoMode->currentData().value<PsiMedia::VideoParams>();
 
     ui.cb_audioOutDevice->clear();
     ui.cb_audioOutDevice->addItem("<None>", QString());
-    for(const auto &dev: featuresWatcher->audioOutputDevices())
+    for (const auto &dev : featuresWatcher->audioOutputDevices())
         ui.cb_audioOutDevice->addItem(dev.name(), dev.id());
 
     ui.cb_audioInDevice->clear();
     ui.cb_audioInDevice->addItem("<None>", QString());
-    for(const auto &dev: featuresWatcher->audioInputDevices())
+    for (const auto &dev : featuresWatcher->audioInputDevices())
         ui.cb_audioInDevice->addItem(dev.name(), dev.id());
 
     ui.cb_videoInDevice->clear();
     ui.cb_videoInDevice->addItem("<None>", QString());
-    for(const auto &dev: featuresWatcher->videoInputDevices())
+    for (const auto &dev : featuresWatcher->videoInputDevices())
         ui.cb_videoInDevice->addItem(dev.name(), dev.id());
 
     ui.cb_audioMode->clear();
-    foreach(const PsiMedia::AudioParams &params, featuresWatcher->supportedAudioModes())
-    {
+    foreach (const PsiMedia::AudioParams &params, featuresWatcher->supportedAudioModes()) {
         QString codec = params.codec();
-        if(codec == "vorbis" || codec == "opus")
+        if (codec == "vorbis" || codec == "opus")
             codec[0] = codec[0].toUpper();
         else
             codec = codec.toUpper();
         QString hz = QString::number(params.sampleRate() / 1000);
         QString chanstr;
-        if(params.channels() == 1)
+        if (params.channels() == 1)
             chanstr = "Mono";
-        else if(params.channels() == 2)
+        else if (params.channels() == 2)
             chanstr = "Stereo";
         else
             chanstr = QString("Channels: %1").arg(params.channels());
@@ -275,15 +268,14 @@ void ConfigDlg::featuresUpdated()
     }
 
     ui.cb_videoMode->clear();
-    foreach(const PsiMedia::VideoParams &params, featuresWatcher->supportedVideoModes())
-    {
+    foreach (const PsiMedia::VideoParams &params, featuresWatcher->supportedVideoModes()) {
         QString codec = params.codec();
-        if(codec == "theora")
+        if (codec == "theora")
             codec[0] = codec[0].toUpper();
         else
             codec = codec.toUpper();
         QString sizestr = QString("%1x%2").arg(params.size().width()).arg(params.size().height());
-        QString str = QString("%1, %2 @ %3fps").arg(codec).arg(sizestr).arg(params.fps());
+        QString str     = QString("%1, %2 @ %3fps").arg(codec).arg(sizestr).arg(params.fps());
 
         ui.cb_videoMode->addItem(str, qVariantFromValue<PsiMedia::VideoParams>(params));
     }
@@ -291,17 +283,22 @@ void ConfigDlg::featuresUpdated()
     // the following lookups are guaranteed, since the config is
     //   adjusted to all valid values as necessary
     auto config = featuresWatcher->configuration();
-    if (!hasAudioInPref) audioInPref = config.audioInDeviceId; // if we didn't change anything, try default from config
-    if (!hasAudioOutPref) audioOutPref = config.audioOutDeviceId;
-    if (!hasVideoInPref) videoInPref = config.videoInDeviceId;
-    if (!hasAudioParams) audioMode = config.audioParams;
-    if (!hasVideoParams) videoMode = config.videoParams;
+    if (!hasAudioInPref)
+        audioInPref = config.audioInDeviceId; // if we didn't change anything, try default from config
+    if (!hasAudioOutPref)
+        audioOutPref = config.audioOutDeviceId;
+    if (!hasVideoInPref)
+        videoInPref = config.videoInDeviceId;
+    if (!hasAudioParams)
+        audioMode = config.audioParams;
+    if (!hasVideoParams)
+        videoMode = config.videoParams;
     ui.cb_audioOutDevice->setCurrentIndex(ui.cb_audioOutDevice->findData(audioOutPref));
     ui.cb_audioInDevice->setCurrentIndex(ui.cb_audioInDevice->findData(audioInPref));
     ui.cb_videoInDevice->setCurrentIndex(ui.cb_videoInDevice->findData(videoInPref));
     ui.cb_audioMode->setCurrentIndex(findAudioParamsData(ui.cb_audioMode, audioMode));
     ui.cb_videoMode->setCurrentIndex(findVideoParamsData(ui.cb_videoMode, videoMode));
-    if(config.liveInput)
+    if (config.liveInput)
         ui.rb_sendLive->setChecked(true);
     else
         ui.rb_sendFile->setChecked(true);
@@ -319,9 +316,8 @@ void ConfigDlg::featuresUpdated()
 //   make our own find functions for the comboboxes
 int ConfigDlg::findAudioParamsData(QComboBox *cb, const PsiMedia::AudioParams &params)
 {
-    for(int n = 0; n < cb->count(); ++n)
-    {
-        if(cb->itemData(n).value<PsiMedia::AudioParams>() == params)
+    for (int n = 0; n < cb->count(); ++n) {
+        if (cb->itemData(n).value<PsiMedia::AudioParams>() == params)
             return n;
     }
 
@@ -330,9 +326,8 @@ int ConfigDlg::findAudioParamsData(QComboBox *cb, const PsiMedia::AudioParams &p
 
 int ConfigDlg::findVideoParamsData(QComboBox *cb, const PsiMedia::VideoParams &params)
 {
-    for(int n = 0; n < cb->count(); ++n)
-    {
-        if(cb->itemData(n).value<PsiMedia::VideoParams>() == params)
+    for (int n = 0; n < cb->count(); ++n) {
+        if (cb->itemData(n).value<PsiMedia::VideoParams>() == params)
             return n;
     }
 
@@ -349,9 +344,13 @@ void ConfigDlg::accept()
     if (hasVideoInPref)
         s.setValue("videoIn", ui.cb_videoInDevice->itemData(ui.cb_videoInDevice->currentIndex()).toString());
     if (hasAudioParams)
-        s.setValue("audioParams", ui.cb_audioMode->itemData(ui.cb_audioMode->currentIndex()).value<PsiMedia::AudioParams>().toString());
+        s.setValue(
+            "audioParams",
+            ui.cb_audioMode->itemData(ui.cb_audioMode->currentIndex()).value<PsiMedia::AudioParams>().toString());
     if (hasVideoParams)
-        s.setValue("videoParams", ui.cb_videoMode->itemData(ui.cb_videoMode->currentIndex()).value<PsiMedia::VideoParams>().toString());
+        s.setValue(
+            "videoParams",
+            ui.cb_videoMode->itemData(ui.cb_videoMode->currentIndex()).value<PsiMedia::VideoParams>().toString());
 
     s.setValue("liveInput", ui.rb_sendLive->isChecked());
     s.setValue("file", ui.le_file->text());
@@ -380,16 +379,13 @@ void ConfigDlg::file_toggled(bool on)
 
 void ConfigDlg::file_choose()
 {
-    QString fileName = QFileDialog::getOpenFileName(this,
-                                                    tr("Open File"),
-                                                    QCoreApplication::applicationDirPath(),
+    QString fileName = QFileDialog::getOpenFileName(this, tr("Open File"), QCoreApplication::applicationDirPath(),
                                                     tr("Ogg Audio/Video (*.oga *.ogv *.ogg)"));
-    if(!fileName.isEmpty())
+    if (!fileName.isEmpty())
         ui.le_file->setText(fileName);
 }
 
-RtpSocketGroup::RtpSocketGroup(QObject *parent) :
-    QObject(parent)
+RtpSocketGroup::RtpSocketGroup(QObject *parent) : QObject(parent)
 {
     connect(&socket[0], SIGNAL(readyRead()), SLOT(sock_readyRead()));
     connect(&socket[1], SIGNAL(readyRead()), SLOT(sock_readyRead()));
@@ -399,9 +395,9 @@ RtpSocketGroup::RtpSocketGroup(QObject *parent) :
 
 bool RtpSocketGroup::bind(int basePort)
 {
-    if(!socket[0].bind(quint16(basePort)))
+    if (!socket[0].bind(quint16(basePort)))
         return false;
-    if(!socket[1].bind(quint16(basePort + 1)))
+    if (!socket[1].bind(quint16(basePort + 1)))
         return false;
     return true;
 }
@@ -409,7 +405,7 @@ bool RtpSocketGroup::bind(int basePort)
 void RtpSocketGroup::sock_readyRead()
 {
     QUdpSocket *udp = static_cast<QUdpSocket *>(sender());
-    if(udp == &socket[0])
+    if (udp == &socket[0])
         emit readyRead(0);
     else
         emit readyRead(1);
@@ -420,18 +416,14 @@ void RtpSocketGroup::sock_bytesWritten(qint64 bytes)
     Q_UNUSED(bytes);
 
     QUdpSocket *udp = static_cast<QUdpSocket *>(sender());
-    if(udp == &socket[0])
+    if (udp == &socket[0])
         emit datagramWritten(0);
     else
         emit datagramWritten(1);
 }
 
 RtpBinding::RtpBinding(Mode _mode, PsiMedia::RtpChannel *_channel, RtpSocketGroup *_socketGroup, QObject *parent) :
-    QObject(parent),
-    mode(_mode),
-    channel(_channel),
-    socketGroup(_socketGroup),
-    sendBasePort(-1)
+    QObject(parent), mode(_mode), channel(_channel), socketGroup(_socketGroup), sendBasePort(-1)
 {
     socketGroup->setParent(this);
     connect(socketGroup, SIGNAL(readyRead(int)), SLOT(net_ready(int)));
@@ -445,19 +437,18 @@ void RtpBinding::net_ready(int offset)
     // here we handle packets received from the network, that
     //   we need to give to psimedia
 
-    while(socketGroup->socket[offset].hasPendingDatagrams())
-    {
-        int size = int(socketGroup->socket[offset].pendingDatagramSize());
+    while (socketGroup->socket[offset].hasPendingDatagrams()) {
+        int        size = int(socketGroup->socket[offset].pendingDatagramSize());
         QByteArray rawValue;
         rawValue.resize(size);
         QHostAddress fromAddr;
-        quint16 fromPort;
-        if(socketGroup->socket[offset].readDatagram(rawValue.data(), size, &fromAddr, &fromPort) == -1)
+        quint16      fromPort;
+        if (socketGroup->socket[offset].readDatagram(rawValue.data(), size, &fromAddr, &fromPort) == -1)
             continue;
 
         // if we are sending RTP, we should not be receiving
         //   anything on offset 0
-        if(mode == Send && offset == 0)
+        if (mode == Send && offset == 0)
             continue;
 
         PsiMedia::RtpPacket packet(rawValue, offset);
@@ -476,19 +467,18 @@ void RtpBinding::app_ready()
     // here we handle packets that psimedia wants to send out,
     //   that we need to give to the network
 
-    while(channel->packetsAvailable() > 0)
-    {
+    while (channel->packetsAvailable() > 0) {
         PsiMedia::RtpPacket packet = channel->read();
-        int offset = packet.portOffset();
-        if(offset < 0 || offset > 1)
+        int                 offset = packet.portOffset();
+        if (offset < 0 || offset > 1)
             continue;
 
         // if we are receiving RTP, we should not be sending
         //   anything on offset 0
-        if(mode == Receive && offset == 0)
+        if (mode == Receive && offset == 0)
             continue;
 
-        if(sendAddress.isNull() || sendBasePort < BASE_PORT_MIN || sendBasePort > BASE_PORT_MAX)
+        if (sendAddress.isNull() || sendBasePort < BASE_PORT_MIN || sendBasePort > BASE_PORT_MAX)
             continue;
 
         socketGroup->socket[offset].writeDatagram(packet.rawValue(), sendAddress, quint16(sendBasePort + offset));
@@ -502,22 +492,14 @@ void RtpBinding::app_written(int count)
 }
 
 MainWin::MainWin() :
-    action_AboutProvider(nullptr),
-    producer(this),
-    receiver(this),
-    sendAudioRtp(nullptr),
-    sendVideoRtp(nullptr),
-    receiveAudioRtp(nullptr),
-    receiveVideoRtp(nullptr),
-    recording(false),
-    recordFile(nullptr)
+    action_AboutProvider(nullptr), producer(this), receiver(this), sendAudioRtp(nullptr), sendVideoRtp(nullptr),
+    receiveAudioRtp(nullptr), receiveVideoRtp(nullptr), recording(false), recordFile(nullptr)
 {
     ui.setupUi(this);
     setWindowTitle(tr("PsiMedia Demo"));
 
     creditName = PsiMedia::creditName();
-    if(!creditName.isEmpty())
-    {
+    if (!creditName.isEmpty()) {
         action_AboutProvider = new QAction(this);
         action_AboutProvider->setText(tr("About %1").arg(creditName));
         ui.menu_Help->addAction(action_AboutProvider);
@@ -578,18 +560,18 @@ MainWin::MainWin() :
     receiver.setVideoOutputWidget(ui.vw_remote);
 
     // hack: make the top/bottom layouts have matching height
-    int lineEditHeight = ui.le_receiveConfig->sizeHint().height();
-    QWidget *spacer = new QWidget(this);
+    int      lineEditHeight = ui.le_receiveConfig->sizeHint().height();
+    QWidget *spacer         = new QWidget(this);
     spacer->setMinimumHeight(lineEditHeight);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     ui.gridLayout2->addWidget(spacer, 3, 1);
 
     // hack: give the video widgets a 4:3 ratio
     int gridSpacing = ui.gridLayout1->verticalSpacing();
-    if(gridSpacing == -1)
+    if (gridSpacing == -1)
         gridSpacing = 9; // not sure how else to get this
     int pushButtonHeight = ui.pb_startSend->sizeHint().height();
-    int heightEstimate = lineEditHeight * 4 + pushButtonHeight + gridSpacing * 4;
+    int heightEstimate   = lineEditHeight * 4 + pushButtonHeight + gridSpacing * 4;
     heightEstimate += 10; // pad just to be safe
     int goodWidth = (heightEstimate * 4) / 3;
     ui.vw_remote->setMinimumSize(goodWidth, heightEstimate);
@@ -628,15 +610,12 @@ void MainWin::setSendFieldsEnabled(bool b)
 
 void MainWin::setSendConfig(const QString &s)
 {
-    if(!s.isEmpty())
-    {
+    if (!s.isEmpty()) {
         ui.lb_sendConfig->setEnabled(true);
         ui.le_sendConfig->setEnabled(true);
         ui.le_sendConfig->setText(s);
         ui.le_sendConfig->setCursorPosition(0);
-    }
-    else
-    {
+    } else {
         ui.lb_sendConfig->setEnabled(false);
         ui.le_sendConfig->setEnabled(false);
         ui.le_sendConfig->clear();
@@ -656,14 +635,16 @@ void MainWin::setReceiveFieldsEnabled(bool b)
 QString MainWin::rtpSessionErrorToString(PsiMedia::RtpSession::Error e)
 {
     QString str;
-    switch(e)
-    {
+    switch (e) {
     case PsiMedia::RtpSession::ErrorSystem:
-        str = tr("System error"); break;
+        str = tr("System error");
+        break;
     case PsiMedia::RtpSession::ErrorCodec:
-        str = tr("Codec error"); break;
+        str = tr("Codec error");
+        break;
     default: // generic
-        str = tr("Generic error"); break;
+        str = tr("Generic error");
+        break;
     }
     return str;
 }
@@ -686,11 +667,10 @@ void MainWin::cleanup_receive_rtp()
 
 void MainWin::cleanup_record()
 {
-    if(recording)
-    {
+    if (recording) {
         delete recordFile;
         recordFile = nullptr;
-        recording = false;
+        recording  = false;
     }
 }
 
@@ -702,20 +682,14 @@ void MainWin::doConfigure()
 
 void MainWin::doAbout()
 {
-    QMessageBox::about(this, tr("About PsiMedia Demo"), tr(
-                           "PsiMedia Demo v1.0\n"
-                           "A simple test application for the PsiMedia system.\n"
-                           "\n"
-                           "Copyright (C) 2008  Barracuda Networks, Inc."
-                           ));
+    QMessageBox::about(this, tr("About PsiMedia Demo"),
+                       tr("PsiMedia Demo v1.0\n"
+                          "A simple test application for the PsiMedia system.\n"
+                          "\n"
+                          "Copyright (C) 2008  Barracuda Networks, Inc."));
 }
 
-void MainWin::doAboutProvider()
-{
-    QMessageBox::about(this, tr("About %1").arg(creditName),
-                       PsiMedia::creditText()
-                       );
-}
+void MainWin::doAboutProvider() { QMessageBox::about(this, tr("About %1").arg(creditName), PsiMedia::creditText()); }
 
 void MainWin::start_send()
 {
@@ -723,35 +697,27 @@ void MainWin::start_send()
     transmitVideo = false;
 
     auto config = featureWatcher->configuration();
-    if(config.liveInput)
-    {
-        if(config.audioInDeviceId.isEmpty() && config.videoInDeviceId.isEmpty())
-        {
-            QMessageBox::information(this, tr("Error"), tr(
-                                         "Cannot send live without at least one audio "
-                                         "input or video input device selected."
-                                         ));
+    if (config.liveInput) {
+        if (config.audioInDeviceId.isEmpty() && config.videoInDeviceId.isEmpty()) {
+            QMessageBox::information(this, tr("Error"),
+                                     tr("Cannot send live without at least one audio "
+                                        "input or video input device selected."));
             return;
         }
 
-        if(!config.audioInDeviceId.isEmpty())
-        {
+        if (!config.audioInDeviceId.isEmpty()) {
             producer.setAudioInputDevice(config.audioInDeviceId);
             transmitAudio = true;
-        }
-        else
+        } else
             producer.setAudioInputDevice(QString());
 
-        if(!config.videoInDeviceId.isEmpty())
-        {
+        if (!config.videoInDeviceId.isEmpty()) {
             producer.setVideoInputDevice(config.videoInDeviceId);
 
             transmitVideo = true;
-        }
-        else
+        } else
             producer.setVideoInputDevice(QString());
-    }
-    else // non-live (file) input
+    } else // non-live (file) input
     {
         producer.setFileInput(config.file);
         producer.setFileLoopEnabled(config.loopFile);
@@ -765,12 +731,12 @@ void MainWin::start_send()
     }
 
     QList<PsiMedia::AudioParams> audioParamsList;
-    if(transmitAudio)
+    if (transmitAudio)
         audioParamsList += config.audioParams;
     producer.setLocalAudioPreferences(audioParamsList);
 
     QList<PsiMedia::VideoParams> videoParamsList;
-    if(transmitVideo)
+    if (transmitVideo)
         videoParamsList += config.videoParams;
     producer.setLocalVideoPreferences(videoParamsList);
 
@@ -783,58 +749,47 @@ void MainWin::start_send()
 void MainWin::transmit()
 {
     QHostAddress addr;
-    if(!addr.setAddress(ui.le_remoteAddress->text()))
-    {
-        QMessageBox::critical(this, tr("Error"), tr(
-                                  "Invalid send IP address."
-                                  ));
+    if (!addr.setAddress(ui.le_remoteAddress->text())) {
+        QMessageBox::critical(this, tr("Error"), tr("Invalid send IP address."));
         return;
     }
 
     int audioPort = -1;
-    if(transmitAudio)
-    {
+    if (transmitAudio) {
         bool ok;
         audioPort = ui.le_remoteAudioPort->text().toInt(&ok);
-        if(!ok || audioPort < BASE_PORT_MIN || audioPort > BASE_PORT_MAX)
-        {
-            QMessageBox::critical(this, tr("Error"), tr(
-                                      "Invalid send audio port."
-                                      ));
+        if (!ok || audioPort < BASE_PORT_MIN || audioPort > BASE_PORT_MAX) {
+            QMessageBox::critical(this, tr("Error"), tr("Invalid send audio port."));
             return;
         }
     }
 
     int videoPort = -1;
-    if(transmitVideo)
-    {
+    if (transmitVideo) {
         bool ok;
         videoPort = ui.le_remoteVideoPort->text().toInt(&ok);
-        if(!ok || videoPort < BASE_PORT_MIN || videoPort > BASE_PORT_MAX)
-        {
-            QMessageBox::critical(this, tr("Error"), tr(
-                                      "Invalid send video port."
-                                      ));
+        if (!ok || videoPort < BASE_PORT_MIN || videoPort > BASE_PORT_MAX) {
+            QMessageBox::critical(this, tr("Error"), tr("Invalid send video port."));
             return;
         }
     }
 
     RtpSocketGroup *audioSocketGroup = new RtpSocketGroup;
-    sendAudioRtp = new RtpBinding(RtpBinding::Send, producer.audioRtpChannel(), audioSocketGroup, this);
-    sendAudioRtp->sendAddress = addr;
+    sendAudioRtp               = new RtpBinding(RtpBinding::Send, producer.audioRtpChannel(), audioSocketGroup, this);
+    sendAudioRtp->sendAddress  = addr;
     sendAudioRtp->sendBasePort = audioPort;
 
     RtpSocketGroup *videoSocketGroup = new RtpSocketGroup;
-    sendVideoRtp = new RtpBinding(RtpBinding::Send, producer.videoRtpChannel(), videoSocketGroup, this);
-    sendVideoRtp->sendAddress = addr;
+    sendVideoRtp               = new RtpBinding(RtpBinding::Send, producer.videoRtpChannel(), videoSocketGroup, this);
+    sendVideoRtp->sendAddress  = addr;
     sendVideoRtp->sendBasePort = videoPort;
 
     setSendFieldsEnabled(false);
     ui.pb_transmit->setEnabled(false);
 
-    if(transmitAudio)
+    if (transmitAudio)
         producer.transmitAudio();
-    if(transmitVideo)
+    if (transmitVideo)
         producer.transmitVideo();
 
     transmitting = true;
@@ -844,7 +799,7 @@ void MainWin::stop_send()
 {
     ui.pb_stopSend->setEnabled(false);
 
-    if(!transmitting)
+    if (!transmitting)
         ui.pb_transmit->setEnabled(false);
 
     producer.stop();
@@ -852,14 +807,11 @@ void MainWin::stop_send()
 
 void MainWin::start_receive()
 {
-    QString receiveConfig = ui.le_receiveConfig->text();
+    QString               receiveConfig = ui.le_receiveConfig->text();
     PsiMedia::PayloadInfo audio;
     PsiMedia::PayloadInfo video;
-    if(receiveConfig.isEmpty() || !codecStringToPayloadInfo(receiveConfig, &audio, &video))
-    {
-        QMessageBox::critical(this, tr("Error"), tr(
-                                  "Invalid codec config."
-                                  ));
+    if (receiveConfig.isEmpty() || !codecStringToPayloadInfo(receiveConfig, &audio, &video)) {
+        QMessageBox::critical(this, tr("Error"), tr("Invalid codec config."));
         return;
     }
 
@@ -867,36 +819,27 @@ void MainWin::start_receive()
     receiveVideo = !video.isNull();
 
     int audioPort = -1;
-    if(receiveAudio)
-    {
+    if (receiveAudio) {
         bool ok;
         audioPort = ui.le_localAudioPort->text().toInt(&ok);
-        if(!ok || audioPort < BASE_PORT_MIN || audioPort > BASE_PORT_MAX)
-        {
-            QMessageBox::critical(this, tr("Error"), tr(
-                                      "Invalid receive audio port."
-                                      ));
+        if (!ok || audioPort < BASE_PORT_MIN || audioPort > BASE_PORT_MAX) {
+            QMessageBox::critical(this, tr("Error"), tr("Invalid receive audio port."));
             return;
         }
     }
 
     int videoPort = -1;
-    if(receiveVideo)
-    {
+    if (receiveVideo) {
         bool ok;
         videoPort = ui.le_localVideoPort->text().toInt(&ok);
-        if(!ok || videoPort < BASE_PORT_MIN || videoPort > BASE_PORT_MAX)
-        {
-            QMessageBox::critical(this, tr("Error"), tr(
-                                      "Invalid receive video port."
-                                      ));
+        if (!ok || videoPort < BASE_PORT_MIN || videoPort > BASE_PORT_MAX) {
+            QMessageBox::critical(this, tr("Error"), tr("Invalid receive video port."));
             return;
         }
     }
 
     auto config = featureWatcher->configuration();
-    if(receiveAudio && !config.audioOutDeviceId.isEmpty())
-    {
+    if (receiveAudio && !config.audioOutDeviceId.isEmpty()) {
         receiver.setAudioOutputDevice(config.audioOutDeviceId);
 
         QList<PsiMedia::AudioParams> audioParamsList;
@@ -908,8 +851,7 @@ void MainWin::start_receive()
         receiver.setRemoteAudioPreferences(payloadInfoList);
     }
 
-    if(receiveVideo)
-    {
+    if (receiveVideo) {
         QList<PsiMedia::VideoParams> videoParamsList;
         videoParamsList += config.videoParams;
         receiver.setLocalVideoPreferences(videoParamsList);
@@ -921,28 +863,22 @@ void MainWin::start_receive()
 
     RtpSocketGroup *audioSocketGroup = new RtpSocketGroup(this);
     RtpSocketGroup *videoSocketGroup = new RtpSocketGroup(this);
-    if(!audioSocketGroup->bind(audioPort))
-    {
+    if (!audioSocketGroup->bind(audioPort)) {
         delete audioSocketGroup;
         audioSocketGroup = nullptr;
         delete videoSocketGroup;
         videoSocketGroup = nullptr;
 
-        QMessageBox::critical(this, tr("Error"), tr(
-                                  "Unable to bind to receive audio ports."
-                                  ));
+        QMessageBox::critical(this, tr("Error"), tr("Unable to bind to receive audio ports."));
         return;
     }
-    if(!videoSocketGroup->bind(videoPort))
-    {
+    if (!videoSocketGroup->bind(videoPort)) {
         delete audioSocketGroup;
         audioSocketGroup = nullptr;
         delete videoSocketGroup;
         videoSocketGroup = nullptr;
 
-        QMessageBox::critical(this, tr("Error"), tr(
-                                  "Unable to bind to receive video ports."
-                                  ));
+        QMessageBox::critical(this, tr("Error"), tr("Unable to bind to receive video ports."));
         return;
     }
 
@@ -961,15 +897,9 @@ void MainWin::stop_receive()
     receiver.stop();
 }
 
-void MainWin::change_volume_mic(int value)
-{
-    producer.setInputVolume(value);
-}
+void MainWin::change_volume_mic(int value) { producer.setInputVolume(value); }
 
-void MainWin::change_volume_spk(int value)
-{
-    receiver.setOutputVolume(value);
-}
+void MainWin::change_volume_spk(int value) { receiver.setOutputVolume(value); }
 
 void MainWin::producer_started()
 {
@@ -978,27 +908,21 @@ void MainWin::producer_started()
 
     pAudio = nullptr;
     pVideo = nullptr;
-    if(transmitAudio)
-    {
+    if (transmitAudio) {
         // confirm transmitting of audio is actually possible,
         //   in the case that a file is used as input
-        if(producer.canTransmitAudio())
-        {
-            audio = producer.localAudioPayloadInfo().first();
+        if (producer.canTransmitAudio()) {
+            audio  = producer.localAudioPayloadInfo().first();
             pAudio = &audio;
-        }
-        else
+        } else
             transmitAudio = false;
     }
-    if(transmitVideo)
-    {
+    if (transmitVideo) {
         // same for video
-        if(producer.canTransmitVideo())
-        {
-            video = producer.localVideoPayloadInfo().first();
+        if (producer.canTransmitVideo()) {
+            video  = producer.localVideoPayloadInfo().first();
             pVideo = &video;
-        }
-        else
+        } else
             transmitVideo = false;
     }
 
@@ -1038,21 +962,14 @@ void MainWin::producer_error()
     ui.pb_transmit->setEnabled(false);
     ui.pb_stopSend->setEnabled(false);
 
-    QMessageBox::critical(this, tr("Error"), tr(
-                              "An error occurred while trying to send:\n%1."
-                              ).arg(rtpSessionErrorToString(producer.errorCode())
-                                    ));
+    QMessageBox::critical(
+        this, tr("Error"),
+        tr("An error occurred while trying to send:\n%1.").arg(rtpSessionErrorToString(producer.errorCode())));
 }
 
-void MainWin::receiver_started()
-{
-    ui.pb_record->setEnabled(true);
-}
+void MainWin::receiver_started() { ui.pb_record->setEnabled(true); }
 
-void MainWin::receiver_stoppedRecording()
-{
-    cleanup_record();
-}
+void MainWin::receiver_stoppedRecording() { cleanup_record(); }
 
 void MainWin::receiver_stopped()
 {
@@ -1074,38 +991,30 @@ void MainWin::receiver_error()
     ui.pb_stopReceive->setEnabled(false);
     ui.pb_record->setEnabled(false);
 
-    QMessageBox::critical(this, tr("Error"), tr(
-                              "An error occurred while trying to receive:\n%1."
-                              ).arg(rtpSessionErrorToString(receiver.errorCode())
-                                    ));
+    QMessageBox::critical(
+        this, tr("Error"),
+        tr("An error occurred while trying to receive:\n%1.").arg(rtpSessionErrorToString(receiver.errorCode())));
 }
 
 void MainWin::record_toggle()
 {
-    if(!recording)
-    {
-        QString fileName = QFileDialog::getSaveFileName(this,
-                                                        tr("Save File"),
-                                                        QDir::homePath(),
+    if (!recording) {
+        QString fileName = QFileDialog::getSaveFileName(this, tr("Save File"), QDir::homePath(),
                                                         tr("Ogg Audio/Video (*.oga *.ogv)"));
-        if(fileName.isEmpty())
+        if (fileName.isEmpty())
             return;
 
         recordFile = new QFile(fileName, this);
-        if(!recordFile->open(QIODevice::WriteOnly | QIODevice::Truncate))
-        {
+        if (!recordFile->open(QIODevice::WriteOnly | QIODevice::Truncate)) {
             delete recordFile;
 
-            QMessageBox::critical(this, tr("Error"), tr(
-                                      "Unable to create file for recording."
-                                      ));
+            QMessageBox::critical(this, tr("Error"), tr("Unable to create file for recording."));
             return;
         }
 
         receiver.setRecordingQIODevice(recordFile);
         recording = true;
-    }
-    else
+    } else
         receiver.stopRecording();
 }
 
@@ -1117,14 +1026,12 @@ Q_IMPORT_PLUGIN(gstprovider)
 static QString findPlugin(const QString &relpath, const QString &basename)
 {
     QDir dir(QCoreApplication::applicationDirPath());
-    if(!dir.cd(relpath))
+    if (!dir.cd(relpath))
         return QString();
-    foreach(const QString &fileName, dir.entryList())
-    {
-        if(fileName.contains(basename))
-        {
+    foreach (const QString &fileName, dir.entryList()) {
+        if (fileName.contains(basename)) {
             QString filePath = dir.filePath(fileName);
-            if(QLibrary::isLibrary(filePath))
+            if (QLibrary::isLibrary(filePath))
                 return filePath;
         }
     }
@@ -1144,24 +1051,23 @@ int main(int argc, char **argv)
     QString resourcePath;
 
     pluginFile = qgetenv("PSI_MEDIA_PLUGIN");
-    if(pluginFile.isEmpty())
-    {
+    if (pluginFile.isEmpty()) {
 #if defined(Q_OS_WIN)
         pluginFile = findPlugin(".", "gstprovider" DEBUG_POSTFIX);
-        if(!pluginFile.isEmpty())
+        if (!pluginFile.isEmpty())
             resourcePath = QCoreApplication::applicationDirPath() + "/gstreamer-1.0";
 #elif defined(Q_OS_MAC)
         pluginFile = findPlugin("../PlugIns", "gstprovider" DEBUG_POSTFIX);
         // codesign can't sign gstreamer-1.0 folder
-        if(!pluginFile.isEmpty())
+        if (!pluginFile.isEmpty())
             resourcePath = QCoreApplication::applicationDirPath() + "/../PlugIns/gstreamer";
 #endif
 
-        if(pluginFile.isEmpty())
+        if (pluginFile.isEmpty())
             pluginFile = findPlugin("../gstprovider", "gstprovider" DEBUG_POSTFIX);
 
 #ifdef PLUGIN_INSTALL_PATH
-        if(pluginFile.isEmpty())
+        if (pluginFile.isEmpty())
             pluginFile = findPlugin(PLUGIN_INSTALL_PATH, "gstprovider" DEBUG_POSTFIX);
 #endif
     }
@@ -1169,12 +1075,9 @@ int main(int argc, char **argv)
     PsiMedia::loadPlugin(pluginFile, resourcePath);
 #endif
 
-    if(!PsiMedia::isSupported())
-    {
+    if (!PsiMedia::isSupported()) {
         QMessageBox::critical(nullptr, MainWin::tr("PsiMedia Demo"),
-                              MainWin::tr(
-                                  "Error: Could not load PsiMedia subsystem."
-                                  ));
+                              MainWin::tr("Error: Could not load PsiMedia subsystem."));
         return 1;
     }
 
@@ -1199,40 +1102,40 @@ FeaturesWatcher::FeaturesWatcher(QObject *parent)
     updateDefaults();
 }
 
-FeaturesWatcher::~FeaturesWatcher()
-{
-}
-
+FeaturesWatcher::~FeaturesWatcher() {}
 
 void FeaturesWatcher::updateDefaults()
 {
     QSettings s;
 
     _configuration.liveInput = s.value("liveInput", true).toBool();
-    _configuration.loopFile = s.value("liveFile", true).toBool();
-    _configuration.file = s.value("file", QString()).toString();
+    _configuration.loopFile  = s.value("liveFile", true).toBool();
+    _configuration.file      = s.value("file", QString()).toString();
 
-    bool hasAudioIn = s.contains("audioIn");   // if we ever opened configuration dialog and set something there
-    bool hasAudioOut = s.contains("audioOut");
-    bool hasVideoIn = s.contains("videoIn");
-    QString userPrefAudioIn = s.value("audioIn").toString();
+    bool    hasAudioIn       = s.contains("audioIn"); // if we ever opened configuration dialog and set something there
+    bool    hasAudioOut      = s.contains("audioOut");
+    bool    hasVideoIn       = s.contains("videoIn");
+    QString userPrefAudioIn  = s.value("audioIn").toString();
     QString userPrefAudioOut = s.value("audioOut").toString();
-    QString userPrefVideoIn = s.value("videoIn").toString();
-    QString audioParams = s.value("audioParams").toString();
-    QString videoParams = s.value("videoParams").toString();
+    QString userPrefVideoIn  = s.value("videoIn").toString();
+    QString audioParams      = s.value("audioParams").toString();
+    QString videoParams      = s.value("videoParams").toString();
 
-    _configuration.audioInDeviceId = (hasAudioIn && userPrefAudioIn.isEmpty())?
-                QString() : defaultDeviceId(_features.audioInputDevices(), userPrefAudioIn);
-    _configuration.audioOutDeviceId = (hasAudioOut && userPrefAudioOut.isEmpty())?
-                QString() : defaultDeviceId(_features.audioOutputDevices(), userPrefAudioOut);
-    _configuration.videoInDeviceId = (hasVideoIn && userPrefVideoIn.isEmpty())?
-                QString() : defaultDeviceId(_features.videoInputDevices(), userPrefVideoIn);
+    _configuration.audioInDeviceId = (hasAudioIn && userPrefAudioIn.isEmpty())
+        ? QString()
+        : defaultDeviceId(_features.audioInputDevices(), userPrefAudioIn);
+    _configuration.audioOutDeviceId = (hasAudioOut && userPrefAudioOut.isEmpty())
+        ? QString()
+        : defaultDeviceId(_features.audioOutputDevices(), userPrefAudioOut);
+    _configuration.videoInDeviceId = (hasVideoIn && userPrefVideoIn.isEmpty())
+        ? QString()
+        : defaultDeviceId(_features.videoInputDevices(), userPrefVideoIn);
 
     bool found = false;
-    for (auto const &d: _features.supportedAudioModes()) {
+    for (auto const &d : _features.supportedAudioModes()) {
         if (d.toString() == audioParams) {
             _configuration.audioParams = d;
-            found = true;
+            found                      = true;
             break;
         }
     }
@@ -1240,10 +1143,10 @@ void FeaturesWatcher::updateDefaults()
         _configuration.audioParams = _features.supportedAudioModes().first();
 
     found = false;
-    for (auto const &d: _features.supportedVideoModes()) {
+    for (auto const &d : _features.supportedVideoModes()) {
         if (d.toString() == videoParams) {
             _configuration.videoParams = d;
-            found = true;
+            found                      = true;
             break;
         }
     }
@@ -1260,8 +1163,8 @@ void FeaturesWatcher::featuresUpdated()
 QString FeaturesWatcher::defaultDeviceId(const QList<PsiMedia::Device> &devs, const QString &userPref)
 {
     QString def;
-    bool userPrefFound = false;
-    for (auto const &d: devs) {
+    bool    userPrefFound = false;
+    for (auto const &d : devs) {
         if (d.isDefault())
             def = d.id();
         if (d.id() == userPref) {

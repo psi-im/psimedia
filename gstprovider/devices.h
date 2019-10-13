@@ -21,10 +21,10 @@
 #ifndef DEVICES_H
 #define DEVICES_H
 
-#include <QString>
-#include <QList>
-#include <gst/gstelement.h>
 #include "psimediaprovider.h"
+#include <QList>
+#include <QString>
+#include <gst/gstelement.h>
 
 class QSize;
 
@@ -32,27 +32,24 @@ namespace PsiMedia {
 
 class GstMainLoop;
 
-class GstDevice
-{
+class GstDevice {
 public:
     PDevice::Type type;
-    QString name;
-    bool isDefault;
-    QString id;
+    QString       name;
+    bool          isDefault;
+    QString       id;
 };
 
-class PlatformDeviceMonitor
-{
+class PlatformDeviceMonitor {
 public:
     QList<GstDevice> getDevices();
 };
 
-class DeviceMonitor : public QObject
-{
+class DeviceMonitor : public QObject {
     Q_OBJECT
 
     class Private;
-    //friend class Private;
+    // friend class Private;
     Private *d;
 
     void updateDevList();

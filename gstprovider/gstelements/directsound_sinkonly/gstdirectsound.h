@@ -29,23 +29,23 @@
 
 #include <gst/gst.h>
 
-#include <windows.h>
 #include <dxerr9.h>
+#include <windows.h>
 
 /* use directsound v8 */
 #ifdef DIRECTSOUND_VERSION
-  #undef DIRECTSOUND_VERSION
+#undef DIRECTSOUND_VERSION
 #endif
 
 #define DIRECTSOUND_VERSION 0x0800
 
 #include <dsound.h>
 
-GST_DEBUG_CATEGORY_EXTERN (directsound);
+GST_DEBUG_CATEGORY_EXTERN(directsound);
 
 G_BEGIN_DECLS
 
-void gst_directsound_set_volume (LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume);
+void gst_directsound_set_volume(LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume);
 
 G_END_DECLS
 

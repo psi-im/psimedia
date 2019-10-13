@@ -22,54 +22,49 @@
 
 #include <gst/gst.h>
 
-#include <windows.h>
 #include <ks.h>
+#include <windows.h>
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_KS_VIDEO_DEVICE \
-  (gst_ks_video_device_get_type ())
-#define GST_KS_VIDEO_DEVICE(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_KS_VIDEO_DEVICE, GstKsVideoDevice))
-#define GST_KS_VIDEO_DEVICE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_KS_VIDEO_DEVICE, GstKsVideoDeviceClass))
-#define GST_IS_KS_VIDEO_DEVICE(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_KS_VIDEO_DEVICE))
-#define GST_IS_KS_VIDEO_DEVICE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_KS_VIDEO_DEVICE))
+#define GST_TYPE_KS_VIDEO_DEVICE (gst_ks_video_device_get_type())
+#define GST_KS_VIDEO_DEVICE(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_KS_VIDEO_DEVICE, GstKsVideoDevice))
+#define GST_KS_VIDEO_DEVICE_CLASS(klass)                                                                               \
+    (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_KS_VIDEO_DEVICE, GstKsVideoDeviceClass))
+#define GST_IS_KS_VIDEO_DEVICE(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_KS_VIDEO_DEVICE))
+#define GST_IS_KS_VIDEO_DEVICE_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_KS_VIDEO_DEVICE))
 
 typedef struct _GstKsVideoDevice      GstKsVideoDevice;
 typedef struct _GstKsVideoDeviceClass GstKsVideoDeviceClass;
 
-struct _GstKsVideoDevice
-{
-  GObject parent;
+struct _GstKsVideoDevice {
+    GObject parent;
 };
 
-struct _GstKsVideoDeviceClass
-{
-  GObjectClass parent_class;
+struct _GstKsVideoDeviceClass {
+    GObjectClass parent_class;
 };
 
-GType gst_ks_video_device_get_type (void);
+GType gst_ks_video_device_get_type(void);
 
-gboolean gst_ks_video_device_open (GstKsVideoDevice * self);
-void gst_ks_video_device_close (GstKsVideoDevice * self);
+gboolean gst_ks_video_device_open(GstKsVideoDevice *self);
+void     gst_ks_video_device_close(GstKsVideoDevice *self);
 
-GstCaps * gst_ks_video_device_get_available_caps (GstKsVideoDevice * self);
-gboolean gst_ks_video_device_has_caps (GstKsVideoDevice * self);
-gboolean gst_ks_video_device_set_caps (GstKsVideoDevice * self, GstCaps * caps);
+GstCaps *gst_ks_video_device_get_available_caps(GstKsVideoDevice *self);
+gboolean gst_ks_video_device_has_caps(GstKsVideoDevice *self);
+gboolean gst_ks_video_device_set_caps(GstKsVideoDevice *self, GstCaps *caps);
 
-gboolean gst_ks_video_device_set_state (GstKsVideoDevice * self, KSSTATE state);
+gboolean gst_ks_video_device_set_state(GstKsVideoDevice *self, KSSTATE state);
 
-guint gst_ks_video_device_get_frame_size (GstKsVideoDevice * self);
-GstClockTime gst_ks_video_device_get_duration (GstKsVideoDevice * self);
-gboolean gst_ks_video_device_get_latency (GstKsVideoDevice * self, GstClockTime * min_latency, GstClockTime * max_latency);
+guint        gst_ks_video_device_get_frame_size(GstKsVideoDevice *self);
+GstClockTime gst_ks_video_device_get_duration(GstKsVideoDevice *self);
+gboolean gst_ks_video_device_get_latency(GstKsVideoDevice *self, GstClockTime *min_latency, GstClockTime *max_latency);
 
-GstFlowReturn gst_ks_video_device_read_frame (GstKsVideoDevice * self, guint8 * buf, gulong buf_size, gulong * bytes_read, GstClockTime * presentation_time, gulong * error_code, gchar ** error_str);
-void gst_ks_video_device_postprocess_frame (GstKsVideoDevice * self, guint8 * buf, guint buf_size);
-void gst_ks_video_device_cancel (GstKsVideoDevice * self);
-void gst_ks_video_device_cancel_stop (GstKsVideoDevice * self);
+GstFlowReturn gst_ks_video_device_read_frame(GstKsVideoDevice *self, guint8 *buf, gulong buf_size, gulong *bytes_read,
+                                             GstClockTime *presentation_time, gulong *error_code, gchar **error_str);
+void          gst_ks_video_device_postprocess_frame(GstKsVideoDevice *self, guint8 *buf, guint buf_size);
+void          gst_ks_video_device_cancel(GstKsVideoDevice *self);
+void          gst_ks_video_device_cancel_stop(GstKsVideoDevice *self);
 
 G_END_DECLS
 

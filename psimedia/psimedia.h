@@ -22,9 +22,9 @@
 #define PSIMEDIA_H
 
 #include <QMetaType>
+#include <QSharedDataPointer>
 #include <QSize>
 #include <QStringList>
-#include <QSharedDataPointer>
 
 #ifdef QT_GUI_LIB
 #include <QWidget>
@@ -39,25 +39,17 @@ class RtpSessionPrivate;
 class VideoWidgetPrivate;
 class RtpChannelPrivate;
 
-enum PluginResult
-{
-    PluginSuccess,
-    ErrorLoad,
-    ErrorVersion,
-    ErrorInit
-};
+enum PluginResult { PluginSuccess, ErrorLoad, ErrorVersion, ErrorInit };
 
-bool isSupported();
+bool         isSupported();
 PluginResult loadPlugin(const QString &fname, const QString &resourcePath);
-void unloadPlugin();
-QString creditName();
-QString creditText();
+void         unloadPlugin();
+QString      creditName();
+QString      creditText();
 
-class Device
-{
+class Device {
 public:
-    enum Type
-    {
+    enum Type {
         AudioOut, // speaker
         AudioIn,  // microphone
         VideoIn   // camera
@@ -66,13 +58,13 @@ public:
     Device();
     Device(const Device &other);
     ~Device();
-    Device & operator=(const Device &other);
+    Device &operator=(const Device &other);
 
-    bool isNull() const;
-    Type type() const;
+    bool    isNull() const;
+    Type    type() const;
     QString name() const;
     QString id() const;
-    bool isDefault() const;
+    bool    isDefault() const;
 
 private:
     class Private;
@@ -81,8 +73,7 @@ private:
 };
 
 #ifdef QT_GUI_LIB
-class VideoWidget : public QWidget
-{
+class VideoWidget : public QWidget {
     Q_OBJECT
 
 public:
@@ -108,18 +99,17 @@ private:
 };
 #endif
 
-class AudioParams
-{
+class AudioParams {
 public:
     AudioParams();
     AudioParams(const AudioParams &other);
     ~AudioParams();
-    AudioParams & operator=(const AudioParams &other);
+    AudioParams &operator=(const AudioParams &other);
 
     QString codec() const;
-    int sampleRate() const;
-    int sampleSize() const;
-    int channels() const;
+    int     sampleRate() const;
+    int     sampleSize() const;
+    int     channels() const;
     QString toString() const;
 
     void setCodec(const QString &s);
@@ -129,27 +119,23 @@ public:
 
     bool operator==(const AudioParams &other) const;
 
-    inline bool operator!=(const AudioParams &other) const
-    {
-        return !(*this == other);
-    }
+    inline bool operator!=(const AudioParams &other) const { return !(*this == other); }
 
 private:
     class Private;
     Private *d;
 };
 
-class VideoParams
-{
+class VideoParams {
 public:
     VideoParams();
     VideoParams(const VideoParams &other);
     ~VideoParams();
-    VideoParams & operator=(const VideoParams &other);
+    VideoParams &operator=(const VideoParams &other);
 
     QString codec() const;
-    QSize size() const;
-    int fps() const;
+    QSize   size() const;
+    int     fps() const;
     QString toString() const;
 
     void setCodec(const QString &s);
@@ -158,30 +144,18 @@ public:
 
     bool operator==(const VideoParams &other) const;
 
-    inline bool operator!=(const VideoParams &other) const
-    {
-        return !(*this == other);
-    }
+    inline bool operator!=(const VideoParams &other) const { return !(*this == other); }
 
 private:
     class Private;
     Private *d;
 };
 
-class Features : public QObject
-{
+class Features : public QObject {
     Q_OBJECT
 
 public:
-    enum Type
-    {
-        AudioOut   = 0x01,
-        AudioIn    = 0x02,
-        VideoIn    = 0x04,
-        AudioModes = 0x08,
-        VideoModes = 0x10,
-        All        = 0xff
-    };
+    enum Type { AudioOut = 0x01, AudioIn = 0x02, VideoIn = 0x04, AudioModes = 0x08, VideoModes = 0x10, All = 0xff };
 
     Features(QObject *parent = nullptr);
     ~Features();
@@ -202,19 +176,18 @@ private:
     Private *d;
 };
 
-class RtpPacket
-{
+class RtpPacket {
 public:
     RtpPacket();
     RtpPacket(const QByteArray &rawValue, int portOffset);
     RtpPacket(const RtpPacket &other);
     ~RtpPacket();
-    RtpPacket & operator=(const RtpPacket &other);
+    RtpPacket &operator=(const RtpPacket &other);
 
     bool isNull() const;
 
     QByteArray rawValue() const;
-    int portOffset() const;
+    int        portOffset() const;
 
 private:
     class Private;
@@ -223,14 +196,13 @@ private:
 
 // may drop packets if not read fast enough.
 // may queue no packets at all, if nobody is listening to readyRead.
-class RtpChannel : public QObject
-{
+class RtpChannel : public QObject {
     Q_OBJECT
 
 public:
-    int packetsAvailable() const;
+    int       packetsAvailable() const;
     RtpPacket read();
-    void write(const RtpPacket &rtp);
+    void      write(const RtpPacket &rtp);
 
 signals:
     void readyRead();
@@ -254,36 +226,31 @@ private:
 // this class essentially follows jingle's notion of payload information,
 //   though it's not really jingle-specific and should be usable for any RTP
 //   purpose
-class PayloadInfo
-{
+class PayloadInfo {
 public:
-    class Parameter
-    {
+    class Parameter {
     public:
         QString name;
         QString value;
 
         bool operator==(const Parameter &other) const;
 
-        inline bool operator!=(const Parameter &other) const
-        {
-            return !(*this == other);
-        }
+        inline bool operator!=(const Parameter &other) const { return !(*this == other); }
     };
 
     PayloadInfo();
     PayloadInfo(const PayloadInfo &other);
     ~PayloadInfo();
-    PayloadInfo & operator=(const PayloadInfo &other);
+    PayloadInfo &operator=(const PayloadInfo &other);
 
     bool isNull() const;
 
-    int id() const;
-    QString name() const;
-    int clockrate() const;
-    int channels() const;
-    int ptime() const;
-    int maxptime() const;
+    int              id() const;
+    QString          name() const;
+    int              clockrate() const;
+    int              channels() const;
+    int              ptime() const;
+    int              maxptime() const;
     QList<Parameter> parameters() const;
 
     void setId(int i);
@@ -296,27 +263,18 @@ public:
 
     bool operator==(const PayloadInfo &other) const;
 
-    inline bool operator!=(const PayloadInfo &other) const
-    {
-        return !(*this == other);
-    }
+    inline bool operator!=(const PayloadInfo &other) const { return !(*this == other); }
 
 private:
     class Private;
     Private *d;
 };
 
-class RtpSession : public QObject
-{
+class RtpSession : public QObject {
     Q_OBJECT
 
 public:
-    enum Error
-    {
-        ErrorGeneric,
-        ErrorSystem,
-        ErrorCodec
-    };
+    enum Error { ErrorGeneric, ErrorSystem, ErrorCodec };
 
     RtpSession(QObject *parent = nullptr);
     ~RtpSession();
@@ -474,11 +432,11 @@ public:
     bool canTransmitVideo() const;
 
     // speaker
-    int outputVolume() const; // 0 (mute) to 100
+    int  outputVolume() const; // 0 (mute) to 100
     void setOutputVolume(int level);
 
     // microphone
-    int inputVolume() const; // 0 (mute) to 100
+    int  inputVolume() const; // 0 (mute) to 100
     void setInputVolume(int level);
 
     Error errorCode() const;
@@ -490,7 +448,7 @@ signals:
     void started();
     void preferencesUpdated();
     void audioOutputIntensityChanged(int intensity); // 0-100, -1 for no signal
-    void audioInputIntensityChanged(int intensity); // 0-100
+    void audioInputIntensityChanged(int intensity);  // 0-100
     void stoppedRecording();
     void stopped();
     void finished(); // for file playback only

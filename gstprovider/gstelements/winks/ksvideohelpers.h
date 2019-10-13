@@ -22,9 +22,9 @@
 #define __KSVIDEOHELPERS_H__
 
 #include <gst/gst.h>
-#include <windows.h>
 #include <ks.h>
 #include <ksmedia.h>
+#include <windows.h>
 
 G_BEGIN_DECLS
 
@@ -38,28 +38,28 @@ typedef struct _KsVideoMediaType KsVideoMediaType;
  * A structure that contain metadata about capabilities
  * for both KS and GStreamer for video only.
  */
-struct _KsVideoMediaType
-{
-  guint pin_id;
+struct _KsVideoMediaType {
+    guint pin_id;
 
-  const KSDATARANGE * range;
-  const KS_VIDEO_STREAM_CONFIG_CAPS vscc;
+    const KSDATARANGE *               range;
+    const KS_VIDEO_STREAM_CONFIG_CAPS vscc;
 
-  guint8 * format;
-  guint format_size;
+    guint8 *format;
+    guint   format_size;
 
-  guint sample_size;
+    guint sample_size;
 
-  GstCaps * translated_caps;
+    GstCaps *translated_caps;
 };
 
-KsVideoMediaType * ks_video_media_type_dup (KsVideoMediaType * media_type);
-void ks_video_media_type_free (KsVideoMediaType * media_type);
-GList * ks_video_probe_filter_for_caps (HANDLE filter_handle);
-KSPIN_CONNECT * ks_video_create_pin_conn_from_media_type (KsVideoMediaType * media_type);
-gboolean ks_video_fixate_media_type (const KSDATARANGE * range, guint8 * format, gint width, gint height, gint fps_n, gint fps_d);
+KsVideoMediaType *ks_video_media_type_dup(KsVideoMediaType *media_type);
+void              ks_video_media_type_free(KsVideoMediaType *media_type);
+GList *           ks_video_probe_filter_for_caps(HANDLE filter_handle);
+KSPIN_CONNECT *   ks_video_create_pin_conn_from_media_type(KsVideoMediaType *media_type);
+gboolean ks_video_fixate_media_type(const KSDATARANGE *range, guint8 *format, gint width, gint height, gint fps_n,
+                                    gint fps_d);
 
-GstCaps * ks_video_get_all_caps (void);
+GstCaps *ks_video_get_all_caps(void);
 
 G_END_DECLS
 

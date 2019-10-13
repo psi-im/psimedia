@@ -21,8 +21,8 @@
 #ifndef MODES_H
 #define MODES_H
 
-#include <QList>
 #include "psimediaprovider.h"
+#include <QList>
 
 namespace PsiMedia {
 

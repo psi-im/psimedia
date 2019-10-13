@@ -70,18 +70,18 @@ QList<PAudioParams> modes_supportedAudio()
     }*/
     {
         PAudioParams p;
-        p.codec = "opus";
+        p.codec      = "opus";
         p.sampleRate = 8000;
         p.sampleSize = 16;
-        p.channels = 1;
+        p.channels   = 1;
         list += p;
     }
     {
         PAudioParams p;
-        p.codec = "opus";
+        p.codec      = "opus";
         p.sampleRate = 16000;
         p.sampleSize = 16;
-        p.channels = 1;
+        p.channels   = 1;
         list += p;
     }
     /*{
@@ -131,8 +131,8 @@ QList<PVideoParams> modes_supportedVideo()
     {
         PVideoParams p;
         p.codec = "theora";
-        p.size = QSize(640, 480);
-        p.fps = 30;
+        p.size  = QSize(640, 480);
+        p.fps   = 30;
         list += p;
     }
     /*{

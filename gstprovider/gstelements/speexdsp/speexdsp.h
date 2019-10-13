@@ -27,92 +27,84 @@
 #ifndef __GST_SPEEX_DSP_H__
 #define __GST_SPEEX_DSP_H__
 
-#include <stdint.h>
-#include <gst/gst.h>
+#include "speexechoprobe.h"
 #include <gst/base/gstadapter.h>
+#include <gst/gst.h>
 #include <speex/speex_echo.h>
 #include <speex/speex_preprocess.h>
-#include "speexechoprobe.h"
+#include <stdint.h>
 
 G_BEGIN_DECLS
 
-GST_DEBUG_CATEGORY_EXTERN (speex_dsp_debug);
+GST_DEBUG_CATEGORY_EXTERN(speex_dsp_debug);
 
-#define GST_TYPE_SPEEX_DSP \
-  (gst_speex_dsp_get_type())
-#define GST_SPEEX_DSP(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_SPEEX_DSP,GstSpeexDSP))
-#define GST_IS_SPEEX_DSP(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_SPEEX_DSP))
-#define GST_SPEEX_DSP_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_SPEEX_DSP,GstSpeexDSPClass))
-#define GST_IS_SPEEX_DSP_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_SPEEX_DSP))
-#define GST_SPEEX_DSP_GET_CLASS(obj) \
-  (G_TYPE_INSTANCE_GET_CLASS((obj),GST_TYPE_SPEEX_DSP,GstSpeexDSPClass))
+#define GST_TYPE_SPEEX_DSP (gst_speex_dsp_get_type())
+#define GST_SPEEX_DSP(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_SPEEX_DSP, GstSpeexDSP))
+#define GST_IS_SPEEX_DSP(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_SPEEX_DSP))
+#define GST_SPEEX_DSP_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_SPEEX_DSP, GstSpeexDSPClass))
+#define GST_IS_SPEEX_DSP_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_SPEEX_DSP))
+#define GST_SPEEX_DSP_GET_CLASS(obj) (G_TYPE_INSTANCE_GET_CLASS((obj), GST_TYPE_SPEEX_DSP, GstSpeexDSPClass))
 
-typedef struct _GstSpeexDSP GstSpeexDSP;
+typedef struct _GstSpeexDSP      GstSpeexDSP;
 typedef struct _GstSpeexDSPClass GstSpeexDSPClass;
 
-struct _GstSpeexDSP
-{
-  GstElement element;
+struct _GstSpeexDSP {
+    GstElement element;
 
-  GstPad * rec_srcpad;
-  GstPad * rec_sinkpad;
+    GstPad *rec_srcpad;
+    GstPad *rec_sinkpad;
 
-  /* Protected by the stream lock */
-  guint frame_size_ms; /* frame size in ms */
-  guint filter_length_ms; /* filter length in ms */
+    /* Protected by the stream lock */
+    guint frame_size_ms;    /* frame size in ms */
+    guint filter_length_ms; /* filter length in ms */
 
-  /* Protected by the object lock */
-  gint rate;
-  gint channels;
+    /* Protected by the object lock */
+    gint rate;
+    gint channels;
 
-  /* Protected by the stream lock */
-  GstSegment rec_segment;
+    /* Protected by the stream lock */
+    GstSegment rec_segment;
 
-  GstAdapter * rec_adapter;
+    GstAdapter *rec_adapter;
 
-  GstClockTime rec_time;
-  guint64 rec_offset;
+    GstClockTime rec_time;
+    guint64      rec_offset;
 
-  /* Protected by the object lock */
-  SpeexPreprocessState * preprocstate;
+    /* Protected by the object lock */
+    SpeexPreprocessState *preprocstate;
 
-  /* Protected by the stream lock */
-  SpeexEchoState * echostate;
+    /* Protected by the stream lock */
+    SpeexEchoState *echostate;
 
-  /* Protected by the object lock */
-  GstSpeexEchoProbe * probe;
-  GQueue * buffers;
+    /* Protected by the object lock */
+    GstSpeexEchoProbe *probe;
+    GQueue *           buffers;
 
-  /* Protected by the object lock */
-  gint latency_tune;
-  gboolean agc;
-  gint agc_increment;
-  gint agc_decrement;
-  gfloat agc_level;
-  gint agc_max_gain;
-  gboolean denoise;
-  gint echo_suppress;
-  gint echo_suppress_active;
-  gint noise_suppress;
+    /* Protected by the object lock */
+    gint     latency_tune;
+    gboolean agc;
+    gint     agc_increment;
+    gint     agc_decrement;
+    gfloat   agc_level;
+    gint     agc_max_gain;
+    gboolean denoise;
+    gint     echo_suppress;
+    gint     echo_suppress_active;
+    gint     noise_suppress;
 };
 
-struct _GstSpeexDSPClass
-{
-  GstElementClass parent_class;
+struct _GstSpeexDSPClass {
+    GstElementClass parent_class;
 };
 
-GType gst_speex_dsp_get_type (void);
+GType gst_speex_dsp_get_type(void);
 
-void gst_speex_dsp_set_auto_attach (GstSpeexDSP * self, gboolean enabled);
-void gst_speex_dsp_add_capture_buffer (GstSpeexDSP * self, GstBuffer * buf);
+void gst_speex_dsp_set_auto_attach(GstSpeexDSP *self, gboolean enabled);
+void gst_speex_dsp_add_capture_buffer(GstSpeexDSP *self, GstBuffer *buf);
 
 /* called by probe, with global_mutex locked */
-void gst_speex_dsp_attach (GstSpeexDSP * self, GstSpeexEchoProbe * probe);
-void gst_speex_dsp_detach (GstSpeexDSP * self);
+void gst_speex_dsp_attach(GstSpeexDSP *self, GstSpeexEchoProbe *probe);
+void gst_speex_dsp_detach(GstSpeexDSP *self);
 
 G_END_DECLS
 

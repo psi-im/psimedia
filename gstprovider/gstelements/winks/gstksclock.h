@@ -27,42 +27,34 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_KS_CLOCK \
-  (gst_ks_clock_get_type ())
-#define GST_KS_CLOCK(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST ((obj), GST_TYPE_KS_CLOCK, GstKsClock))
-#define GST_KS_CLOCK_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST ((klass), GST_TYPE_KS_CLOCK, GstKsClockClass))
-#define GST_IS_KS_CLOCK(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE ((obj), GST_TYPE_KS_CLOCK))
-#define GST_IS_KS_CLOCK_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE ((klass), GST_TYPE_KS_CLOCK))
+#define GST_TYPE_KS_CLOCK (gst_ks_clock_get_type())
+#define GST_KS_CLOCK(obj) (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_KS_CLOCK, GstKsClock))
+#define GST_KS_CLOCK_CLASS(klass) (G_TYPE_CHECK_CLASS_CAST((klass), GST_TYPE_KS_CLOCK, GstKsClockClass))
+#define GST_IS_KS_CLOCK(obj) (G_TYPE_CHECK_INSTANCE_TYPE((obj), GST_TYPE_KS_CLOCK))
+#define GST_IS_KS_CLOCK_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE((klass), GST_TYPE_KS_CLOCK))
 
 typedef struct _GstKsClock      GstKsClock;
 typedef struct _GstKsClockClass GstKsClockClass;
 
-struct _GstKsClock
-{
-  GObject parent;
+struct _GstKsClock {
+    GObject parent;
 };
 
-struct _GstKsClockClass
-{
-  GObjectClass parent_class;
+struct _GstKsClockClass {
+    GObjectClass parent_class;
 };
 
-GType gst_ks_clock_get_type (void);
+GType gst_ks_clock_get_type(void);
 
-gboolean gst_ks_clock_open (GstKsClock * self);
-void gst_ks_clock_close (GstKsClock * self);
+gboolean gst_ks_clock_open(GstKsClock *self);
+void     gst_ks_clock_close(GstKsClock *self);
 
-HANDLE gst_ks_clock_get_handle (GstKsClock * self);
+HANDLE gst_ks_clock_get_handle(GstKsClock *self);
 
-void gst_ks_clock_prepare (GstKsClock * self);
-void gst_ks_clock_start (GstKsClock * self);
+void gst_ks_clock_prepare(GstKsClock *self);
+void gst_ks_clock_start(GstKsClock *self);
 
-void gst_ks_clock_provide_master_clock (GstKsClock * self,
-    GstClock * master_clock);
+void gst_ks_clock_provide_master_clock(GstKsClock *self, GstClock *master_clock);
 
 G_END_DECLS
 

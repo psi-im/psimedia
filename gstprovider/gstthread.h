@@ -21,9 +21,9 @@
 #ifndef PSI_GSTTHREAD_H
 #define PSI_GSTTHREAD_H
 
-#include <functional>
-#include <QString>
 #include <QObject>
+#include <QString>
+#include <functional>
 #include <glib.h>
 
 namespace PsiMedia {
@@ -33,8 +33,7 @@ namespace PsiMedia {
 //   ready for use.  if you want to do stuff in the other thread, set
 //   up a glib timeout of 0 against mainContext(), and go from there.
 
-class GstMainLoop : public QObject
-{
+class GstMainLoop : public QObject {
     Q_OBJECT
 
 public:
@@ -43,10 +42,10 @@ public:
     GstMainLoop(const QString &resPath);
     ~GstMainLoop();
 
-    QString gstVersion() const;
+    QString       gstVersion() const;
     GMainContext *mainContext();
-    bool isInitialized() const;
-    bool execInContext(ContextCallback cb, void *userData);
+    bool          isInitialized() const;
+    bool          execInContext(ContextCallback cb, void *userData);
 
 signals:
     void initialized();

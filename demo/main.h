@@ -18,51 +18,46 @@
  *
  */
 
+#include <QComboBox>
 #include <QDialog>
+#include <QFile>
+#include <QHostAddress>
 #include <QMainWindow>
 #include <QUdpSocket>
-#include <QComboBox>
-#include <QHostAddress>
-#include <QFile>
 
-#include "ui_mainwin.h"
 #include "ui_config.h"
+#include "ui_mainwin.h"
 
 #include <psimedia.h>
 
-class Configuration
-{
+class Configuration {
 public:
-    bool liveInput;
-    QString audioOutDeviceId, audioInDeviceId, videoInDeviceId;
-    QString file;
-    bool loopFile;
+    bool                  liveInput;
+    QString               audioOutDeviceId, audioInDeviceId, videoInDeviceId;
+    QString               file;
+    bool                  loopFile;
     PsiMedia::AudioParams audioParams;
     PsiMedia::VideoParams videoParams;
 
-    Configuration() :
-        liveInput(false),
-        loopFile(false)
-    {
-    }
+    Configuration() : liveInput(false), loopFile(false) {}
 };
 
-class FeaturesWatcher : public QObject
-{
+class FeaturesWatcher : public QObject {
     Q_OBJECT
 
-    Configuration _configuration;
+    Configuration      _configuration;
     PsiMedia::Features _features;
 
     QString defaultDeviceId(const QList<PsiMedia::Device> &devs, const QString &userPref);
+
 public:
     FeaturesWatcher(QObject *parent);
     ~FeaturesWatcher();
-    inline const Configuration &configuration() const { return _configuration; }
-    inline const PsiMedia::Features &features() const { return _features; }
-    inline QList<PsiMedia::Device> audioInputDevices() { return _features.audioInputDevices(); }
-    inline QList<PsiMedia::Device> audioOutputDevices() { return _features.audioOutputDevices(); }
-    inline QList<PsiMedia::Device> videoInputDevices() { return _features.videoInputDevices(); }
+    inline const Configuration &        configuration() const { return _configuration; }
+    inline const PsiMedia::Features &   features() const { return _features; }
+    inline QList<PsiMedia::Device>      audioInputDevices() { return _features.audioInputDevices(); }
+    inline QList<PsiMedia::Device>      audioOutputDevices() { return _features.audioOutputDevices(); }
+    inline QList<PsiMedia::Device>      videoInputDevices() { return _features.videoInputDevices(); }
     inline QList<PsiMedia::AudioParams> supportedAudioModes() { return _features.supportedAudioModes(); }
     inline QList<PsiMedia::VideoParams> supportedVideoModes() { return _features.supportedVideoModes(); }
 
@@ -75,18 +70,17 @@ signals:
 };
 
 class MainWin;
-class ConfigDlg : public QDialog
-{
+class ConfigDlg : public QDialog {
     Q_OBJECT
 
 public:
-    Ui::Config ui;
+    Ui::Config       ui;
     FeaturesWatcher *featuresWatcher;
-    bool hasAudioInPref = false;
-    bool hasAudioOutPref = false;
-    bool hasVideoInPref = false;
-    bool hasAudioParams = false;
-    bool hasVideoParams = false;
+    bool             hasAudioInPref  = false;
+    bool             hasAudioOutPref = false;
+    bool             hasVideoInPref  = false;
+    bool             hasAudioParams  = false;
+    bool             hasVideoParams  = false;
 
     ConfigDlg(MainWin *parent = nullptr);
     int findAudioParamsData(QComboBox *cb, const PsiMedia::AudioParams &params);
@@ -103,8 +97,7 @@ private slots:
 };
 
 // handles two udp sockets
-class RtpSocketGroup : public QObject
-{
+class RtpSocketGroup : public QObject {
     Q_OBJECT
 
 public:
@@ -124,22 +117,17 @@ private slots:
 
 // bind a channel to a socket group.
 // takes ownership of socket group.
-class RtpBinding : public QObject
-{
+class RtpBinding : public QObject {
     Q_OBJECT
 
 public:
-    enum Mode
-    {
-        Send,
-        Receive
-    };
+    enum Mode { Send, Receive };
 
-    Mode mode;
+    Mode                  mode;
     PsiMedia::RtpChannel *channel;
-    RtpSocketGroup *socketGroup;
-    QHostAddress sendAddress;
-    int sendBasePort;
+    RtpSocketGroup *      socketGroup;
+    QHostAddress          sendAddress;
+    int                   sendBasePort;
 
     RtpBinding(Mode _mode, PsiMedia::RtpChannel *_channel, RtpSocketGroup *_socketGroup, QObject *parent = nullptr);
 
@@ -150,33 +138,32 @@ private slots:
     void app_written(int count);
 };
 
-class MainWin : public QMainWindow
-{
+class MainWin : public QMainWindow {
     Q_OBJECT
 
 public:
-    Ui::MainWin ui;
-    QAction *action_AboutProvider;
-    QString creditName;
+    Ui::MainWin          ui;
+    QAction *            action_AboutProvider;
+    QString              creditName;
     PsiMedia::RtpSession producer;
     PsiMedia::RtpSession receiver;
-    bool transmitAudio, transmitVideo, transmitting;
-    bool receiveAudio, receiveVideo;
-    RtpBinding *sendAudioRtp, *sendVideoRtp;
-    RtpBinding *receiveAudioRtp, *receiveVideoRtp;
-    bool recording;
-    QFile *recordFile;
-    FeaturesWatcher *featureWatcher;
+    bool                 transmitAudio, transmitVideo, transmitting;
+    bool                 receiveAudio, receiveVideo;
+    RtpBinding *         sendAudioRtp, *sendVideoRtp;
+    RtpBinding *         receiveAudioRtp, *receiveVideoRtp;
+    bool                 recording;
+    QFile *              recordFile;
+    FeaturesWatcher *    featureWatcher;
 
     MainWin();
     ~MainWin();
-    void setSendFieldsEnabled(bool b);
-    void setSendConfig(const QString &s);
-    void setReceiveFieldsEnabled(bool b);
+    void           setSendFieldsEnabled(bool b);
+    void           setSendConfig(const QString &s);
+    void           setReceiveFieldsEnabled(bool b);
     static QString rtpSessionErrorToString(PsiMedia::RtpSession::Error e);
-    void cleanup_send_rtp();
-    void cleanup_receive_rtp();
-    void cleanup_record();
+    void           cleanup_send_rtp();
+    void           cleanup_receive_rtp();
+    void           cleanup_record();
 
 private slots:
     void doConfigure();
