@@ -36,7 +36,7 @@ class GstDevice {
 public:
     PDevice::Type type;
     QString       name;
-    bool          isDefault;
+    bool          isDefault = false; // TODO assign true somewhere
     QString       id;
 };
 
