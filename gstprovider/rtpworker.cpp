@@ -20,14 +20,13 @@
 
 #include "rtpworker.h"
 
+#include <QElapsedTimer>
 #include <QStringList>
-#include <QTime>
 #include <cstring>
 #include <gst/app/gstappsrc.h>
-#include <stdio.h>
 
 #include "bins.h"
-#include "devices.h"
+//#include "devices.h"
 #include "payloadinfo.h"
 #include "pipeline.h"
 
@@ -66,11 +65,11 @@ static const char *state_to_str(GstState state)
 
 class Stats {
 public:
-    QString name;
-    int     calls;
-    int     sizes[30];
-    int     sizes_at;
-    QTime   calltime;
+    QString       name;
+    int           calls;
+    int           sizes[30];
+    int           sizes_at;
+    QElapsedTimer calltime;
 
     Stats(const QString &_name) : name(_name), calls(-1), sizes_at(0)
     {
@@ -117,8 +116,8 @@ public:
 static void dump_pipeline(GstElement *in, int indent = 1);
 static void dump_pipeline_each(const GValue *value, gpointer data)
 {
-    GstElement *e      = static_cast<GstElement *>(g_value_get_object(value));
-    int         indent = *(static_cast<int *>(data));
+    auto *e      = static_cast<GstElement *>(g_value_get_object(value));
+    int   indent = *(static_cast<int *>(data));
     if (GST_IS_BIN(e)) {
         qDebug("%s%s:\n", qPrintable(QString(indent, ' ')), gst_element_get_name(e));
         dump_pipeline(e, indent + 2);
@@ -418,7 +417,7 @@ static GstBuffer *makeGstBuffer(const PRtpPacket &packet)
 GstAppSink *RtpWorker::makeVideoPlayAppSink(const gchar *name)
 {
     GstElement *videoplaysink = gst_element_factory_make("appsink", name); // was appvideosink
-    GstAppSink *appVideoSink  = reinterpret_cast<GstAppSink *>(videoplaysink);
+    auto *      appVideoSink  = reinterpret_cast<GstAppSink *>(videoplaysink);
 
     GstCaps *videoplaycaps;
     videoplaycaps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "BGRx", nullptr);
@@ -1544,7 +1543,7 @@ bool RtpWorker::addVideoChain()
 
     GstElement *rtpqueue     = gst_element_factory_make("queue", nullptr);
     GstElement *videortpsink = gst_element_factory_make("appsink", nullptr); // was apprtpsink
-    GstAppSink *appRtpSink   = reinterpret_cast<GstAppSink *>(videortpsink);
+    auto *      appRtpSink   = reinterpret_cast<GstAppSink *>(videortpsink);
     if (!fileDemux)
         g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, nullptr);
 
@@ -1566,14 +1565,14 @@ bool RtpWorker::addVideoChain()
     gst_bin_add(GST_BIN(sendbin), videotee);
     gst_bin_add(GST_BIN(sendbin), playqueue);
     gst_bin_add(GST_BIN(sendbin), videoconvertplay);
-    gst_bin_add(GST_BIN(sendbin), (GstElement *)appVideoSink);
+    gst_bin_add(GST_BIN(sendbin), reinterpret_cast<GstElement *>(appVideoSink));
     gst_bin_add(GST_BIN(sendbin), rtpqueue);
     gst_bin_add(GST_BIN(sendbin), videoenc);
     gst_bin_add(GST_BIN(sendbin), videortpsink);
 #ifdef VIDEO_PREP
     gst_element_link(videoprep, videotee);
 #endif
-    gst_element_link_many(videotee, playqueue, videoconvertplay, (GstElement *)appVideoSink, nullptr);
+    gst_element_link_many(videotee, playqueue, videoconvertplay, reinterpret_cast<GstElement *>(appVideoSink), nullptr);
     gst_element_link_many(videotee, rtpqueue, videoenc, videortpsink, nullptr); // FIXME!
 
     videortppay = videoenc;
@@ -1592,7 +1591,7 @@ bool RtpWorker::addVideoChain()
         gst_element_set_state(videotee, GST_STATE_PAUSED);
         gst_element_set_state(playqueue, GST_STATE_PAUSED);
         gst_element_set_state(videoconvertplay, GST_STATE_PAUSED);
-        gst_element_set_state((GstElement *)appVideoSink, GST_STATE_PAUSED);
+        gst_element_set_state(reinterpret_cast<GstElement *>(appVideoSink), GST_STATE_PAUSED);
         gst_element_set_state(rtpqueue, GST_STATE_PAUSED);
         gst_element_set_state(videoenc, GST_STATE_PAUSED);
         gst_element_set_state(videortpsink, GST_STATE_PAUSED);

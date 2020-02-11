@@ -140,7 +140,7 @@ public:
     QString version;
     bool    success;
 
-    GstSession(const QString &pluginPath = QString())
+    explicit GstSession(const QString &pluginPath = QString())
     {
         args.set(QCoreApplication::instance()->arguments());
 
@@ -166,7 +166,7 @@ public:
         else if (nano == 2)
             nano_str = " (Prerelease)";
 
-        version.sprintf("%d.%d.%d%s", major, minor, micro, !nano_str.isEmpty() ? qPrintable(nano_str) : "");
+        version.asprintf("%d.%d.%d%s", major, minor, micro, !nano_str.isEmpty() ? qPrintable(nano_str) : "");
 
         uint need_maj = 1;
         uint need_min = 4;
@@ -293,10 +293,10 @@ public:
     static gboolean bridge_callback(gpointer data)
     {
         auto d = static_cast<GstMainLoop::Private *>(data);
-        while (d->bridgeQueue.size()) {
+        while (!d->bridgeQueue.empty()) {
             d->m.lock();
             QPair<GstMainLoop::ContextCallback, void *> p;
-            bool                                        exist = d->bridgeQueue.size() > 0;
+            bool                                        exist = !d->bridgeQueue.empty();
             if (exist)
                 p = d->bridgeQueue.dequeue();
             d->m.unlock();
@@ -312,14 +312,14 @@ public:
         *timeout_      = -1;
         auto         d = reinterpret_cast<Private::BridgeQueueSource *>(source)->d;
         QMutexLocker locker(&d->m);
-        return d->bridgeQueue.size() > 0 ? TRUE : FALSE;
+        return !d->bridgeQueue.empty() ? TRUE : FALSE;
     }
 
     static gboolean bridge_check(GSource *source)
     {
         auto         d = reinterpret_cast<Private::BridgeQueueSource *>(source)->d;
         QMutexLocker locker(&d->m);
-        return d->bridgeQueue.size() > 0 ? TRUE : FALSE;
+        return !d->bridgeQueue.empty() ? TRUE : FALSE;
     }
 
     static gboolean bridge_dispatch(GSource *source, GSourceFunc callback, gpointer user_data)
@@ -392,7 +392,7 @@ bool GstMainLoop::isInitialized() const
     return d->success;
 }
 
-bool GstMainLoop::execInContext(ContextCallback cb, void *userData)
+bool GstMainLoop::execInContext(const ContextCallback &cb, void *userData)
 {
     QMutexLocker locker(&d->m);
     if (d->mainLoop) {

@@ -51,8 +51,8 @@ class FeaturesWatcher : public QObject {
     QString defaultDeviceId(const QList<PsiMedia::Device> &devs, const QString &userPref);
 
 public:
-    FeaturesWatcher(QObject *parent);
-    ~FeaturesWatcher();
+    explicit FeaturesWatcher(QObject *parent);
+    ~FeaturesWatcher() override;
     inline const Configuration &        configuration() const { return _configuration; }
     inline const PsiMedia::Features &   features() const { return _features; }
     inline QList<PsiMedia::Device>      audioInputDevices() { return _features.audioInputDevices(); }
@@ -82,12 +82,12 @@ public:
     bool             hasAudioParams  = false;
     bool             hasVideoParams  = false;
 
-    ConfigDlg(MainWin *parent = nullptr);
+    explicit ConfigDlg(MainWin *parent = nullptr);
     int findAudioParamsData(QComboBox *cb, const PsiMedia::AudioParams &params);
     int findVideoParamsData(QComboBox *cb, const PsiMedia::VideoParams &params);
 
 protected:
-    virtual void accept();
+    void accept() override;
 
 private slots:
     void live_toggled(bool on);
@@ -103,7 +103,7 @@ class RtpSocketGroup : public QObject {
 public:
     QUdpSocket socket[2];
 
-    RtpSocketGroup(QObject *parent = nullptr);
+    explicit RtpSocketGroup(QObject *parent = nullptr);
     bool bind(int basePort);
 
 signals:
@@ -156,7 +156,7 @@ public:
     FeaturesWatcher *    featureWatcher;
 
     MainWin();
-    ~MainWin();
+    ~MainWin() override;
     void           setSendFieldsEnabled(bool b);
     void           setSendConfig(const QString &s);
     void           setReceiveFieldsEnabled(bool b);

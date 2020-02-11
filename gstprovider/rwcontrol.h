@@ -187,9 +187,9 @@ public:
 
     Type type;
 
-    RwControlMessage(Type _type) : type(_type) {}
+    explicit RwControlMessage(Type _type) : type(_type) {}
 
-    virtual ~RwControlMessage() {}
+    virtual ~RwControlMessage() = default;
 };
 
 class RwControlStartMessage : public RwControlMessage {
@@ -258,8 +258,8 @@ class RwControlLocal : public QObject {
     Q_OBJECT
 
 public:
-    RwControlLocal(GstMainLoop *thread, QObject *parent = nullptr);
-    ~RwControlLocal();
+    explicit RwControlLocal(GstMainLoop *thread, QObject *parent = nullptr);
+    ~RwControlLocal() override;
 
     void start(const RwControlConfigDevices &devices, const RwControlConfigCodecs &codecs);
     void stop(); // if called, may still receive many status messages before stopped

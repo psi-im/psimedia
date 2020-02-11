@@ -62,8 +62,8 @@ signals:
     void updated();
 
 public:
-    DeviceMonitor(GstMainLoop *mainLoop);
-    ~DeviceMonitor();
+    explicit DeviceMonitor(GstMainLoop *mainLoop);
+    ~DeviceMonitor() override;
 
     QList<GstDevice> devices(PDevice::Type type);
 };

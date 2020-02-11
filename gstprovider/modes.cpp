@@ -20,7 +20,7 @@
 
 #include "modes.h"
 
-#include <gst/gst.h>
+//#include <gst/gst.h>
 
 namespace PsiMedia {
 

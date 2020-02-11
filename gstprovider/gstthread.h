@@ -39,13 +39,13 @@ class GstMainLoop : public QObject {
 public:
     typedef std::function<void(void *userData)> ContextCallback;
 
-    GstMainLoop(const QString &resPath);
-    ~GstMainLoop();
+    explicit GstMainLoop(const QString &resPath);
+    ~GstMainLoop() override;
 
     QString       gstVersion() const;
     GMainContext *mainContext();
     bool          isInitialized() const;
-    bool          execInContext(ContextCallback cb, void *userData);
+    bool          execInContext(const ContextCallback &cb, void *userData);
 
 signals:
     void initialized();

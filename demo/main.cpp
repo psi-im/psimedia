@@ -41,7 +41,7 @@ static QString urlishEncode(const QString &in)
     for (int n = 0; n < in.length(); ++n) {
         if (in[n] == '%' || in[n] == ',' || in[n] == ';' || in[n] == ':' || in[n] == '\n') {
             unsigned char c = quint8(in[n].toLatin1());
-            out += QString().sprintf("%%%02x", c);
+            out += QString().asprintf("%%%02x", c);
         } else
             out += in[n];
     }
@@ -397,14 +397,12 @@ bool RtpSocketGroup::bind(int basePort)
 {
     if (!socket[0].bind(quint16(basePort)))
         return false;
-    if (!socket[1].bind(quint16(basePort + 1)))
-        return false;
-    return true;
+    return socket[1].bind(quint16(basePort + 1));
 }
 
 void RtpSocketGroup::sock_readyRead()
 {
-    QUdpSocket *udp = static_cast<QUdpSocket *>(sender());
+    auto *udp = static_cast<QUdpSocket *>(sender());
     if (udp == &socket[0])
         emit readyRead(0);
     else
@@ -561,7 +559,7 @@ MainWin::MainWin() :
 
     // hack: make the top/bottom layouts have matching height
     int      lineEditHeight = ui.le_receiveConfig->sizeHint().height();
-    QWidget *spacer         = new QWidget(this);
+    auto *spacer         = new QWidget(this);
     spacer->setMinimumHeight(lineEditHeight);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     ui.gridLayout2->addWidget(spacer, 3, 1);
@@ -774,12 +772,12 @@ void MainWin::transmit()
         }
     }
 
-    RtpSocketGroup *audioSocketGroup = new RtpSocketGroup;
+    auto *audioSocketGroup     = new RtpSocketGroup;
     sendAudioRtp               = new RtpBinding(RtpBinding::Send, producer.audioRtpChannel(), audioSocketGroup, this);
     sendAudioRtp->sendAddress  = addr;
     sendAudioRtp->sendBasePort = audioPort;
 
-    RtpSocketGroup *videoSocketGroup = new RtpSocketGroup;
+    auto *videoSocketGroup     = new RtpSocketGroup;
     sendVideoRtp               = new RtpBinding(RtpBinding::Send, producer.videoRtpChannel(), videoSocketGroup, this);
     sendVideoRtp->sendAddress  = addr;
     sendVideoRtp->sendBasePort = videoPort;
@@ -861,8 +859,8 @@ void MainWin::start_receive()
         receiver.setRemoteVideoPreferences(payloadInfoList);
     }
 
-    RtpSocketGroup *audioSocketGroup = new RtpSocketGroup(this);
-    RtpSocketGroup *videoSocketGroup = new RtpSocketGroup(this);
+    auto *audioSocketGroup = new RtpSocketGroup(this);
+    auto *videoSocketGroup = new RtpSocketGroup(this);
     if (!audioSocketGroup->bind(audioPort)) {
         delete audioSocketGroup;
         audioSocketGroup = nullptr;
@@ -1043,8 +1041,8 @@ int main(int argc, char **argv)
 {
     QApplication qapp(argc, argv);
 
-    qapp.setOrganizationName("psi-im.org");
-    qapp.setApplicationName("psimedia");
+    QApplication::setOrganizationName("psi-im.org");
+    QApplication::setApplicationName("psimedia");
 
 #ifndef GSTPROVIDER_STATIC
     QString pluginFile;
@@ -1086,7 +1084,7 @@ int main(int argc, char **argv)
     // give mainWin a chance to fix its layout before showing
     QTimer::singleShot(0, &mainWin, SLOT(show()));
 
-    qapp.exec();
+    QApplication::exec();
     return 0;
 }
 
@@ -1102,7 +1100,7 @@ FeaturesWatcher::FeaturesWatcher(QObject *parent)
     updateDefaults();
 }
 
-FeaturesWatcher::~FeaturesWatcher() {}
+FeaturesWatcher::~FeaturesWatcher() = default;
 
 void FeaturesWatcher::updateDefaults()
 {
