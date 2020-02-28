@@ -250,7 +250,7 @@ static QList<GstDevice> get_alsa_items(int type)
         QStringList cId  = read_proc_as_lines(path.data());
         if (cId.count() > 0)
             ai.cardName = cId.at(0);
-        ai.name.asprintf("ALSA Card %d, Device %d", ai.card, ai.dev);
+        ai.name = QString("ALSA Card %1, Device %2").arg(ai.card).arg(ai.dev);
         items += ai;
     }
 
@@ -327,7 +327,7 @@ static QList<GstDevice> get_alsa_items(int type)
             i.id   = QLatin1String("alsasink ");
         }
         i.name = QLatin1String("alsa: ") + QString("[%1] %2").arg(ai.cardName).arg(ai.name);
-        i.id += QString().asprintf("device=plughw:%d,%d", ai.card, ai.dev);
+        i.id += QString("device=plughw:%1,%2").arg(ai.card).arg(ai.dev);
         out += i;
 
         // internet discussion seems to indicate that plughw is the

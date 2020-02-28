@@ -41,7 +41,7 @@ static QString urlishEncode(const QString &in)
     for (int n = 0; n < in.length(); ++n) {
         if (in[n] == '%' || in[n] == ',' || in[n] == ';' || in[n] == ':' || in[n] == '\n') {
             unsigned char c = quint8(in[n].toLatin1());
-            out += QString().asprintf("%%%02x", c);
+            out += QString("%%1").arg(c, 2, 16, QLatin1Char('0'));
         } else
             out += in[n];
     }
@@ -558,7 +558,7 @@ MainWin::MainWin() :
     receiver.setVideoOutputWidget(ui.vw_remote);
 
     // hack: make the top/bottom layouts have matching height
-    int      lineEditHeight = ui.le_receiveConfig->sizeHint().height();
+    int   lineEditHeight = ui.le_receiveConfig->sizeHint().height();
     auto *spacer         = new QWidget(this);
     spacer->setMinimumHeight(lineEditHeight);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);

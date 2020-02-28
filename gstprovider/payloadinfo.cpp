@@ -29,7 +29,7 @@ static QString hexEncode(const QByteArray &in)
 {
     QString out;
     for (char n : in)
-        out += QString().arg("%02x", static_cast<unsigned char>(n));
+        out += QString("%1").arg(static_cast<unsigned char>(n), 2, 16);
     return out;
 }
 

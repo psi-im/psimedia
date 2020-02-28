@@ -166,7 +166,11 @@ public:
         else if (nano == 2)
             nano_str = " (Prerelease)";
 
-        version.asprintf("%d.%d.%d%s", major, minor, micro, !nano_str.isEmpty() ? qPrintable(nano_str) : "");
+        version = QString("%1.%2.%3%4")
+                      .arg(major)
+                      .arg(minor)
+                      .arg(micro)
+                      .arg(!nano_str.isEmpty() ? qPrintable(nano_str) : "");
 
         uint need_maj = 1;
         uint need_min = 4;
