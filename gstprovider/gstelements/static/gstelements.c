@@ -51,30 +51,30 @@ void gstelements_osxvideo_register();
 void gstelements_register()
 {
 #ifdef HAVE_VIDEOMAXRATE
-	gstelements_videomaxrate_register();
+    gstelements_videomaxrate_register();
 #endif
 
 #ifdef HAVE_LIVEADDER
-	gstelements_liveadder_register();
+    gstelements_liveadder_register();
 #endif
 
 #ifdef HAVE_SPEEXDSP
-	gstelements_speexdsp_register();
+    gstelements_speexdsp_register();
 #endif
 
 #ifdef HAVE_DIRECTSOUND
-	gstelements_directsound_register();
+    gstelements_directsound_register();
 #endif
 
 #ifdef HAVE_WINKS
-	gstelements_winks_register();
+    gstelements_winks_register();
 #endif
 
 #ifdef HAVE_OSXAUDIO
-	gstelements_osxaudio_register();
+    gstelements_osxaudio_register();
 #endif
 
 #ifdef HAVE_OSXVIDEO
-	gstelements_osxvideo_register();
+    gstelements_osxvideo_register();
 #endif
 }

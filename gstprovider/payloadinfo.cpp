@@ -28,8 +28,8 @@ namespace PsiMedia {
 static QString hexEncode(const QByteArray &in)
 {
     QString out;
-    for (int n = 0; n < in.size(); ++n)
-        out += QString().sprintf("%02x", static_cast<unsigned char>(in[n]));
+    for (char n : in)
+        out += QString("%1").arg(static_cast<unsigned char>(n), 2, 16);
     return out;
 }
 

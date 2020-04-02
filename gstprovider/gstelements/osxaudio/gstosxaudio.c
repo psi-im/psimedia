@@ -31,23 +31,17 @@
 #include "gstosxaudiosink.h"
 #include "gstosxaudiosrc.h"
 
-static gboolean
-plugin_init (GstPlugin * plugin)
+static gboolean plugin_init(GstPlugin *plugin)
 {
-  if (!gst_element_register (plugin, "osxaudiosink", GST_RANK_PRIMARY,
-          GST_TYPE_OSX_AUDIO_SINK)) {
-    return FALSE;
-  }
-  if (!gst_element_register (plugin, "osxaudiosrc", GST_RANK_PRIMARY,
-          GST_TYPE_OSX_AUDIO_SRC)) {
-    return FALSE;
-  }
+    if (!gst_element_register(plugin, "osxaudiosink", GST_RANK_PRIMARY, GST_TYPE_OSX_AUDIO_SINK)) {
+        return FALSE;
+    }
+    if (!gst_element_register(plugin, "osxaudiosrc", GST_RANK_PRIMARY, GST_TYPE_OSX_AUDIO_SRC)) {
+        return FALSE;
+    }
 
-  return TRUE;
+    return TRUE;
 }
 
-GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
-    GST_VERSION_MINOR,
-    "osxaudio",
-    "OSX (Mac OS X) audio support for GStreamer",
-    plugin_init, VERSION, GST_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "osxaudio", "OSX (Mac OS X) audio support for GStreamer",
+                  plugin_init, VERSION, GST_LICENSE, GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

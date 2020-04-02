@@ -24,18 +24,13 @@
 
 #include "videomaxrate.h"
 
-static gboolean
-plugin_init (GstPlugin * plugin)
+static gboolean plugin_init(GstPlugin *plugin)
 {
-  if (!gst_element_register (plugin, "videomaxrate", GST_RANK_NONE,
-          GST_TYPE_VIDEOMAXRATE))
-    return FALSE;
+    if (!gst_element_register(plugin, "videomaxrate", GST_RANK_NONE, GST_TYPE_VIDEOMAXRATE))
+        return FALSE;
 
-  return TRUE;
+    return TRUE;
 }
 
-GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
-    GST_VERSION_MINOR,
-    "videomaxrate",
-    "Drop extra frames",
-    plugin_init, VERSION, "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)
+GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, "videomaxrate", "Drop extra frames", plugin_init, VERSION,
+                  "LGPL", GST_PACKAGE_NAME, GST_PACKAGE_ORIGIN)

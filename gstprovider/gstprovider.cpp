@@ -60,7 +60,8 @@ public:
     VideoWidgetContext *context;
     QImage              curImage;
 
-    GstVideoWidget(VideoWidgetContext *_context, QObject *parent = nullptr) : QObject(parent), context(_context)
+    explicit GstVideoWidget(VideoWidgetContext *_context, QObject *parent = nullptr) :
+        QObject(parent), context(_context)
     {
         QPalette palette;
         palette.setColor(context->qwidget()->backgroundRole(), Qt::black);
@@ -121,7 +122,7 @@ public:
     DeviceMonitor *deviceMonitor = nullptr;
     PFeatures      features;
 
-    GstFeaturesContext(GstMainLoop *_gstLoop, QObject *parent = nullptr) : QObject(parent), gstLoop(_gstLoop)
+    explicit GstFeaturesContext(GstMainLoop *_gstLoop, QObject *parent = nullptr) : QObject(parent), gstLoop(_gstLoop)
     {
         gstLoop->execInContext(
             [this](void *userData) {
@@ -133,7 +134,7 @@ public:
             this);
     }
 
-    ~GstFeaturesContext()
+    ~GstFeaturesContext() override
     {
         delete deviceMonitor; // thread safe?
     }
@@ -311,7 +312,7 @@ public:
     bool              wake_pending;
     QList<QByteArray> pending_in;
 
-    GstRecorder(QObject *parent = nullptr) :
+    explicit GstRecorder(QObject *parent = nullptr) :
         QObject(parent), control(nullptr), recordDevice(nullptr), nextRecordDevice(nullptr), record_cancel(false),
         wake_pending(false)
     {
@@ -443,7 +444,7 @@ public:
     QMutex        write_mutex;
     bool          allow_writes;
 
-    GstRtpSessionContext(GstMainLoop *_gstLoop, QObject *parent = nullptr) :
+    explicit GstRtpSessionContext(GstMainLoop *_gstLoop, QObject *parent = nullptr) :
         QObject(parent), gstLoop(_gstLoop), control(nullptr), isStarted(false), isStopping(false),
         pending_status(false), recorder(this), allow_writes(false)
     {
@@ -464,7 +465,7 @@ public:
         connect(&recorder, SIGNAL(stopped()), SLOT(recorder_stopped()));
     }
 
-    ~GstRtpSessionContext() { cleanup(); }
+    ~GstRtpSessionContext() override { cleanup(); }
 
     virtual QObject *qobject() { return this; }
 
@@ -557,7 +558,7 @@ public:
         if (widget)
             outputWidget = new GstVideoWidget(widget, this);
 
-        devices.useVideoOut = widget ? true : false;
+        devices.useVideoOut = widget != nullptr;
         if (control)
             control->updateDevices(devices);
     }
@@ -576,7 +577,7 @@ public:
         if (widget)
             previewWidget = new GstVideoWidget(widget, this);
 
-        devices.useVideoPreview = widget ? true : false;
+        devices.useVideoPreview = widget != nullptr;
         if (control)
             control->updateDevices(devices);
     }
@@ -860,7 +861,7 @@ public:
 
     GstProvider() { gstEventLoopThread.setObjectName("GstEventLoop"); }
 
-    ~GstProvider()
+    ~GstProvider() override
     {
         gstEventLoop->stop();
         gstEventLoopThread.quit();

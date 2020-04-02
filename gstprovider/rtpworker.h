@@ -70,7 +70,7 @@ public:
     int  inputVolume;
     int  error;
 
-    RtpWorker(GMainContext *mainContext);
+    explicit RtpWorker(GMainContext *mainContext);
     ~RtpWorker();
 
     void start();  // must wait until cb_updated before calling update

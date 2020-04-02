@@ -34,31 +34,30 @@
 
 #include <math.h>
 
-GST_DEBUG_CATEGORY (directsound);
+GST_DEBUG_CATEGORY(directsound);
 
 #define GST_CAT_DEFAULT directsound
 
-void
-gst_directsound_set_volume (LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume)
+void gst_directsound_set_volume(LPDIRECTSOUNDBUFFER8 pDSB8, gdouble volume)
 {
-  HRESULT hr;
-  long dsVolume;
+    HRESULT hr;
+    long    dsVolume;
 
-  /* DirectSound controls volume using units of 100th of a decibel,
-   * ranging from -10000 to 0. We use a linear scale of 0 - 100
-   * here, so remap.
-   */
-  if (volume == 0)
-    dsVolume = -10000;
-  else
-    dsVolume = 100 * (long) (20 * log10 (volume));
+    /* DirectSound controls volume using units of 100th of a decibel,
+     * ranging from -10000 to 0. We use a linear scale of 0 - 100
+     * here, so remap.
+     */
+    if (volume == 0)
+        dsVolume = -10000;
+    else
+        dsVolume = 100 * (long)(20 * log10(volume));
 
-  dsVolume = CLAMP (dsVolume, -10000, 0);
+    dsVolume = CLAMP(dsVolume, -10000, 0);
 
-  GST_DEBUG ("Setting volume on secondary buffer to %d", (int) dsVolume);
+    GST_DEBUG("Setting volume on secondary buffer to %d", (int)dsVolume);
 
-  hr = IDirectSoundBuffer8_SetVolume (pDSB8, dsVolume);
-  if (G_UNLIKELY (FAILED(hr))) {
-    GST_WARNING ("Setting volume on secondary buffer failed.");
-  }
+    hr = IDirectSoundBuffer8_SetVolume(pDSB8, dsVolume);
+    if (G_UNLIKELY(FAILED(hr))) {
+        GST_WARNING("Setting volume on secondary buffer failed.");
+    }
 }

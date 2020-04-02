@@ -18,22 +18,22 @@
  *
  */
 
-#include <QDir>
+//#include <QDir>
 #include <QFile>
-#include <QFileInfo>
+//#include <QFileInfo>
 #include <QStringList>
 
-#include <errno.h>
+#include <cerrno>
 #include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+//#include <sys/stat.h>
+//#include <sys/types.h>
 #include <unistd.h>
 
 #ifdef Q_OS_LINUX
 #include <dirent.h>
-#include <linux/videodev2.h>
-#include <sys/ioctl.h>
-#include <sys/stat.h>
+//#include <linux/videodev2.h>
+//#include <sys/ioctl.h>
+//#include <sys/stat.h>
 #endif
 #include "devices.h"
 
@@ -250,7 +250,7 @@ static QList<GstDevice> get_alsa_items(int type)
         QStringList cId  = read_proc_as_lines(path.data());
         if (cId.count() > 0)
             ai.cardName = cId.at(0);
-        ai.name.sprintf("ALSA Card %d, Device %d", ai.card, ai.dev);
+        ai.name = QString("ALSA Card %1, Device %2").arg(ai.card).arg(ai.dev);
         items += ai;
     }
 
@@ -267,7 +267,7 @@ static QList<GstDevice> get_alsa_items(int type)
         if (x != -1) {
             QString devname2 = devname.mid(x + 3);
             devname          = devname.mid(0, x);
-            int x            = devname2.indexOf(" :");
+            x                = devname2.indexOf(" :");
             if (x != -1)
                 devname2 = devname2.mid(0, x);
             else
@@ -327,7 +327,7 @@ static QList<GstDevice> get_alsa_items(int type)
             i.id   = QLatin1String("alsasink ");
         }
         i.name = QLatin1String("alsa: ") + QString("[%1] %2").arg(ai.cardName).arg(ai.name);
-        i.id += QString().sprintf("device=plughw:%d,%d", ai.card, ai.dev);
+        i.id += QString("device=plughw:%1,%2").arg(ai.card).arg(ai.dev);
         out += i;
 
         // internet discussion seems to indicate that plughw is the

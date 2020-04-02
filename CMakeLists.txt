@@ -75,6 +75,29 @@ else()
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/")
 endif()
 
+find_program(CLF_BIN clang-format DOC "Path to clang-format binary")
+if(CLF_BIN)
+    #Obtain list of source files
+    file(GLOB_RECURSE SRC_LIST
+        *.c
+        *.cc
+        *.cpp
+        *.hpp
+        *.h
+        *.mm
+        qcm/*.qcm
+    )
+    add_custom_target(fix-codestyle
+        COMMAND ${CLF_BIN}
+        --verbose
+        -style=file
+        -i ${SRC_LIST}
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        COMMENT "Fix codestyle with clang-format"
+        VERBATIM
+    )
+endif()
+
 if(BUILD_DEMO)
   add_subdirectory(demo)
 endif()

@@ -22,8 +22,8 @@
 
 #include <QSize>
 #include <QString>
+#include <cstdio>
 #include <gst/gst.h>
-#include <stdio.h>
 
 // default latency is 200ms
 #define DEFAULT_RTP_LATENCY 200
@@ -216,6 +216,7 @@ static bool video_codec_get_recv_elements(const QString &name, GstElement **dec,
 
 GstElement *bins_videoprep_create(const QSize &size, int fps, bool is_live)
 {
+    Q_UNUSED(is_live);
     GstElement *bin = gst_bin_new("videoprepbin");
 
     GstElement *videorate  = nullptr;

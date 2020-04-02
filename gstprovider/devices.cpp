@@ -23,7 +23,6 @@
 #include "gstthread.h"
 #include <QMap>
 #include <QMutex>
-#include <QSet>
 #include <QSize>
 #include <QStringList>
 #include <gst/gst.h>
@@ -158,7 +157,7 @@ public:
     bool audioSrcFirst  = true;
     bool audioSinkFirst = true;
 
-    Private(DeviceMonitor *q) : q(q) {}
+    explicit Private(DeviceMonitor *q) : q(q) {}
 
     static GstDevice gstDevConvert(::GstDevice *gdev)
     {
