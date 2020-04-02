@@ -338,7 +338,7 @@ void AudioParams::setChannels(int n) { d->channels = n; }
 bool AudioParams::operator==(const AudioParams &other) const
 {
     return d->codec == other.d->codec && d->sampleRate == other.d->sampleRate && d->sampleSize == other.d->sampleSize
-           && d->channels == other.d->channels;
+        && d->channels == other.d->channels;
 }
 
 //----------------------------------------------------------------------------
@@ -449,8 +449,7 @@ RtpPacket::RtpPacket(const RtpPacket &other) = default;
 
 RtpPacket::~RtpPacket() = default;
 
-RtpPacket &RtpPacket::operator=(const RtpPacket &other)
-= default;
+RtpPacket &RtpPacket::operator=(const RtpPacket &other) = default;
 
 bool RtpPacket::isNull() const { return (d ? false : true); }
 
@@ -550,8 +549,8 @@ public:
     {
         // according to xep-167, parameters are unordered
         return id == other.id && name.compare(other.name, Qt::CaseInsensitive) && clockrate == other.clockrate
-               && channels == other.channels && ptime == other.ptime && maxptime == other.maxptime
-               && compareUnordered(parameters, other.parameters);
+            && channels == other.channels && ptime == other.ptime && maxptime == other.maxptime
+            && compareUnordered(parameters, other.parameters);
     }
 
     static bool compareUnordered(const QList<PayloadInfo::Parameter> &a, const QList<PayloadInfo::Parameter> &b)

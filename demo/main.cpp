@@ -402,7 +402,7 @@ bool RtpSocketGroup::bind(int basePort)
 
 void RtpSocketGroup::sock_readyRead()
 {
-    auto *udp = static_cast<QUdpSocket *>(sender());
+    auto udp = static_cast<QUdpSocket *>(sender());
     if (udp == &socket[0])
         emit readyRead(0);
     else
@@ -558,8 +558,8 @@ MainWin::MainWin() :
     receiver.setVideoOutputWidget(ui.vw_remote);
 
     // hack: make the top/bottom layouts have matching height
-    int   lineEditHeight = ui.le_receiveConfig->sizeHint().height();
-    auto *spacer         = new QWidget(this);
+    int  lineEditHeight = ui.le_receiveConfig->sizeHint().height();
+    auto spacer         = new QWidget(this);
     spacer->setMinimumHeight(lineEditHeight);
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     ui.gridLayout2->addWidget(spacer, 3, 1);
@@ -772,12 +772,12 @@ void MainWin::transmit()
         }
     }
 
-    auto *audioSocketGroup     = new RtpSocketGroup;
+    auto audioSocketGroup      = new RtpSocketGroup;
     sendAudioRtp               = new RtpBinding(RtpBinding::Send, producer.audioRtpChannel(), audioSocketGroup, this);
     sendAudioRtp->sendAddress  = addr;
     sendAudioRtp->sendBasePort = audioPort;
 
-    auto *videoSocketGroup     = new RtpSocketGroup;
+    auto videoSocketGroup      = new RtpSocketGroup;
     sendVideoRtp               = new RtpBinding(RtpBinding::Send, producer.videoRtpChannel(), videoSocketGroup, this);
     sendVideoRtp->sendAddress  = addr;
     sendVideoRtp->sendBasePort = videoPort;
@@ -859,8 +859,8 @@ void MainWin::start_receive()
         receiver.setRemoteVideoPreferences(payloadInfoList);
     }
 
-    auto *audioSocketGroup = new RtpSocketGroup(this);
-    auto *videoSocketGroup = new RtpSocketGroup(this);
+    auto audioSocketGroup = new RtpSocketGroup(this);
+    auto videoSocketGroup = new RtpSocketGroup(this);
     if (!audioSocketGroup->bind(audioPort)) {
         delete audioSocketGroup;
         audioSocketGroup = nullptr;

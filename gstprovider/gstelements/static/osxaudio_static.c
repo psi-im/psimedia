@@ -16,10 +16,10 @@
  * License along with this library; if not, write to the
  * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301, USA.
- * 
- * The development of this code was made possible due to the involvement of 
+ *
+ * The development of this code was made possible due to the involvement of
  * Pioneers of the Inevitable, the creators of the Songbird Music player
- * 
+ *
  */
 
 /**
@@ -42,44 +42,30 @@
  * Last reviewed on 2006-03-01 (0.10.4)
  */
 
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
-
 
 #include "../osxaudio/gstosxaudioelement.h"
 #include "../osxaudio/gstosxaudiosink.h"
 #include "../osxaudio/gstosxaudiosrc.h"
 
-static gboolean
-plugin_init (GstPlugin * plugin)
+static gboolean plugin_init(GstPlugin *plugin)
 {
 
-  if (!gst_element_register (plugin, "osxaudiosink", GST_RANK_PRIMARY,
-          GST_TYPE_OSX_AUDIO_SINK)) {
-    return FALSE;
-  }
-  if (!gst_element_register (plugin, "osxaudiosrc", GST_RANK_PRIMARY,
-          GST_TYPE_OSX_AUDIO_SRC)) {
-    return FALSE;
-  }
+    if (!gst_element_register(plugin, "osxaudiosink", GST_RANK_PRIMARY, GST_TYPE_OSX_AUDIO_SINK)) {
+        return FALSE;
+    }
+    if (!gst_element_register(plugin, "osxaudiosrc", GST_RANK_PRIMARY, GST_TYPE_OSX_AUDIO_SRC)) {
+        return FALSE;
+    }
 
-  return TRUE;
+    return TRUE;
 }
 
 void gstelements_osxaudio_register()
 {
-  gst_plugin_register_static(
-    GST_VERSION_MAJOR,
-    GST_VERSION_MINOR,
-    "osxaudio",
-    "OSX (Mac OS X) audio support for GStreamer",
-    plugin_init,
-    "1.0.4",
-    "LGPL",
-    "my-application",
-    "my-application",
-    "http://www.my-application.net/"
-    );
+    gst_plugin_register_static(GST_VERSION_MAJOR, GST_VERSION_MINOR, "osxaudio",
+                               "OSX (Mac OS X) audio support for GStreamer", plugin_init, "1.0.4", "LGPL",
+                               "my-application", "my-application", "http://www.my-application.net/");
 }

@@ -28,48 +28,32 @@
 #include "../rtpmanager/gstrtpsession.h"
 #include "../rtpmanager/gstrtpssrcdemux.h"
 
-static gboolean
-plugin_init (GstPlugin * plugin)
+static gboolean plugin_init(GstPlugin *plugin)
 {
-  if (!gst_element_register (plugin, "gstrtpbin", GST_RANK_NONE,
-          GST_TYPE_RTP_BIN))
-    return FALSE;
+    if (!gst_element_register(plugin, "gstrtpbin", GST_RANK_NONE, GST_TYPE_RTP_BIN))
+        return FALSE;
 
-  if (!gst_element_register (plugin, "gstrtpclient", GST_RANK_NONE,
-          GST_TYPE_RTP_CLIENT))
-    return FALSE;
+    if (!gst_element_register(plugin, "gstrtpclient", GST_RANK_NONE, GST_TYPE_RTP_CLIENT))
+        return FALSE;
 
-  if (!gst_element_register (plugin, "gstrtpjitterbuffer", GST_RANK_NONE,
-          GST_TYPE_RTP_JITTER_BUFFER))
-    return FALSE;
+    if (!gst_element_register(plugin, "gstrtpjitterbuffer", GST_RANK_NONE, GST_TYPE_RTP_JITTER_BUFFER))
+        return FALSE;
 
-  if (!gst_element_register (plugin, "gstrtpptdemux", GST_RANK_NONE,
-          GST_TYPE_RTP_PT_DEMUX))
-    return FALSE;
+    if (!gst_element_register(plugin, "gstrtpptdemux", GST_RANK_NONE, GST_TYPE_RTP_PT_DEMUX))
+        return FALSE;
 
-  if (!gst_element_register (plugin, "gstrtpsession", GST_RANK_NONE,
-          GST_TYPE_RTP_SESSION))
-    return FALSE;
+    if (!gst_element_register(plugin, "gstrtpsession", GST_RANK_NONE, GST_TYPE_RTP_SESSION))
+        return FALSE;
 
-  if (!gst_element_register (plugin, "gstrtpssrcdemux", GST_RANK_NONE,
-          GST_TYPE_RTP_SSRC_DEMUX))
-    return FALSE;
+    if (!gst_element_register(plugin, "gstrtpssrcdemux", GST_RANK_NONE, GST_TYPE_RTP_SSRC_DEMUX))
+        return FALSE;
 
-  return TRUE;
+    return TRUE;
 }
 
 void gstelements_rtpmanager_register()
 {
-  gst_plugin_register_static(
-    GST_VERSION_MAJOR,
-    GST_VERSION_MINOR,
-    "gstrtpmanager",
-    "RTP session management plugin library",
-    plugin_init,
-    "1.0.4",
-    "LGPL",
-    "my-application",
-    "my-application",
-    "http://www.my-application.net/"
-    );
+    gst_plugin_register_static(GST_VERSION_MAJOR, GST_VERSION_MINOR, "gstrtpmanager",
+                               "RTP session management plugin library", plugin_init, "1.0.4", "LGPL", "my-application",
+                               "my-application", "http://www.my-application.net/");
 }

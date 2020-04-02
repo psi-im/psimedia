@@ -46,47 +46,42 @@
  *
  */
 
-#include <gst/gst.h>
 #include "gstosxaudioelement.h"
+#include <gst/gst.h>
 
-static void
-gst_osx_audio_element_class_init (GstOsxAudioElementInterface * klass);
+static void gst_osx_audio_element_class_init(GstOsxAudioElementInterface *klass);
 
-GType
-gst_osx_audio_element_get_type ()
+GType gst_osx_audio_element_get_type()
 {
-  static GType gst_osxaudioelement_type = 0;
+    static GType gst_osxaudioelement_type = 0;
 
-  if (!gst_osxaudioelement_type) {
-    static const GTypeInfo gst_osxaudioelement_info = {
-      sizeof (GstOsxAudioElementInterface),
-      (GBaseInitFunc) gst_osx_audio_element_class_init,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      0,
-      0,
-      NULL,
-      NULL
-    };
+    if (!gst_osxaudioelement_type) {
+        static const GTypeInfo gst_osxaudioelement_info = { sizeof(GstOsxAudioElementInterface),
+                                                            (GBaseInitFunc)gst_osx_audio_element_class_init,
+                                                            NULL,
+                                                            NULL,
+                                                            NULL,
+                                                            NULL,
+                                                            0,
+                                                            0,
+                                                            NULL,
+                                                            NULL };
 
-    gst_osxaudioelement_type = g_type_register_static (G_TYPE_INTERFACE,
-        "GstOsxAudioElement", &gst_osxaudioelement_info, 0);
-  }
+        gst_osxaudioelement_type
+            = g_type_register_static(G_TYPE_INTERFACE, "GstOsxAudioElement", &gst_osxaudioelement_info, 0);
+    }
 
-  return gst_osxaudioelement_type;
+    return gst_osxaudioelement_type;
 }
 
-static void
-gst_osx_audio_element_class_init (GstOsxAudioElementInterface * klass)
+static void gst_osx_audio_element_class_init(GstOsxAudioElementInterface *klass)
 {
-  static gboolean initialized = FALSE;
+    static gboolean initialized = FALSE;
 
-  if (!initialized) {
-    initialized = TRUE;
-  }
+    if (!initialized) {
+        initialized = TRUE;
+    }
 
-  /* default virtual functions */
-  klass->io_proc = NULL;
+    /* default virtual functions */
+    klass->io_proc = NULL;
 }

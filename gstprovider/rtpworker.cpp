@@ -116,8 +116,8 @@ public:
 static void dump_pipeline(GstElement *in, int indent = 1);
 static void dump_pipeline_each(const GValue *value, gpointer data)
 {
-    auto *e      = static_cast<GstElement *>(g_value_get_object(value));
-    int   indent = *(static_cast<int *>(data));
+    auto e      = static_cast<GstElement *>(g_value_get_object(value));
+    int  indent = *(static_cast<int *>(data));
     if (GST_IS_BIN(e)) {
         qDebug("%s%s:\n", qPrintable(QString(indent, ' ')), gst_element_get_name(e));
         dump_pipeline(e, indent + 2);
@@ -417,7 +417,7 @@ static GstBuffer *makeGstBuffer(const PRtpPacket &packet)
 GstAppSink *RtpWorker::makeVideoPlayAppSink(const gchar *name)
 {
     GstElement *videoplaysink = gst_element_factory_make("appsink", name); // was appvideosink
-    auto *      appVideoSink  = reinterpret_cast<GstAppSink *>(videoplaysink);
+    auto        appVideoSink  = reinterpret_cast<GstAppSink *>(videoplaysink);
 
     GstCaps *videoplaycaps;
     videoplaycaps = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "BGRx", nullptr);
@@ -1543,7 +1543,7 @@ bool RtpWorker::addVideoChain()
 
     GstElement *rtpqueue     = gst_element_factory_make("queue", nullptr);
     GstElement *videortpsink = gst_element_factory_make("appsink", nullptr); // was apprtpsink
-    auto *      appRtpSink   = reinterpret_cast<GstAppSink *>(videortpsink);
+    auto        appRtpSink   = reinterpret_cast<GstAppSink *>(videortpsink);
     if (!fileDemux)
         g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, nullptr);
 

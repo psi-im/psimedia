@@ -88,7 +88,7 @@ static const char *type_to_str(PDevice::Type type)
 static void videosrcbin_pad_added(GstElement *element, GstPad *pad, gpointer data)
 {
     Q_UNUSED(element);
-    auto *gpad = static_cast<GstPad *>(data);
+    auto gpad = static_cast<GstPad *>(data);
 
     // gchar *name = gst_pad_get_name(pad);
     // qDebug("videosrcbin pad-added: %s\n", name);
@@ -611,7 +611,7 @@ NULL
             struct F {
                 static GstPadProbeReturn cb(GstPad *pad, GstPadProbeInfo *info, gpointer user_data)
                 {
-                    auto *pipeline = reinterpret_cast<PipelineDevice *>(user_data);
+                    auto pipeline = reinterpret_cast<PipelineDevice *>(user_data);
                     gst_pad_remove_probe(pad, GST_PAD_PROBE_INFO_ID(info));
 
                     // insert webrtcdsp after audio input device
@@ -710,7 +710,7 @@ PipelineDeviceContext::PipelineDeviceContext()
 PipelineDeviceContext *PipelineDeviceContext::create(PipelineContext *pipeline, const QString &id, PDevice::Type type,
                                                      const PipelineDeviceOptions &opts)
 {
-    auto *that = new PipelineDeviceContext;
+    auto that = new PipelineDeviceContext;
 
     that->d->pipeline  = pipeline;
     that->d->opts      = opts;
