@@ -1313,7 +1313,7 @@ bool RtpWorker::startRecv()
             goto fail1;
 
         GstElement *videoconvert = gst_element_factory_make("videoconvert", nullptr);
-        GstAppSink *appVideoSink = makeVideoPlayAppSink("netviedeoplay");
+        GstAppSink *appVideoSink = makeVideoPlayAppSink("netvideoplay");
 
         GstAppSinkCallbacks sinkVideoCb;
         sinkVideoCb.new_sample  = cb_show_frame_output;
