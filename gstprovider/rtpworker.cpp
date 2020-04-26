@@ -1710,7 +1710,7 @@ bool RtpWorker::updateTheoraConfig()
         return false;
 
     // if so, update the videortpsrc caps
-    for (int n = 0; n < remoteAudioPayloadInfo.count(); ++n) {
+    for (int n = 0; n < remoteVideoPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteVideoPayloadInfo[n];
         if (ri.name.toUpper() == "THEORA" && ri.clockrate == 90000
             && ri.id == actual_remoteVideoPayloadInfo[theora_at].id) {
@@ -1732,7 +1732,7 @@ bool RtpWorker::updateTheoraConfig()
             g_object_set(G_OBJECT(videortpsrc), "caps", caps, nullptr);
             gst_caps_unref(caps);
 
-            actual_remoteAudioPayloadInfo[theora_at] = ri;
+            actual_remoteVideoPayloadInfo[theora_at] = ri;
             return true;
         }
     }
