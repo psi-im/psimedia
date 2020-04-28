@@ -116,7 +116,7 @@ Provider *provider()
         // static plugin around?
         Provider *  provider = nullptr;
         QObjectList list     = QPluginLoader::staticInstances();
-        foreach (QObject *obj, list) {
+        for (QObject *obj : list) {
             Plugin *instance = qobject_cast<Plugin *>(obj);
             if (!instance)
                 continue;
@@ -227,9 +227,9 @@ public:
 //----------------------------------------------------------------------------
 // Device
 //----------------------------------------------------------------------------
-Device::Device() : d(nullptr) {}
+Device::Device() : d(nullptr) { }
 
-Device::Device(const Device &other) : d(other.d ? new Private(*other.d) : nullptr) {}
+Device::Device(const Device &other) : d(other.d ? new Private(*other.d) : nullptr) { }
 
 Device::~Device() { delete d; }
 
@@ -298,12 +298,12 @@ public:
     int     sampleSize;
     int     channels;
 
-    Private() : sampleRate(0), sampleSize(0), channels(0) {}
+    Private() : sampleRate(0), sampleSize(0), channels(0) { }
 };
 
-AudioParams::AudioParams() : d(new Private) {}
+AudioParams::AudioParams() : d(new Private) { }
 
-AudioParams::AudioParams(const AudioParams &other) : d(new Private(*other.d)) {}
+AudioParams::AudioParams(const AudioParams &other) : d(new Private(*other.d)) { }
 
 AudioParams::~AudioParams() { delete d; }
 
@@ -350,12 +350,12 @@ public:
     QSize   size;
     int     fps;
 
-    Private() : fps(0) {}
+    Private() : fps(0) { }
 };
 
-VideoParams::VideoParams() : d(new Private) {}
+VideoParams::VideoParams() : d(new Private) { }
 
-VideoParams::VideoParams(const VideoParams &other) : d(new Private(*other.d)) {}
+VideoParams::VideoParams(const VideoParams &other) : d(new Private(*other.d)) { }
 
 VideoParams::~VideoParams() { delete d; }
 
@@ -438,12 +438,12 @@ public:
     QByteArray rawValue;
     int        portOffset;
 
-    Private(const QByteArray &_rawValue, int _portOffset) : rawValue(_rawValue), portOffset(_portOffset) {}
+    Private(const QByteArray &_rawValue, int _portOffset) : rawValue(_rawValue), portOffset(_portOffset) { }
 };
 
-RtpPacket::RtpPacket() : d(nullptr) {}
+RtpPacket::RtpPacket() : d(nullptr) { }
 
-RtpPacket::RtpPacket(const QByteArray &rawValue, int portOffset) : d(new Private(rawValue, portOffset)) {}
+RtpPacket::RtpPacket(const QByteArray &rawValue, int portOffset) : d(new Private(rawValue, portOffset)) { }
 
 RtpPacket::RtpPacket(const RtpPacket &other) = default;
 
@@ -543,7 +543,7 @@ public:
     int                           maxptime;
     QList<PayloadInfo::Parameter> parameters;
 
-    Private() : id(-1), clockrate(-1), channels(-1), ptime(-1), maxptime(-1) {}
+    Private() : id(-1), clockrate(-1), channels(-1), ptime(-1), maxptime(-1) { }
 
     bool operator==(const Private &other) const
     {
@@ -569,9 +569,9 @@ public:
     }
 };
 
-PayloadInfo::PayloadInfo() : d(new Private) {}
+PayloadInfo::PayloadInfo() : d(new Private) { }
 
-PayloadInfo::PayloadInfo(const PayloadInfo &other) : d(new Private(*other.d)) {}
+PayloadInfo::PayloadInfo(const PayloadInfo &other) : d(new Private(*other.d)) { }
 
 PayloadInfo::~PayloadInfo() { delete d; }
 

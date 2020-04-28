@@ -409,7 +409,7 @@ bool GstMainLoop::execInContext(const ContextCallback &cb, void *userData)
 
 void GstMainLoop::init()
 {
-    // qDebug("GStreamer thread started\n");
+    qDebug("GStreamer thread started\n");
 
     // this will be unlocked as soon as the mainloop runs
     d->m.lock();

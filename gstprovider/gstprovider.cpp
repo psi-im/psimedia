@@ -128,7 +128,8 @@ public:
             [this](void *userData) {
                 Q_UNUSED(userData);
                 deviceMonitor = new DeviceMonitor(gstLoop);
-                connect(deviceMonitor, &DeviceMonitor::updated, this, &GstFeaturesContext::devicesUpdated);
+                connect(deviceMonitor, &DeviceMonitor::updated, this, &GstFeaturesContext::devicesUpdated,
+                        Qt::QueuedConnection);
                 devicesUpdated();
             },
             this);
@@ -909,7 +910,11 @@ public:
         return str;
     }
 
-    FeaturesContext *createFeatures() override { return new GstFeaturesContext(gstEventLoop); }
+    FeaturesContext *createFeatures() override
+    {
+        qDebug("GstProvider::createFeatures DeviceMonitor will be allocated now");
+        return new GstFeaturesContext(gstEventLoop);
+    }
 
     RtpSessionContext *createRtpSession() override { return new GstRtpSessionContext(gstEventLoop); }
 

@@ -47,6 +47,7 @@ find_package(PkgConfig REQUIRED)
 
 option(USE_PSI "Use gstprovider module for Psi client. Should be disabled for Psi+ client" ON)
 option(BUILD_DEMO "Build psimedia-demo" ON)
+option(BUILD_PSIPLUGIN "Build a regular Psi plugin" ON)
 
 if(USE_PSI)
     set(CLIENT_NAME "psi")
@@ -100,5 +101,8 @@ endif()
 
 if(BUILD_DEMO)
   add_subdirectory(demo)
+endif()
+if(BUILD_PSIPLUGIN)
+  add_subdirectory(psiplugin)
 endif()
 add_subdirectory(gstprovider)

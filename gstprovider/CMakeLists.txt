@@ -91,7 +91,7 @@ endif()
 get_filename_component(ABS_PARENT_DIR "${CMAKE_CURRENT_LIST_DIR}/../psimedia" ABSOLUTE)
 include_directories(${GST_INCLUDES} ${ABS_PARENT_DIR})
 
-add_library(gstprovider MODULE ${SOURCES})
+add_library(gstprovider STATIC ${SOURCES})
 target_link_libraries(${PROJECT_NAME}
                       ${GSTMODULES_LIBRARIES}
                       ${GLIBMODULES_LIBRARIES}
