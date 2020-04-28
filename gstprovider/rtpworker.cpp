@@ -1137,19 +1137,11 @@ bool RtpWorker::startRecv()
 
     // TODO: support more than opus
     int opus_at    = -1;
-    int samplerate = -1;
     for (int n = 0; n < remoteAudioPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
         if (ri.name.toUpper() == "OPUS") {
-            if (ri.clockrate > samplerate) {
-                opus_at    = n;
-                samplerate = ri.clockrate;
-            }
+		opus_at    = n;
         }
-    }
-    if (samplerate != 16000) {
-        cleanup();
-        startSend(samplerate);
     }
 
     // TODO: support more than theora
