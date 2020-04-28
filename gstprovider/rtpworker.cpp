@@ -1643,19 +1643,7 @@ bool RtpWorker::getCaps()
 
         gst_caps_unref(caps);
 
-        PPayloadInfo opusnb;
-        opusnb.id        = 97;
-        opusnb.name      = "OPUS";
-        opusnb.clockrate = 8000;
-        opusnb.channels  = 1;
-        opusnb.ptime     = pi.ptime;
-        opusnb.maxptime  = pi.maxptime;
-
-        QList<PPayloadInfo> ppil;
-        ppil << pi;
-        ppil << opusnb;
-
-        localAudioPayloadInfo = ppil;
+        localAudioPayloadInfo << pi;
         canTransmitAudio      = true;
     }
 
@@ -1688,7 +1676,7 @@ bool RtpWorker::getCaps()
 
         gst_caps_unref(caps);
 
-        localVideoPayloadInfo = QList<PPayloadInfo>() << pi;
+        localVideoPayloadInfo << pi;
         canTransmitVideo      = true;
     }
 
