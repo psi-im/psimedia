@@ -267,22 +267,22 @@ class GstMainLoop::Private {
 public:
     typedef struct {
         GSource               parent;
-        GstMainLoop::Private *d;
+        GstMainLoop::Private *d = nullptr;
     } BridgeQueueSource;
 
-    GstMainLoop *                                       q;
+    GstMainLoop *                                       q = nullptr;
     QString                                             pluginPath;
-    GstSession *                                        gstSession;
-    bool                                                success;
-    GMainContext *                                      mainContext;
-    GMainLoop *                                         mainLoop;
+    GstSession *                                        gstSession  = nullptr;
+    bool                                                success     = false;
+    GMainContext *                                      mainContext = nullptr;
+    GMainLoop *                                         mainLoop    = nullptr;
     QMutex                                              m;
     QWaitCondition                                      w;
-    BridgeQueueSource *                                 bridgeSource;
-    guint                                               bridgeId;
+    BridgeQueueSource *                                 bridgeSource = nullptr;
+    guint                                               bridgeId     = 0;
     QQueue<QPair<GstMainLoop::ContextCallback, void *>> bridgeQueue;
 
-    Private(GstMainLoop *q) : q(q), gstSession(nullptr), success(false), mainContext(nullptr), mainLoop(nullptr) {}
+    Private(GstMainLoop *q) : q(q) { }
 
     static gboolean cb_loop_started(gpointer data) { return static_cast<Private *>(data)->loop_started(); }
 

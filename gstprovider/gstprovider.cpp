@@ -139,11 +139,11 @@ public:
         delete deviceMonitor; // thread safe?
     }
 
-    virtual QObject *qobject() { return this; }
+    QObject *qobject() override { return this; }
 
-    virtual void lookup(int types) { Q_UNUSED(types); }
+    void lookup(int types) override { Q_UNUSED(types); }
 
-    virtual PFeatures results() const { return features; }
+    PFeatures results() const override { return features; }
 
 private:
     QList<PDevice> audioOutputDevices()
@@ -217,7 +217,7 @@ public:
 
     int written_pending;
 
-    GstRtpChannel() : QObject(), enabled(false), wake_pending(false), written_pending(0) {}
+    GstRtpChannel() : QObject(), enabled(false), wake_pending(false), written_pending(0) { }
 
     virtual QObject *qobject() { return this; }
 
@@ -467,7 +467,7 @@ public:
 
     ~GstRtpSessionContext() override { cleanup(); }
 
-    virtual QObject *qobject() { return this; }
+    QObject *qobject() override { return this; }
 
     void cleanup()
     {
@@ -491,14 +491,14 @@ public:
         write_mutex.unlock();
     }
 
-    virtual void setAudioOutputDevice(const QString &deviceId)
+    void setAudioOutputDevice(const QString &deviceId) override
     {
         devices.audioOutId = deviceId;
         if (control)
             control->updateDevices(devices);
     }
 
-    virtual void setAudioInputDevice(const QString &deviceId)
+    void setAudioInputDevice(const QString &deviceId) override
     {
         devices.audioInId = deviceId;
         devices.fileNameIn.clear();
@@ -507,7 +507,7 @@ public:
             control->updateDevices(devices);
     }
 
-    virtual void setVideoInputDevice(const QString &deviceId)
+    void setVideoInputDevice(const QString &deviceId) override
     {
         devices.videoInId = deviceId;
         devices.fileNameIn.clear();
@@ -516,7 +516,7 @@ public:
             control->updateDevices(devices);
     }
 
-    virtual void setFileInput(const QString &fileName)
+    void setFileInput(const QString &fileName) override
     {
         devices.fileNameIn = fileName;
         devices.audioInId.clear();
@@ -526,7 +526,7 @@ public:
             control->updateDevices(devices);
     }
 
-    virtual void setFileDataInput(const QByteArray &fileData)
+    void setFileDataInput(const QByteArray &fileData) override
     {
         devices.fileDataIn = fileData;
         devices.audioInId.clear();
@@ -536,7 +536,7 @@ public:
             control->updateDevices(devices);
     }
 
-    virtual void setFileLoopEnabled(bool enabled)
+    void setFileLoopEnabled(bool enabled) override
     {
         devices.loopFile = enabled;
         if (control)
@@ -544,7 +544,7 @@ public:
     }
 
 #ifdef QT_GUI_LIB
-    virtual void setVideoOutputWidget(VideoWidgetContext *widget)
+    void setVideoOutputWidget(VideoWidgetContext *widget) override
     {
         // no change?
         if (!outputWidget && !widget)
@@ -563,7 +563,7 @@ public:
             control->updateDevices(devices);
     }
 
-    virtual void setVideoPreviewWidget(VideoWidgetContext *widget)
+    void setVideoPreviewWidget(VideoWidgetContext *widget) override
     {
         // no change?
         if (!previewWidget && !widget)
@@ -583,7 +583,7 @@ public:
     }
 #endif
 
-    virtual void setRecorder(QIODevice *recordDevice)
+    void setRecorder(QIODevice *recordDevice) override
     {
         // can't assign a new recording device after stopping
         Q_ASSERT(!isStopping);
@@ -591,35 +591,35 @@ public:
         recorder.setDevice(recordDevice);
     }
 
-    virtual void stopRecording() { recorder.stop(); }
+    void stopRecording() override { recorder.stop(); }
 
-    virtual void setLocalAudioPreferences(const QList<PAudioParams> &params)
+    void setLocalAudioPreferences(const QList<PAudioParams> &params) override
     {
         codecs.useLocalAudioParams = true;
         codecs.localAudioParams    = params;
     }
 
-    virtual void setLocalVideoPreferences(const QList<PVideoParams> &params)
+    void setLocalVideoPreferences(const QList<PVideoParams> &params) override
     {
         codecs.useLocalVideoParams = true;
         codecs.localVideoParams    = params;
     }
 
-    virtual void setMaximumSendingBitrate(int kbps) { codecs.maximumSendingBitrate = kbps; }
+    void setMaximumSendingBitrate(int kbps) override { codecs.maximumSendingBitrate = kbps; }
 
-    virtual void setRemoteAudioPreferences(const QList<PPayloadInfo> &info)
+    void setRemoteAudioPreferences(const QList<PPayloadInfo> &info) override
     {
         codecs.useRemoteAudioPayloadInfo = true;
         codecs.remoteAudioPayloadInfo    = info;
     }
 
-    virtual void setRemoteVideoPreferences(const QList<PPayloadInfo> &info)
+    void setRemoteVideoPreferences(const QList<PPayloadInfo> &info) override
     {
         codecs.useRemoteVideoPayloadInfo = true;
         codecs.remoteVideoPayloadInfo    = info;
     }
 
-    virtual void start()
+    void start() override
     {
         Q_ASSERT(!control && !isStarted);
 
@@ -649,7 +649,7 @@ public:
         control->start(devices, codecs);
     }
 
-    virtual void updatePreferences()
+    void updatePreferences() override
     {
         Q_ASSERT(control && !pending_status);
 
@@ -657,31 +657,31 @@ public:
         control->updateCodecs(codecs);
     }
 
-    virtual void transmitAudio()
+    void transmitAudio() override
     {
         transmit.useAudio = true;
         control->setTransmit(transmit);
     }
 
-    virtual void transmitVideo()
+    void transmitVideo() override
     {
         transmit.useVideo = true;
         control->setTransmit(transmit);
     }
 
-    virtual void pauseAudio()
+    void pauseAudio() override
     {
         transmit.useAudio = false;
         control->setTransmit(transmit);
     }
 
-    virtual void pauseVideo()
+    void pauseVideo() override
     {
         transmit.useVideo = false;
         control->setTransmit(transmit);
     }
 
-    virtual void stop()
+    void stop() override
     {
         Q_ASSERT(control && !isStopping);
 
@@ -694,45 +694,45 @@ public:
         control->stop();
     }
 
-    virtual QList<PPayloadInfo> localAudioPayloadInfo() const { return lastStatus.localAudioPayloadInfo; }
+    QList<PPayloadInfo> localAudioPayloadInfo() const override { return lastStatus.localAudioPayloadInfo; }
 
-    virtual QList<PPayloadInfo> localVideoPayloadInfo() const { return lastStatus.localVideoPayloadInfo; }
+    QList<PPayloadInfo> localVideoPayloadInfo() const override { return lastStatus.localVideoPayloadInfo; }
 
-    virtual QList<PPayloadInfo> remoteAudioPayloadInfo() const { return lastStatus.remoteAudioPayloadInfo; }
+    QList<PPayloadInfo> remoteAudioPayloadInfo() const override { return lastStatus.remoteAudioPayloadInfo; }
 
-    virtual QList<PPayloadInfo> remoteVideoPayloadInfo() const { return lastStatus.remoteVideoPayloadInfo; }
+    QList<PPayloadInfo> remoteVideoPayloadInfo() const override { return lastStatus.remoteVideoPayloadInfo; }
 
-    virtual QList<PAudioParams> audioParams() const { return lastStatus.localAudioParams; }
+    QList<PAudioParams> audioParams() const override { return lastStatus.localAudioParams; }
 
-    virtual QList<PVideoParams> videoParams() const { return lastStatus.localVideoParams; }
+    QList<PVideoParams> videoParams() const override { return lastStatus.localVideoParams; }
 
-    virtual bool canTransmitAudio() const { return lastStatus.canTransmitAudio; }
+    bool canTransmitAudio() const override { return lastStatus.canTransmitAudio; }
 
-    virtual bool canTransmitVideo() const { return lastStatus.canTransmitVideo; }
+    bool canTransmitVideo() const override { return lastStatus.canTransmitVideo; }
 
-    virtual int outputVolume() const { return devices.audioOutVolume; }
+    int outputVolume() const override { return devices.audioOutVolume; }
 
-    virtual void setOutputVolume(int level)
+    void setOutputVolume(int level) override
     {
         devices.audioOutVolume = level;
         if (control)
             control->updateDevices(devices);
     }
 
-    virtual int inputVolume() const { return devices.audioInVolume; }
+    int inputVolume() const override { return devices.audioInVolume; }
 
-    virtual void setInputVolume(int level)
+    void setInputVolume(int level) override
     {
         devices.audioInVolume = level;
         if (control)
             control->updateDevices(devices);
     }
 
-    virtual Error errorCode() const { return static_cast<Error>(lastStatus.errorCode); }
+    Error errorCode() const override { return static_cast<Error>(lastStatus.errorCode); }
 
-    virtual RtpChannelContext *audioRtpChannel() { return &audioRtp; }
+    RtpChannelContext *audioRtpChannel() override { return &audioRtp; }
 
-    virtual RtpChannelContext *videoRtpChannel() { return &videoRtp; }
+    RtpChannelContext *videoRtpChannel() override { return &videoRtp; }
 
     // channel calls this, which may be in another thread
     void push_packet_for_write(GstRtpChannel *from, const PRtpPacket &rtp)
@@ -868,9 +868,9 @@ public:
         gstEventLoopThread.wait();
     }
 
-    virtual QObject *qobject() { return this; }
+    QObject *qobject() override { return this; }
 
-    virtual bool init(const QString &resourcePath)
+    bool init(const QString &resourcePath) override
     {
         gstEventLoop = new GstMainLoop(resourcePath);
         gstEventLoop->moveToThread(&gstEventLoopThread);
@@ -894,11 +894,11 @@ public:
         return true;
     }
 
-    bool isInitialized() const { return gstEventLoop && gstEventLoop->isInitialized(); }
+    bool isInitialized() const override { return gstEventLoop && gstEventLoop->isInitialized(); }
 
-    virtual QString creditName() { return "GStreamer"; }
+    QString creditName() override { return "GStreamer"; }
 
-    virtual QString creditText()
+    QString creditText() override
     {
         QString str = QString("This application uses GStreamer %1, a comprehensive "
                               "open-source and cross-platform multimedia framework.  For "
@@ -909,9 +909,9 @@ public:
         return str;
     }
 
-    virtual FeaturesContext *createFeatures() { return new GstFeaturesContext(gstEventLoop); }
+    FeaturesContext *createFeatures() override { return new GstFeaturesContext(gstEventLoop); }
 
-    virtual RtpSessionContext *createRtpSession() { return new GstRtpSessionContext(gstEventLoop); }
+    RtpSessionContext *createRtpSession() override { return new GstRtpSessionContext(gstEventLoop); }
 
 signals:
     void initialized();

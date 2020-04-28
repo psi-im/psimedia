@@ -264,7 +264,7 @@ void ConfigDlg::featuresUpdated()
             chanstr = QString("Channels: %1").arg(params.channels());
         QString str = QString("%1, %2KHz, %3-bit, %4").arg(codec).arg(hz).arg(params.sampleSize()).arg(chanstr);
 
-        ui.cb_audioMode->addItem(str, qVariantFromValue<PsiMedia::AudioParams>(params));
+        ui.cb_audioMode->addItem(str, QVariant::fromValue<PsiMedia::AudioParams>(params));
     }
 
     ui.cb_videoMode->clear();
@@ -277,7 +277,7 @@ void ConfigDlg::featuresUpdated()
         QString sizestr = QString("%1x%2").arg(params.size().width()).arg(params.size().height());
         QString str     = QString("%1, %2 @ %3fps").arg(codec).arg(sizestr).arg(params.fps());
 
-        ui.cb_videoMode->addItem(str, qVariantFromValue<PsiMedia::VideoParams>(params));
+        ui.cb_videoMode->addItem(str, QVariant::fromValue<PsiMedia::VideoParams>(params));
     }
 
     // the following lookups are guaranteed, since the config is
