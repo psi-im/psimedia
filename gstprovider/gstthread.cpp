@@ -22,14 +22,12 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QIcon>
 #include <QLibrary>
 #include <QMutex>
 #include <QQueue>
 #include <QStringList>
 #include <QWaitCondition>
-//#include <QStyle>
-#include "gstelements/static/gstelements.h"
-#include <QIcon>
 #include <gst/gst.h>
 
 namespace PsiMedia {
