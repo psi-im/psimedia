@@ -106,7 +106,7 @@ public:
             int kbps        = bps / 1000;
             calls           = -2;
             calltime.restart();
-            qDebug("%s: average packet size=%d, kbps=%d\n", qPrintable(name), avg, kbps);
+            qDebug("%s: average packet size=%d, kbps=%d", qPrintable(name), avg, kbps);
         } else
             ++calls;
     }
@@ -220,7 +220,7 @@ RtpWorker::~RtpWorker()
 void RtpWorker::cleanup()
 {
 #ifdef RTPWORKER_DEBUG
-    qDebug("cleaning up...\n");
+    qDebug("cleaning up...");
 #endif
     volumein_mutex.lock();
     volumein = nullptr;
@@ -259,7 +259,7 @@ void RtpWorker::cleanup()
             send_clock_is_shared = false;
 
             if (recv_in_use) {
-                qDebug("recv clock reverts to auto\n");
+                qDebug("recv clock reverts to auto");
                 gst_element_set_state(rpipeline, GST_STATE_READY);
                 gst_element_get_state(rpipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
@@ -295,7 +295,7 @@ void RtpWorker::cleanup()
             {
                 // FIXME: do we really need to restart the pipeline?
 
-                qDebug("send clock becomes master\n");
+                qDebug("send clock becomes master");
                 send_pipelineContext->deactivate();
                 gst_pipeline_auto_clock(GST_PIPELINE(spipeline));
                 send_pipelineContext->activate();
@@ -336,7 +336,7 @@ void RtpWorker::cleanup()
     }
 
 #ifdef RTPWORKER_DEBUG
-    qDebug("cleaning done.\n");
+    qDebug("cleaning done.");
 #endif
 }
 
@@ -597,7 +597,7 @@ void RtpWorker::fileDemux_no_more_pads(GstElement *element)
 {
     Q_UNUSED(element);
 #ifdef RTPWORKER_DEBUG
-    qDebug("no more pads\n");
+    qDebug("no more pads");
 #endif
 
     // FIXME: make this get canceled on cleanup?
@@ -612,7 +612,7 @@ void RtpWorker::fileDemux_pad_added(GstElement *element, GstPad *pad)
 
 #ifdef RTPWORKER_DEBUG
     gchar *name = gst_pad_get_name(pad);
-    qDebug("pad-added: %s\n", name);
+    qDebug("pad-added: %s", name);
     g_free(name);
 #endif
 
@@ -621,7 +621,7 @@ void RtpWorker::fileDemux_pad_added(GstElement *element, GstPad *pad)
     gchar * gstr       = gst_caps_to_string(caps);
     QString capsString = QString::fromUtf8(gstr);
     g_free(gstr);
-    qDebug("  caps: [%s]\n", qPrintable(capsString));
+    qDebug("  caps: [%s]", qPrintable(capsString));
 #endif
 
     guint num = gst_caps_get_size(caps);
@@ -692,7 +692,7 @@ void RtpWorker::fileDemux_pad_removed(GstElement *element, GstPad *pad)
 
 #ifdef RTPWORKER_DEBUG
     gchar *name = gst_pad_get_name(pad);
-    qDebug("pad-removed: %s\n", name);
+    qDebug("pad-removed: %s", name);
     g_free(name);
 #endif
 }
@@ -703,7 +703,7 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
     // GMainLoop *loop = static_cast<GMainLoop *>(data);
     switch (GST_MESSAGE_TYPE(msg)) {
     case GST_MESSAGE_EOS: {
-        g_print("End-of-stream\n");
+        qDebug("End-of-stream");
         // g_main_loop_quit(loop);
         break;
     }
@@ -714,7 +714,7 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
         gst_message_parse_error(msg, &err, &debug);
         g_free(debug);
 
-        g_print("Error: %s: %s\n", gst_element_get_name(GST_MESSAGE_SRC(msg)), err->message);
+        qDebug("Error: %s: %s", gst_element_get_name(GST_MESSAGE_SRC(msg)), err->message);
         g_error_free(err);
 
         // g_main_loop_quit(loop);
@@ -722,7 +722,7 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
     }
     case GST_MESSAGE_SEGMENT_DONE: {
         // FIXME: we seem to get this event too often?
-        qDebug("Segment-done\n");
+        qDebug("Segment-done");
         /*gst_element_seek(sendPipeline, 1, GST_FORMAT_TIME,
                 (GstSeekFlags)(GST_SEEK_FLAG_SEGMENT),
                 GST_SEEK_TYPE_SET, 0, GST_SEEK_TYPE_END, 0);*/
@@ -735,7 +735,7 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
         gst_message_parse_warning(msg, &err, &debug);
         g_free(debug);
 
-        g_print("Warning: %s: %s\n", gst_element_get_name(GST_MESSAGE_SRC(msg)), err->message);
+        qDebug("Warning: %s: %s", gst_element_get_name(GST_MESSAGE_SRC(msg)), err->message);
         g_error_free(err);
 
         // g_main_loop_quit(loop);
@@ -749,15 +749,15 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
                state_to_str(newstate));
         if (pending != GST_STATE_VOID_PENDING)
             qDebug(" (%s)", state_to_str(pending));
-        qDebug("\n");
+        qDebug("");
         break;
     }
     case GST_MESSAGE_ASYNC_DONE: {
-        qDebug("Async done: %s\n", gst_element_get_name(GST_MESSAGE_SRC(msg)));
+        qDebug("Async done: %s", gst_element_get_name(GST_MESSAGE_SRC(msg)));
         break;
     }
     default:
-        qDebug("Bus message: %s\n", GST_MESSAGE_TYPE_NAME(msg));
+        qDebug("Bus message: %s", GST_MESSAGE_TYPE_NAME(msg));
         break;
     }
 
@@ -964,7 +964,7 @@ bool RtpWorker::startSend(int rate)
             pd_audiosrc = PipelineDeviceContext::create(send_pipelineContext, ain, PDevice::AudioIn, options);
             if (!pd_audiosrc) {
 #ifdef RTPWORKER_DEBUG
-                qDebug("Failed to create audio input element '%s'.\n", qPrintable(ain));
+                qDebug("Failed to create audio input element '%s'.", qPrintable(ain));
 #endif
                 g_object_unref(G_OBJECT(sendbin));
                 sendbin = nullptr;
@@ -984,7 +984,7 @@ bool RtpWorker::startSend(int rate)
             pd_videosrc = PipelineDeviceContext::create(send_pipelineContext, vin, PDevice::VideoIn, opts);
             if (!pd_videosrc) {
 #ifdef RTPWORKER_DEBUG
-                qDebug("Failed to create video input element '%s'.\n", qPrintable(vin));
+                qDebug("Failed to create video input element '%s'.", qPrintable(vin));
 #endif
                 delete pd_audiosrc;
                 pd_audiosrc = nullptr;
@@ -1053,7 +1053,7 @@ bool RtpWorker::startSend(int rate)
         // gst_element_get_state(sendbin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
 #ifdef RTPWORKER_DEBUG
-        qDebug("changing state...\n");
+        qDebug("changing state...");
 #endif
 
         // gst_element_set_state(sendbin, GST_STATE_PLAYING);
@@ -1071,7 +1071,7 @@ bool RtpWorker::startSend(int rate)
 
         /*if(shared_clock && recv_clock_is_shared)
         {
-            qDebug("send pipeline slaving to recv clock\n");
+            qDebug("send pipeline slaving to recv clock");
             gst_pipeline_use_clock(GST_PIPELINE(spipeline), shared_clock);
         }*/
 
@@ -1084,7 +1084,7 @@ bool RtpWorker::startSend(int rate)
         // gst_element_get_state(sendbin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
         if (ret != GST_STATE_CHANGE_SUCCESS && ret != GST_STATE_CHANGE_NO_PREROLL) {
 #ifdef RTPWORKER_DEBUG
-            qDebug("error/timeout while setting send pipeline to PLAYING\n");
+            qDebug("error/timeout while setting send pipeline to PLAYING");
 #endif
             cleanup();
             error = RtpSessionContext::ErrorGeneric;
@@ -1092,7 +1092,7 @@ bool RtpWorker::startSend(int rate)
         }
 
         if (!shared_clock && use_shared_clock) {
-            qDebug("send clock is master\n");
+            qDebug("send clock is master");
 
             shared_clock = gst_pipeline_get_clock(GST_PIPELINE(spipeline));
             gst_pipeline_use_clock(GST_PIPELINE(spipeline), shared_clock);
@@ -1100,7 +1100,7 @@ bool RtpWorker::startSend(int rate)
 
             // if recv active, apply this clock to it
             if (recv_in_use) {
-                qDebug("recv pipeline slaving to send clock\n");
+                qDebug("recv pipeline slaving to send clock");
                 gst_element_set_state(rpipeline, GST_STATE_READY);
                 gst_element_get_state(rpipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
                 gst_pipeline_use_clock(GST_PIPELINE(rpipeline), shared_clock);
@@ -1109,7 +1109,7 @@ bool RtpWorker::startSend(int rate)
         }
 
 #ifdef RTPWORKER_DEBUG
-        qDebug("state changed\n");
+        qDebug("state changed");
 
         qDebug("Dumping send pipeline");
         dump_pipeline(spipeline);
@@ -1163,7 +1163,7 @@ bool RtpWorker::startRecv()
 
     if (!remoteAudioPayloadInfo.isEmpty() && opus_at != -1) {
 #ifdef RTPWORKER_DEBUG
-        qDebug("setting up audio recv\n");
+        qDebug("setting up audio recv");
 #endif
 
         int at = opus_at;
@@ -1171,7 +1171,7 @@ bool RtpWorker::startRecv()
         GstStructure *cs = payloadInfoToStructure(remoteAudioPayloadInfo[at], "audio");
         if (!cs) {
 #ifdef RTPWORKER_DEBUG
-            qDebug("cannot parse payload info\n");
+            qDebug("cannot parse payload info");
 #endif
             return false;
         }
@@ -1200,7 +1200,7 @@ bool RtpWorker::startRecv()
 
     if (!remoteVideoPayloadInfo.isEmpty() && theora_at != -1) {
 #ifdef RTPWORKER_DEBUG
-        qDebug("setting up video recv\n");
+        qDebug("setting up video recv");
 #endif
 
         int at = theora_at;
@@ -1208,7 +1208,7 @@ bool RtpWorker::startRecv()
         GstStructure *cs = payloadInfoToStructure(remoteVideoPayloadInfo[at], "video");
         if (!cs) {
 #ifdef RTPWORKER_DEBUG
-            qDebug("cannot parse payload info\n");
+            qDebug("cannot parse payload info");
 #endif
             goto fail1;
         }
@@ -1251,13 +1251,13 @@ bool RtpWorker::startRecv()
 
         if (!aout.isEmpty()) {
 #ifdef RTPWORKER_DEBUG
-            qDebug("creating audioout\n");
+            qDebug("creating audioout");
 #endif
 
             pd_audiosink = PipelineDeviceContext::create(recv_pipelineContext, aout, PDevice::AudioOut);
             if (!pd_audiosink) {
 #ifdef RTPWORKER_DEBUG
-                qDebug("failed to create audio output element\n");
+                qDebug("failed to create audio output element");
 #endif
                 goto fail1;
             }
@@ -1336,14 +1336,14 @@ bool RtpWorker::startRecv()
     }
 
     if (shared_clock && send_clock_is_shared) {
-        qDebug("recv pipeline slaving to send clock\n");
+        qDebug("recv pipeline slaving to send clock");
         gst_pipeline_use_clock(GST_PIPELINE(rpipeline), shared_clock);
     }
 
     // gst_element_set_locked_state(recvbin, FALSE);
     // gst_element_set_state(recvbin, GST_STATE_PLAYING);
 #ifdef RTPWORKER_DEBUG
-    qDebug("activating\n");
+    qDebug("activating");
 #endif
 
     gst_element_set_state(rpipeline, GST_STATE_READY);
@@ -1353,7 +1353,7 @@ bool RtpWorker::startRecv()
 
     /*if(!shared_clock && use_shared_clock)
     {
-        qDebug("recv clock is master\n");
+        qDebug("recv clock is master");
 
         shared_clock = gst_pipeline_get_clock(GST_PIPELINE(rpipeline));
         gst_pipeline_use_clock(GST_PIPELINE(rpipeline), shared_clock);
@@ -1361,7 +1361,7 @@ bool RtpWorker::startRecv()
     }*/
 
 #ifdef RTPWORKER_DEBUG
-    qDebug("receive pipeline started\n");
+    qDebug("receive pipeline started");
 #endif
     return true;
 
@@ -1406,7 +1406,7 @@ bool RtpWorker::addAudioChain(int rate)
     // int size = localAudioParams[0].sampleSize;
     // int channels = localAudioParams[0].channels;
 #ifdef RTPWORKER_DEBUG
-    qDebug("codec=%s\n", qPrintable(codec));
+    qDebug("codec=%s", qPrintable(codec));
 #endif
 
     // see if we need to match a pt id
@@ -1490,7 +1490,7 @@ bool RtpWorker::addVideoChain()
     // QSize size = localVideoParams[0].size;
     // int fps = localVideoParams[0].fps;
 #ifdef RTPWORKER_DEBUG
-    qDebug("codec=%s\n", qPrintable(codec));
+    qDebug("codec=%s", qPrintable(codec));
 #endif
 
     // see if we need to match a pt id
@@ -1611,7 +1611,7 @@ bool RtpWorker::getCaps()
         GstCaps *caps = gst_pad_get_current_caps(pad);
         if (!caps) {
 #ifdef RTPWORKER_DEBUG
-            qDebug("can't get audio caps\n");
+            qDebug("can't get audio caps");
 #endif
             return false;
         }
@@ -1620,7 +1620,7 @@ bool RtpWorker::getCaps()
         gchar * gstr       = gst_caps_to_string(caps);
         QString capsString = QString::fromUtf8(gstr);
         g_free(gstr);
-        qDebug("rtppay caps audio: [%s]\n", qPrintable(capsString));
+        qDebug("rtppay caps audio: [%s]", qPrintable(capsString));
 #endif
 
         gst_object_unref(pad);
@@ -1644,7 +1644,7 @@ bool RtpWorker::getCaps()
         GstCaps *caps = gst_pad_get_current_caps(pad);
         if (!caps) {
 #ifdef RTPWORKER_DEBUG
-            qWarning("can't get video caps\n");
+            qWarning("can't get video caps");
 #endif
             return false;
         }
@@ -1653,7 +1653,7 @@ bool RtpWorker::getCaps()
         gchar * gstr       = gst_caps_to_string(caps);
         QString capsString = QString::fromUtf8(gstr);
         g_free(gstr);
-        qDebug("rtppay caps video: [%s]\n", qPrintable(capsString));
+        qDebug("rtppay caps video: [%s]", qPrintable(capsString));
 #endif
 
         gst_object_unref(pad);
@@ -1697,7 +1697,7 @@ bool RtpWorker::updateTheoraConfig()
             GstStructure *cs = payloadInfoToStructure(remoteVideoPayloadInfo[n], "video");
             if (!cs) {
 #ifdef RTPWORKER_DEBUG
-                qDebug("cannot parse payload info\n");
+                qDebug("cannot parse payload info");
 #endif
                 continue;
             }
@@ -1731,7 +1731,7 @@ RtpWorker::Frame RtpWorker::Frame::pullFromSink(GstAppSink *appsink)
     /*
     gchar *capsstr;
     capsstr = gst_caps_to_string(caps);
-    qDebug("recv video frame caps: %s\n", capsstr);
+    qDebug("recv video frame caps: %s", capsstr);
     g_free (capsstr);
 */
 
@@ -1751,7 +1751,7 @@ RtpWorker::Frame RtpWorker::Frame::pullFromSink(GstAppSink *appsink)
         qDebug("wrong size of received buffer: %x != %lx", (width * height * 4), gst_buffer_get_size(buffer));
         gchar *capsstr;
         capsstr = gst_caps_to_string(caps);
-        qDebug("recv video frame caps: %s\n", capsstr);
+        qDebug("recv video frame caps: %s", capsstr);
         g_free(capsstr);
     }
     gst_sample_unref(sample);

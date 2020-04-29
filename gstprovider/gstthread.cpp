@@ -86,7 +86,7 @@ private:
 static void loadPlugins(const QString &pluginPath, bool print = false)
 {
     if (print)
-        qDebug("Loading plugins in [%s]\n", qPrintable(pluginPath));
+        qDebug("Loading plugins in [%s]", qPrintable(pluginPath));
     QDir        dir(pluginPath);
     QStringList entryList = dir.entryList(QDir::Files);
     foreach (QString entry, entryList) {
@@ -97,19 +97,19 @@ static void loadPlugins(const QString &pluginPath, bool print = false)
         GstPlugin *plugin   = gst_plugin_load_file(filePath.toUtf8().data(), &err);
         if (!plugin) {
             if (print) {
-                qDebug("**FAIL**: %s: %s\n", qPrintable(entry), err->message);
+                qDebug("**FAIL**: %s: %s", qPrintable(entry), err->message);
             }
             g_error_free(err);
             continue;
         }
         if (print) {
-            qDebug("   OK   : %s name=[%s]\n", qPrintable(entry), gst_plugin_get_name(plugin));
+            qDebug("   OK   : %s name=[%s]", qPrintable(entry), gst_plugin_get_name(plugin));
         }
         gst_object_unref(plugin);
     }
 
     if (print)
-        qDebug("\n");
+        qDebug("");
 }
 
 static int compare_gst_version(uint a1, uint a2, uint a3, uint b1, uint b2, uint b3)
@@ -174,7 +174,7 @@ public:
         uint need_min = 4;
         uint need_mic = 0;
         if (compare_gst_version(major, minor, micro, need_maj, need_min, need_mic) < 0) {
-            qDebug("Need GStreamer version %d.%d.%d\n", need_maj, need_min, need_mic);
+            qDebug("Need GStreamer version %d.%d.%d", need_maj, need_min, need_mic);
             success = false;
             return;
         }
@@ -235,7 +235,7 @@ public:
         foreach (const QString &name, reqelem) {
             GstElement *e = gst_element_factory_make(name.toLatin1().data(), nullptr);
             if (!e) {
-                qDebug("Unable to load element '%s'.\n", qPrintable(name));
+                qDebug("Unable to load element '%s'.", qPrintable(name));
                 success = false;
                 return;
             }
@@ -408,7 +408,7 @@ bool GstMainLoop::execInContext(const ContextCallback &cb, void *userData)
 
 void GstMainLoop::init()
 {
-    qDebug("GStreamer thread started\n");
+    qDebug("GStreamer thread started");
 
     // this will be unlocked as soon as the mainloop runs
     d->m.lock();
@@ -422,13 +422,13 @@ void GstMainLoop::init()
         d->gstSession = nullptr;
         d->w.wakeOne();
         d->m.unlock();
-        // qDebug("GStreamer thread completed (error)\n");
+        // qDebug("GStreamer thread completed (error)");
         emit finished();
     }
 
     d->success = true;
 
-    // qDebug("Using GStreamer version %s\n", qPrintable(d->gstSession->version));
+    // qDebug("Using GStreamer version %s", qPrintable(d->gstSession->version));
 
     d->mainContext = g_main_context_new();
     d->mainLoop    = g_main_loop_new(d->mainContext, FALSE);
@@ -460,7 +460,7 @@ void GstMainLoop::start()
 
     d->w.wakeOne();
     emit finished();
-    // qDebug("GStreamer thread completed\n");
+    // qDebug("GStreamer thread completed");
 }
 
 }

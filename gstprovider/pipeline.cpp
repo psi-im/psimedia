@@ -91,14 +91,14 @@ static void videosrcbin_pad_added(GstElement *element, GstPad *pad, gpointer dat
     auto gpad = static_cast<GstPad *>(data);
 
     // gchar *name = gst_pad_get_name(pad);
-    // qDebug("videosrcbin pad-added: %s\n", name);
+    // qDebug("videosrcbin pad-added: %s", name);
     // g_free(name);
 
     // GstCaps *caps = gst_pad_get_caps(pad);
     // gchar *gstr = gst_caps_to_string(caps);
     // QString capsString = QString::fromUtf8(gstr);
     // g_free(gstr);
-    // qDebug("  caps: [%s]\n", qPrintable(capsString));
+    // qDebug("  caps: [%s]", qPrintable(capsString));
 
     gst_ghost_pad_set_target(GST_GHOST_PAD(gpad), pad);
 
@@ -556,7 +556,7 @@ public:
                 gst_element_set_state(bin, GST_STATE_NULL);
                 gst_element_get_state(bin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 
-                //qDebug("set to null\n");
+                //qDebug("set to null");
                 if(speexdsp)
                 {
                     gst_element_set_state(speexdsp, GST_STATE_NULL);
@@ -754,7 +754,7 @@ PipelineDeviceContext *PipelineDeviceContext::create(PipelineContext *pipeline, 
     that->d->device = dev;
 
 #ifdef PIPELINE_DEBUG
-    qDebug("Readying %s:[%s], refs=%d\n", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
+    qDebug("Readying %s:[%s], refs=%d", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
 #endif
     return that;
 }
@@ -766,7 +766,7 @@ PipelineDeviceContext::~PipelineDeviceContext()
     if (dev) {
         dev->removeRef(d);
 #ifdef PIPELINE_DEBUG
-        qDebug("Releasing %s:[%s], refs=%d\n", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
+        qDebug("Releasing %s:[%s], refs=%d", type_to_str(dev->type), qPrintable(dev->id), dev->refs);
 #endif
         if (dev->refs == 0) {
             d->pipeline->d->devices.remove(dev);
