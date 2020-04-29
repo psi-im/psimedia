@@ -430,7 +430,7 @@ void GstMainLoop::init()
 
     // qDebug("Using GStreamer version %s", qPrintable(d->gstSession->version));
 
-    d->mainContext = g_main_context_new();
+    d->mainContext = g_main_context_ref_thread_default();
     d->mainLoop    = g_main_loop_new(d->mainContext, FALSE);
 
     // attach bridge source to context
