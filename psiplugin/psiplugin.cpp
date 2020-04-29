@@ -130,6 +130,6 @@ QString PsiMediaPlugin::pluginInfo()
 
 QPixmap PsiMediaPlugin::icon() const { return QPixmap(":/icons/avcall.png"); }
 
-PsiMedia::Provider *PsiMediaPlugin::createProvider() { }
+PsiMedia::Provider *PsiMediaPlugin::createProvider() { return nullptr; /*fixme*/ }
 
 #include "psiplugin.moc"

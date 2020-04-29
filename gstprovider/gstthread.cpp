@@ -183,7 +183,7 @@ public:
 
         // manually load plugins?
         // if(!pluginPath.isEmpty())
-        //	loadPlugins(pluginPath);
+        //    loadPlugins(pluginPath);
 
         // gstcustomelements_register();
         // gstelements_register();
@@ -359,7 +359,7 @@ GstMainLoop::GstMainLoop(const QString &resPath) : QObject()
     //   may conflict with separate Gtk initialization that may
     //   occur through gstreamer plugin loading.
     //{
-    //	QIcon icon = QApplication::style()->standardIcon(QStyle::SP_MessageBoxCritical, 0, 0);
+    //    QIcon icon = QApplication::style()->standardIcon(QStyle::SP_MessageBoxCritical, 0, 0);
     //}
 }
 

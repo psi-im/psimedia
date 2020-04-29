@@ -120,33 +120,33 @@ static GstCaps *filter_for_capture_size(const QSize &size)
 static GstCaps *filter_for_desired_size(const QSize &size)
 {
     Q_UNUSED(size)
-    //	QList<int> widths;
-    //	widths << 160 << 320 << 640 << 800 << 1024;
-    //	for(int n = 0; n < widths.count(); ++n)
-    //	{
-    //		if(widths[n] < size.width())
-    //		{
-    //			widths.removeAt(n);
-    //			--n; // adjust position
-    //		}
-    //	}
+    //    QList<int> widths;
+    //    widths << 160 << 320 << 640 << 800 << 1024;
+    //    for(int n = 0; n < widths.count(); ++n)
+    //    {
+    //        if(widths[n] < size.width())
+    //        {
+    //            widths.removeAt(n);
+    //            --n; // adjust position
+    //        }
+    //    }
 
-    //	GstElement *capsfilter = gst_element_factory_make("capsfilter", nullptr);
-    //	GstCaps *caps = gst_caps_new_empty();
+    //    GstElement *capsfilter = gst_element_factory_make("capsfilter", nullptr);
+    //    GstCaps *caps = gst_caps_new_empty();
 
-    // 	for(int n = 0; n < widths.count(); ++n)
-    // 	{
-    // 		GstStructure *cs;
-    // 		cs = gst_structure_new("video/x-raw-yuv",
-    // 			"width", GST_TYPE_INT_RANGE, 1, widths[n],
-    // 			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, nullptr);
-    // 		gst_caps_append_structure(caps, cs);
+    //     for(int n = 0; n < widths.count(); ++n)
+    //     {
+    //         GstStructure *cs;
+    //         cs = gst_structure_new("video/x-raw-yuv",
+    //             "width", GST_TYPE_INT_RANGE, 1, widths[n],
+    //             "height", GST_TYPE_INT_RANGE, 1, G_MAXINT, nullptr);
+    //         gst_caps_append_structure(caps, cs);
     //
-    // 		cs = gst_structure_new("video/x-raw-rgb",
-    // 			"width", GST_TYPE_INT_RANGE, 1, widths[n],
-    // 			"height", GST_TYPE_INT_RANGE, 1, G_MAXINT, nullptr);
-    // 		gst_caps_append_structure(caps, cs);
-    // 	}
+    //         cs = gst_structure_new("video/x-raw-rgb",
+    //             "width", GST_TYPE_INT_RANGE, 1, widths[n],
+    //             "height", GST_TYPE_INT_RANGE, 1, G_MAXINT, nullptr);
+    //         gst_caps_append_structure(caps, cs);
+    //     }
     return gst_caps_new_simple("video/x-raw", "width", G_TYPE_INT, 640, "height", G_TYPE_INT, 480, "framerate",
                                GST_TYPE_FRACTION, 30, 1, nullptr);
 }

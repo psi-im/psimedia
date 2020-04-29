@@ -39,7 +39,7 @@ public:
     PsiMedia::AudioParams audioParams;
     PsiMedia::VideoParams videoParams;
 
-    Configuration() : liveInput(false), loopFile(false) {}
+    Configuration() : liveInput(false), loopFile(false) { }
 };
 
 class FeaturesWatcher : public QObject {

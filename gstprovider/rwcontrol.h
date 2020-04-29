@@ -127,14 +127,14 @@ public:
     bool useAudio;
     bool useVideo;
 
-    RwControlTransmit() : useAudio(false), useVideo(false) {}
+    RwControlTransmit() : useAudio(false), useVideo(false) { }
 };
 
 class RwControlRecord {
 public:
     bool enabled;
 
-    RwControlRecord() : enabled(false) {}
+    RwControlRecord() : enabled(false) { }
 };
 
 // note: if this is received spontaneously, then only finished, error, and
@@ -168,7 +168,7 @@ public:
     Type type;
     int  value;
 
-    RwControlAudioIntensity() : type((Type)-1), value(-1) {}
+    RwControlAudioIntensity() : type((Type)-1), value(-1) { }
 };
 
 // always remote -> local, for internal use
@@ -187,7 +187,7 @@ public:
 
     Type type;
 
-    explicit RwControlMessage(Type _type) : type(_type) {}
+    explicit RwControlMessage(Type _type) : type(_type) { }
 
     virtual ~RwControlMessage() = default;
 };
@@ -197,61 +197,61 @@ public:
     RwControlConfigDevices devices;
     RwControlConfigCodecs  codecs;
 
-    RwControlStartMessage() : RwControlMessage(RwControlMessage::Start) {}
+    RwControlStartMessage() : RwControlMessage(RwControlMessage::Start) { }
 };
 
 class RwControlStopMessage : public RwControlMessage {
 public:
-    RwControlStopMessage() : RwControlMessage(RwControlMessage::Stop) {}
+    RwControlStopMessage() : RwControlMessage(RwControlMessage::Stop) { }
 };
 
 class RwControlUpdateDevicesMessage : public RwControlMessage {
 public:
     RwControlConfigDevices devices;
 
-    RwControlUpdateDevicesMessage() : RwControlMessage(RwControlMessage::UpdateDevices) {}
+    RwControlUpdateDevicesMessage() : RwControlMessage(RwControlMessage::UpdateDevices) { }
 };
 
 class RwControlUpdateCodecsMessage : public RwControlMessage {
 public:
     RwControlConfigCodecs codecs;
 
-    RwControlUpdateCodecsMessage() : RwControlMessage(RwControlMessage::UpdateCodecs) {}
+    RwControlUpdateCodecsMessage() : RwControlMessage(RwControlMessage::UpdateCodecs) { }
 };
 
 class RwControlTransmitMessage : public RwControlMessage {
 public:
     RwControlTransmit transmit;
 
-    RwControlTransmitMessage() : RwControlMessage(RwControlMessage::Transmit) {}
+    RwControlTransmitMessage() : RwControlMessage(RwControlMessage::Transmit) { }
 };
 
 class RwControlRecordMessage : public RwControlMessage {
 public:
     RwControlRecord record;
 
-    RwControlRecordMessage() : RwControlMessage(RwControlMessage::Record) {}
+    RwControlRecordMessage() : RwControlMessage(RwControlMessage::Record) { }
 };
 
 class RwControlStatusMessage : public RwControlMessage {
 public:
     RwControlStatus status;
 
-    RwControlStatusMessage() : RwControlMessage(RwControlMessage::Status) {}
+    RwControlStatusMessage() : RwControlMessage(RwControlMessage::Status) { }
 };
 
 class RwControlAudioIntensityMessage : public RwControlMessage {
 public:
     RwControlAudioIntensity intensity;
 
-    RwControlAudioIntensityMessage() : RwControlMessage(RwControlMessage::AudioIntensity) {}
+    RwControlAudioIntensityMessage() : RwControlMessage(RwControlMessage::AudioIntensity) { }
 };
 
 class RwControlFrameMessage : public RwControlMessage {
 public:
     RwControlFrame frame;
 
-    RwControlFrameMessage() : RwControlMessage(RwControlMessage::Frame), frame() {}
+    RwControlFrameMessage() : RwControlMessage(RwControlMessage::Frame), frame() { }
 };
 
 class RwControlLocal : public QObject {

@@ -23,7 +23,6 @@
 #include <QMetaMethod>
 
 namespace PsiMedia {
-
 static AudioParams importAudioParams(const PAudioParams &pp)
 {
     AudioParams out;
@@ -72,7 +71,7 @@ static PayloadInfo importPayloadInfo(const PPayloadInfo &pp)
     out.setPtime(pp.ptime);
     out.setMaxptime(pp.maxptime);
     QList<PayloadInfo::Parameter> list;
-    foreach (const PPayloadInfo::Parameter &pi, pp.parameters) {
+    for (const PPayloadInfo::Parameter &pi : pp.parameters) {
         PayloadInfo::Parameter i;
         i.name  = pi.name;
         i.value = pi.value;
@@ -92,7 +91,7 @@ static PPayloadInfo exportPayloadInfo(const PayloadInfo &p)
     out.ptime     = p.ptime();
     out.maxptime  = p.maxptime();
     QList<PPayloadInfo::Parameter> list;
-    foreach (const PayloadInfo::Parameter &i, p.parameters()) {
+    for (const PayloadInfo::Parameter &i : p.parameters()) {
         PPayloadInfo::Parameter pi;
         pi.name  = i.name;
         pi.value = i.value;
@@ -207,7 +206,7 @@ public:
     Device::Type type;
     QString      id;
     QString      name;
-    bool         isDefault;
+    bool         isDefault = false;
 };
 
 class Global {
@@ -395,7 +394,7 @@ QString VideoParams::toString() const
 QList<Device> importDevices(const QList<PDevice> &in)
 {
     QList<Device> out;
-    foreach (const PDevice &pd, in)
+    for (const PDevice &pd : in)
         out += Global::importDevice(pd);
     return out;
 }
@@ -403,7 +402,7 @@ QList<Device> importDevices(const QList<PDevice> &in)
 QList<AudioParams> importAudioModes(const QList<PAudioParams> &in)
 {
     QList<AudioParams> out;
-    foreach (const PAudioParams &pp, in)
+    for (const PAudioParams &pp : in)
         out += importAudioParams(pp);
     return out;
 }
@@ -411,7 +410,7 @@ QList<AudioParams> importAudioModes(const QList<PAudioParams> &in)
 QList<VideoParams> importVideoModes(const QList<PVideoParams> &in)
 {
     QList<VideoParams> out;
-    foreach (const PVideoParams &pp, in)
+    for (const PVideoParams &pp : in)
         out += importVideoParams(pp);
     return out;
 }
@@ -559,7 +558,7 @@ public:
             return false;
 
         // for every parameter in 'a'
-        foreach (const PayloadInfo::Parameter &p, a) {
+        for (const PayloadInfo::Parameter &p : a) {
             // make sure it is found in 'b'
             if (!b.contains(p))
                 return false;
@@ -595,7 +594,7 @@ int PayloadInfo::ptime() const { return d->ptime; }
 
 int PayloadInfo::maxptime() const { return d->maxptime; }
 
-QList<PayloadInfo::Parameter> PayloadInfo::parameters() const { return d->parameters; }
+const QList<PayloadInfo::Parameter> &PayloadInfo::parameters() const { return d->parameters; }
 
 void PayloadInfo::setId(int i) { d->id = i; }
 
@@ -657,7 +656,7 @@ void RtpSession::stopRecording() { d->c->stopRecording(); }
 void RtpSession::setLocalAudioPreferences(const QList<AudioParams> &params)
 {
     QList<PAudioParams> list;
-    foreach (const AudioParams &p, params)
+    for (const AudioParams &p : params)
         list += exportAudioParams(p);
     d->c->setLocalAudioPreferences(list);
 }
@@ -665,7 +664,7 @@ void RtpSession::setLocalAudioPreferences(const QList<AudioParams> &params)
 void RtpSession::setLocalVideoPreferences(const QList<VideoParams> &params)
 {
     QList<PVideoParams> list;
-    foreach (const VideoParams &p, params)
+    for (const VideoParams &p : params)
         list += exportVideoParams(p);
     d->c->setLocalVideoPreferences(list);
 }
@@ -675,7 +674,7 @@ void RtpSession::setMaximumSendingBitrate(int kbps) { d->c->setMaximumSendingBit
 void RtpSession::setRemoteAudioPreferences(const QList<PayloadInfo> &info)
 {
     QList<PPayloadInfo> list;
-    foreach (const PayloadInfo &p, info)
+    for (const PayloadInfo &p : info)
         list += exportPayloadInfo(p);
     d->c->setRemoteAudioPreferences(list);
 }
@@ -683,7 +682,7 @@ void RtpSession::setRemoteAudioPreferences(const QList<PayloadInfo> &info)
 void RtpSession::setRemoteVideoPreferences(const QList<PayloadInfo> &info)
 {
     QList<PPayloadInfo> list;
-    foreach (const PayloadInfo &p, info)
+    for (const PayloadInfo &p : info)
         list += exportPayloadInfo(p);
     d->c->setRemoteVideoPreferences(list);
 }
@@ -705,7 +704,7 @@ void RtpSession::stop() { d->c->stop(); }
 QList<PayloadInfo> RtpSession::localAudioPayloadInfo() const
 {
     QList<PayloadInfo> out;
-    foreach (const PPayloadInfo &pp, d->c->localAudioPayloadInfo())
+    for (const PPayloadInfo &pp : d->c->localAudioPayloadInfo())
         out += importPayloadInfo(pp);
     return out;
 }
@@ -713,7 +712,7 @@ QList<PayloadInfo> RtpSession::localAudioPayloadInfo() const
 QList<PayloadInfo> RtpSession::localVideoPayloadInfo() const
 {
     QList<PayloadInfo> out;
-    foreach (const PPayloadInfo &pp, d->c->localVideoPayloadInfo())
+    for (const PPayloadInfo &pp : d->c->localVideoPayloadInfo())
         out += importPayloadInfo(pp);
     return out;
 }
@@ -721,7 +720,7 @@ QList<PayloadInfo> RtpSession::localVideoPayloadInfo() const
 QList<PayloadInfo> RtpSession::remoteAudioPayloadInfo() const
 {
     QList<PayloadInfo> out;
-    foreach (const PPayloadInfo &pp, d->c->remoteAudioPayloadInfo())
+    for (const PPayloadInfo &pp : d->c->remoteAudioPayloadInfo())
         out += importPayloadInfo(pp);
     return out;
 }
@@ -729,7 +728,7 @@ QList<PayloadInfo> RtpSession::remoteAudioPayloadInfo() const
 QList<PayloadInfo> RtpSession::remoteVideoPayloadInfo() const
 {
     QList<PayloadInfo> out;
-    foreach (const PPayloadInfo &pp, d->c->remoteVideoPayloadInfo())
+    for (const PPayloadInfo &pp : d->c->remoteVideoPayloadInfo())
         out += importPayloadInfo(pp);
     return out;
 }
@@ -737,7 +736,7 @@ QList<PayloadInfo> RtpSession::remoteVideoPayloadInfo() const
 QList<AudioParams> RtpSession::audioParams() const
 {
     QList<AudioParams> out;
-    foreach (const PAudioParams &pp, d->c->audioParams())
+    for (const PAudioParams &pp : d->c->audioParams())
         out += importAudioParams(pp);
     return out;
 }
@@ -745,7 +744,7 @@ QList<AudioParams> RtpSession::audioParams() const
 QList<VideoParams> RtpSession::videoParams() const
 {
     QList<VideoParams> out;
-    foreach (const PVideoParams &pp, d->c->videoParams())
+    for (const PVideoParams &pp : d->c->videoParams())
         out += importVideoParams(pp);
     return out;
 }
@@ -767,5 +766,4 @@ RtpSession::Error RtpSession::errorCode() const { return static_cast<RtpSession:
 RtpChannel *RtpSession::audioRtpChannel() { return &d->audioRtpChannel; }
 
 RtpChannel *RtpSession::videoRtpChannel() { return &d->videoRtpChannel; }
-
-}
+}; // namespace PsiMedia

@@ -70,4 +70,3 @@ There is special "make install" target in this case oriented to Psi IM users, se
 make install DESTDIR=./out
 tree ./out
 ```
-

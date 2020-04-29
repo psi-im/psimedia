@@ -247,10 +247,10 @@ void RtpWorker::cleanup()
     rtpvideoout_mutex.unlock();
 
     // if(pd_audiosrc)
-    //	pd_audiosrc->deactivate();
+    //    pd_audiosrc->deactivate();
 
     // if(pd_videosrc)
-    //	pd_videosrc->deactivate();
+    //    pd_videosrc->deactivate();
 
     if (sendbin) {
         if (shared_clock && send_clock_is_shared) {
@@ -1136,11 +1136,11 @@ bool RtpWorker::startRecv()
     GstElement *asrc     = nullptr;
 
     // TODO: support more than opus
-    int opus_at    = -1;
+    int opus_at = -1;
     for (int n = 0; n < remoteAudioPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
         if (ri.name.toUpper() == "OPUS") {
-		opus_at    = n;
+            opus_at = n;
         }
     }
 
@@ -1636,7 +1636,7 @@ bool RtpWorker::getCaps()
         gst_caps_unref(caps);
 
         localAudioPayloadInfo << pi;
-        canTransmitAudio      = true;
+        canTransmitAudio = true;
     }
 
     if (videortppay) {
@@ -1669,7 +1669,7 @@ bool RtpWorker::getCaps()
         gst_caps_unref(caps);
 
         localVideoPayloadInfo << pi;
-        canTransmitVideo      = true;
+        canTransmitVideo = true;
     }
 
     return true;

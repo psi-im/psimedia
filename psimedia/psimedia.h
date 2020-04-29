@@ -25,7 +25,6 @@
 #include <QSharedDataPointer>
 #include <QSize>
 #include <QStringList>
-
 #ifdef QT_GUI_LIB
 #include <QWidget>
 #endif
@@ -33,11 +32,10 @@
 class QMetaMethod;
 
 namespace PsiMedia {
-
+class RtpChannelPrivate;
 class RtpSession;
 class RtpSessionPrivate;
 class VideoWidgetPrivate;
-class RtpChannelPrivate;
 
 enum PluginResult { PluginSuccess, ErrorLoad, ErrorVersion, ErrorInit };
 
@@ -245,13 +243,13 @@ public:
 
     bool isNull() const;
 
-    int              id() const;
-    QString          name() const;
-    int              clockrate() const;
-    int              channels() const;
-    int              ptime() const;
-    int              maxptime() const;
-    QList<Parameter> parameters() const;
+    int                     id() const;
+    QString                 name() const;
+    int                     clockrate() const;
+    int                     channels() const;
+    int                     ptime() const;
+    int                     maxptime() const;
+    const QList<Parameter> &parameters() const;
 
     void setId(int i);
     void setName(const QString &str);
@@ -460,10 +458,9 @@ private:
     friend class RtpSessionPrivate;
     RtpSessionPrivate *d;
 };
-
-}
+}; // namespace PsiMedia
 
 Q_DECLARE_METATYPE(PsiMedia::AudioParams)
 Q_DECLARE_METATYPE(PsiMedia::VideoParams)
 
-#endif
+#endif // PSIMEDIA_H

@@ -64,7 +64,7 @@ public:
     bool    aec = false; // echo cancelation (will be enabled when prober is available)
     QString echoProberName;
 
-    PipelineDeviceOptions() : fps(-1) {}
+    PipelineDeviceOptions() : fps(-1) { }
 };
 
 class PipelineDeviceContext {
