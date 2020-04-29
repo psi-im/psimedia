@@ -88,19 +88,20 @@ if(WIN32)
     endif()
 endif()
 
-add_library(gstprovider STATIC ${SOURCES})
-target_include_directories(gstprovider PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/psimedia ${GST_INCLUDES})
-target_link_libraries(${PROJECT_NAME}
+set(PROVIDERLIB gstprovidersrc)
+add_library(${PROVIDERLIB} STATIC ${SOURCES})
+target_include_directories(${PROVIDERLIB} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/psimedia ${GST_INCLUDES})
+target_link_libraries(${PROVIDERLIB}
                       ${GSTMODULES_LIBRARIES}
                       ${GLIBMODULES_LIBRARIES}
                       ${PROJECT_LDFLAGS}
 )
 
 if(APPLE)
-    target_link_libraries(${PROJECT_NAME} "-framework CoreAudio")
-    set_property(TARGET ${PROJECT_NAME}  PROPERTY SUFFIX ".dylib")
+    target_link_libraries(${PROVIDERLIB} "-framework CoreAudio")
+    set_property(TARGET ${PROVIDERLIB}  PROPERTY SUFFIX ".dylib")
 endif()
 
-target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Gui Qt5::Widgets)
+target_link_libraries(${PROVIDERLIB} Qt5::Core Qt5::Gui Qt5::Widgets)
 
 

@@ -66,7 +66,7 @@ target_link_libraries(
     ${PLUGIN}
     ${QT_DEPLIBS}
 )
-target_link_libraries(${PLUGIN} gstprovider)
+target_link_libraries(${PLUGIN} gstprovidersrc)
 
 install(
     TARGETS

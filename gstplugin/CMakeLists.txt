@@ -4,7 +4,7 @@ unset(_SRCS)
 unset(_RSCS)
 unset(PLUGIN)
 
-set( PLUGIN gstproviderplugin )
+set( PLUGIN gstprovider )
 project(${PLUGIN} LANGUAGES CXX)
 cmake_minimum_required(VERSION 3.1.0)
 if(POLICY CMP0071)
@@ -38,5 +38,5 @@ target_link_libraries(
     ${PLUGIN}
     ${QT_DEPLIBS}
 )
-target_link_libraries(${PLUGIN} gstprovider)
+target_link_libraries(${PLUGIN} gstprovidersrc)
 install(TARGETS ${PLUGIN} LIBRARY DESTINATION ${LIB_INSTALL_DIR})

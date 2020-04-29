@@ -9,6 +9,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   elseif(WIN32)
     add_definitions(-DDEBUG_POSTFIX=\"d\")
   endif()
+  add_definitions(-DPLUGIN_INSTALL_PATH_DEBUG=\"${CMAKE_BINARY_DIR}/psimedia\")
 endif()
 
 find_package(Qt5 COMPONENTS Core Widgets Gui Network REQUIRED)
