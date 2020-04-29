@@ -212,7 +212,8 @@ public:
                                             << "videoscale"
                                             << "rtpjitterbuffer"
                                             << "audiomixer"
-                                            << "appsink";
+                                            << "appsink"
+                                            << "webrtcechoprobe";
 
 #if defined(Q_OS_MAC)
         reqelem << "osxaudiosrc"

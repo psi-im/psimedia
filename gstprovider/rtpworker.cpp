@@ -119,10 +119,10 @@ static void dump_pipeline_each(const GValue *value, gpointer data)
     auto e      = static_cast<GstElement *>(g_value_get_object(value));
     int  indent = *(static_cast<int *>(data));
     if (GST_IS_BIN(e)) {
-        qDebug("%s%s:\n", qPrintable(QString(indent, ' ')), gst_element_get_name(e));
+        qDebug("%s%s:", qPrintable(QString(indent, ' ')), gst_element_get_name(e));
         dump_pipeline(e, indent + 2);
     } else
-        qDebug("%s%s\n", qPrintable(QString(indent, ' ')), gst_element_get_name(e));
+        qDebug("%s%s", qPrintable(QString(indent, ' ')), gst_element_get_name(e));
 }
 
 static void dump_pipeline(GstElement *in, int indent)

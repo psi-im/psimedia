@@ -300,9 +300,13 @@ private:
 
             gchar *name_value = nullptr;
             webrtcprobe       = gst_element_factory_make("webrtcechoprobe", nullptr);
-            g_object_get(G_OBJECT(webrtcprobe), "name", &name_value, nullptr);
-            webrtcEchoProbeName = QString::fromLatin1(name_value);
-            g_free(name_value);
+            if (webrtcprobe) {
+                g_object_get(G_OBJECT(webrtcprobe), "name", &name_value, nullptr);
+                webrtcEchoProbeName = QString::fromLatin1(name_value);
+                g_free(name_value);
+            } else {
+                qWarning("Failed to create GStreamer webrtcechoprobe element instance. Echo cancelation was disabled");
+            }
 
             // build resampler caps
             GstStructure *cs;
@@ -317,10 +321,14 @@ private:
             gst_bin_add(GST_BIN(bin), audioconvert);
             gst_bin_add(GST_BIN(bin), audioresample);
             gst_bin_add(GST_BIN(bin), capsfilter);
-            gst_bin_add(GST_BIN(bin), webrtcprobe);
+            if (webrtcprobe)
+                gst_bin_add(GST_BIN(bin), webrtcprobe);
             gst_bin_add(GST_BIN(bin), e);
 
-            gst_element_link_many(audioconvert, audioresample, capsfilter, webrtcprobe, e, nullptr);
+            if (webrtcprobe)
+                gst_element_link_many(audioconvert, audioresample, capsfilter, webrtcprobe, e, nullptr);
+            else
+                gst_element_link_many(audioconvert, audioresample, capsfilter, e, nullptr);
 
             GstPad *pad = gst_element_get_static_pad(audioconvert, "sink");
             gst_element_add_pad(bin, gst_ghost_pad_new("sink", pad));
@@ -338,7 +346,7 @@ public:
 
         device_bin = makeDeviceBin(context->opts);
         if (!device_bin) {
-            qDebug("Failed to create device");
+            qWarning("Failed to create device");
             return;
         }
 

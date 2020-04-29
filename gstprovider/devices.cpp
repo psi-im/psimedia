@@ -294,7 +294,6 @@ void DeviceMonitor::onDeviceRemoved(const GstDevice &dev)
 DeviceMonitor::DeviceMonitor(GstMainLoop *mainLoop) : d(new Private(this))
 {
     qRegisterMetaType<GstDevice>("GstDevice");
-    Q_ASSERT(mainLoop->mainContext() == g_main_context_get_thread_default());
 
     // auto context = mainLoop->mainContext();
     d->_platform = new PlatformDeviceMonitor;
