@@ -26,6 +26,7 @@
 #include "optionaccessinghost.h"
 #include "optionaccessor.h"
 #include "plugininfoprovider.h"
+#include "psimediaprovider.h"
 
 #include <QIcon>
 
@@ -36,27 +37,30 @@ class PsiMediaPlugin : public QObject,
                        public OptionAccessor,
                        public ApplicationInfoAccessor,
                        public IconFactoryAccessor,
-                       public PluginInfoProvider {
+                       public PluginInfoProvider,
+                       public PsiMedia::Plugin {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID "com.psi-plus.PsiMedia")
-    Q_INTERFACES(PsiPlugin OptionAccessor ApplicationInfoAccessor PluginInfoProvider IconFactoryAccessor)
+    Q_PLUGIN_METADATA(IID "org.psi-im.PsiMediaPlugin")
+    Q_INTERFACES(
+        PsiPlugin OptionAccessor ApplicationInfoAccessor PluginInfoProvider IconFactoryAccessor PsiMedia::Plugin)
 
 public:
     PsiMediaPlugin() = default;
-    QString  name() const override;
-    QString  shortName() const override;
-    QString  version() const override;
-    QWidget *options() override;
-    bool     enable() override;
-    bool     disable() override;
-    void     optionChanged(const QString &option) override;
-    void     applyOptions() override;
-    void     restoreOptions() override;
-    void     setOptionAccessingHost(OptionAccessingHost *host) override;
-    void     setApplicationInfoAccessingHost(ApplicationInfoAccessingHost *host) override;
-    void     setIconFactoryAccessingHost(IconFactoryAccessingHost *host) override;
-    QString  pluginInfo() override;
-    QPixmap  icon() const override;
+    QString             name() const override;
+    QString             shortName() const override;
+    QString             version() const override;
+    QWidget *           options() override;
+    bool                enable() override;
+    bool                disable() override;
+    void                optionChanged(const QString &option) override;
+    void                applyOptions() override;
+    void                restoreOptions() override;
+    void                setOptionAccessingHost(OptionAccessingHost *host) override;
+    void                setApplicationInfoAccessingHost(ApplicationInfoAccessingHost *host) override;
+    void                setIconFactoryAccessingHost(IconFactoryAccessingHost *host) override;
+    QString             pluginInfo() override;
+    QPixmap             icon() const override;
+    PsiMedia::Provider *createProvider() override;
 
 private:
     OptionAccessingHost *         psiOptions = nullptr;
@@ -64,7 +68,6 @@ private:
     ApplicationInfoAccessingHost *appInfo    = nullptr;
     bool                          enabled    = false;
     QPointer<QWidget>             options_;
-    QIcon                         pluginIcon;
 
     OAH_PluginOptionsTab *tab = nullptr;
 };
@@ -79,11 +82,10 @@ bool PsiMediaPlugin::enable()
 {
     if (!psiOptions)
         return false;
-    enabled    = true;
-    pluginIcon = iconHost->getIcon("psi/avcall");
+    enabled = true;
 
     if (!tab)
-        tab = new OptionsTabAvCall(pluginIcon);
+        tab = new OptionsTabAvCall(icon());
     psiOptions->addSettingPage(tab);
 
     return enabled;
@@ -127,5 +129,7 @@ QString PsiMediaPlugin::pluginInfo()
 }
 
 QPixmap PsiMediaPlugin::icon() const { return QPixmap(":/icons/avcall.png"); }
+
+PsiMedia::Provider *PsiMediaPlugin::createProvider() { }
 
 #include "psiplugin.moc"

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2008-2009  Barracuda Networks, Inc.
- * Copyright (C)
+ * Copyright (C) 2017-2020  Sergey Ilinykh
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -28,35 +28,34 @@
 #include <QSize>
 #include <QString>
 
-class QImage;
-class QIODevice;
-
-#ifdef QT_GUI_LIB
-class QWidget;
-class QPainter;
-#endif
-
 // since we cannot put signals/slots in Qt "interfaces", we use the following
 //   defines to hint about signals/slots that derived classes should provide
 #define HINT_SIGNALS protected
 #define HINT_PUBLIC_SLOTS public
 #define HINT_METHOD(x)
 
-namespace PsiMedia {
+class QImage;
+class QIODevice;
 
-class Provider;
+#ifdef QT_GUI_LIB
+class QPainter;
+class QWidget;
+#endif
+
+namespace PsiMedia {
 class FeaturesContext;
+class Provider;
 class RtpSessionContext;
 
 class Plugin {
 public:
-    virtual ~Plugin() {}
+    virtual ~Plugin() { }
     virtual Provider *createProvider() = 0;
 };
 
 class QObjectInterface {
 public:
-    virtual ~QObjectInterface() {}
+    virtual ~QObjectInterface() { }
 
     virtual QObject *qobject() = 0;
 };
@@ -72,7 +71,7 @@ public:
     Type    type;
     QString name;
     QString id;
-    bool    isDefault;
+    bool    isDefault = false;
 };
 
 class PAudioParams {
@@ -82,7 +81,7 @@ public:
     int     sampleSize;
     int     channels;
 
-    inline PAudioParams() : sampleRate(0), sampleSize(0), channels(0) {}
+    inline PAudioParams() : sampleRate(0), sampleSize(0), channels(0) { }
 };
 
 class PVideoParams {
@@ -91,7 +90,7 @@ public:
     QSize   size;
     int     fps;
 
-    inline PVideoParams() : fps(0) {}
+    inline PVideoParams() : fps(0) { }
 };
 
 class PFeatures {
@@ -119,7 +118,7 @@ public:
     int              maxptime;
     QList<Parameter> parameters;
 
-    inline PPayloadInfo() : id(-1), clockrate(-1), channels(-1), ptime(-1), maxptime(-1) {}
+    inline PPayloadInfo() : id(-1), clockrate(-1), channels(-1), ptime(-1), maxptime(-1) { }
 };
 
 class PRtpPacket {
@@ -127,7 +126,7 @@ public:
     QByteArray rawValue;
     int        portOffset;
 
-    inline PRtpPacket() : portOffset(0) {}
+    inline PRtpPacket() : portOffset(0) { }
 };
 
 class Provider : public QObjectInterface {
@@ -246,8 +245,7 @@ public:
                                HINT_METHOD(stopped()) HINT_METHOD(finished()) // for file playback only
                    HINT_METHOD(error())
 };
-
-}
+}; // namespace PsiMedia
 
 Q_DECLARE_INTERFACE(PsiMedia::Plugin, "org.psi-im.psimedia.Plugin/1.4")
 Q_DECLARE_INTERFACE(PsiMedia::Provider, "org.psi-im.psimedia.Provider/1.4")
@@ -255,4 +253,4 @@ Q_DECLARE_INTERFACE(PsiMedia::FeaturesContext, "org.psi-im.psimedia.FeaturesCont
 Q_DECLARE_INTERFACE(PsiMedia::RtpChannelContext, "org.psi-im.psimedia.RtpChannelContext/1.4")
 Q_DECLARE_INTERFACE(PsiMedia::RtpSessionContext, "org.psi-im.psimedia.RtpSessionContext/1.4")
 
-#endif
+#endif // PSIMEDIAPROVIDER_H
