@@ -35,9 +35,9 @@ set( _SRCS
     opt_avcall.cpp
     opt_avcall.h
 )
-#set( _RSCS
-#    resources.qrc
-#)
+set( _RSCS
+    resources.qrc
+)
 
 set(FORMS opt_avcall.ui)
 

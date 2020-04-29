@@ -71,7 +71,7 @@ private:
 
 QString PsiMediaPlugin::name() const { return "Psi Multimedia"; }
 
-QString PsiMediaPlugin::shortName() const { return "extopt"; }
+QString PsiMediaPlugin::shortName() const { return "psimedia"; }
 
 QString PsiMediaPlugin::version() const { return constVersion; }
 
@@ -79,8 +79,8 @@ bool PsiMediaPlugin::enable()
 {
     if (!psiOptions)
         return false;
-
-    enabled = true;
+    enabled    = true;
+    pluginIcon = iconHost->getIcon("psi/avcall");
 
     if (!tab)
         tab = new OptionsTabAvCall(pluginIcon);
@@ -91,6 +91,13 @@ bool PsiMediaPlugin::enable()
 
 bool PsiMediaPlugin::disable()
 {
+    if (!enabled)
+        return true;
+    if (tab)
+        psiOptions->removeSettingPage(tab);
+    delete tab;
+    tab = nullptr;
+
     enabled = false;
     return true;
 }
@@ -102,11 +109,7 @@ void PsiMediaPlugin::applyOptions() { return; }
 void PsiMediaPlugin::restoreOptions() { return; }
 
 void PsiMediaPlugin::setOptionAccessingHost(OptionAccessingHost *host) { psiOptions = host; }
-void PsiMediaPlugin::setIconFactoryAccessingHost(IconFactoryAccessingHost *host)
-{
-    iconHost   = host;
-    pluginIcon = iconHost->getIcon("psi/avcall");
-}
+void PsiMediaPlugin::setIconFactoryAccessingHost(IconFactoryAccessingHost *host) { iconHost = host; }
 void PsiMediaPlugin::setApplicationInfoAccessingHost(ApplicationInfoAccessingHost *host) { appInfo = host; }
 
 void PsiMediaPlugin::optionChanged(const QString &option) { Q_UNUSED(option); }
@@ -123,6 +126,6 @@ QString PsiMediaPlugin::pluginInfo()
              "QtMultimedia.");
 }
 
-QPixmap PsiMediaPlugin::icon() const { return pluginIcon.pixmap(16); }
+QPixmap PsiMediaPlugin::icon() const { return QPixmap(":/icons/avcall.png"); }
 
 #include "psiplugin.moc"
