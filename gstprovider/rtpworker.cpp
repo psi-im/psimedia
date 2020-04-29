@@ -1137,19 +1137,11 @@ bool RtpWorker::startRecv()
 
     // TODO: support more than opus
     int opus_at    = -1;
-    int samplerate = -1;
     for (int n = 0; n < remoteAudioPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
         if (ri.name.toUpper() == "OPUS") {
-            if (ri.clockrate > samplerate) {
-                opus_at    = n;
-                samplerate = ri.clockrate;
-            }
+		opus_at    = n;
         }
-    }
-    if (samplerate != 16000) {
-        cleanup();
-        startSend(samplerate);
     }
 
     // TODO: support more than theora
@@ -1313,7 +1305,7 @@ bool RtpWorker::startRecv()
             goto fail1;
 
         GstElement *videoconvert = gst_element_factory_make("videoconvert", nullptr);
-        GstAppSink *appVideoSink = makeVideoPlayAppSink("netviedeoplay");
+        GstAppSink *appVideoSink = makeVideoPlayAppSink("netvideoplay");
 
         GstAppSinkCallbacks sinkVideoCb;
         sinkVideoCb.new_sample  = cb_show_frame_output;
@@ -1643,19 +1635,7 @@ bool RtpWorker::getCaps()
 
         gst_caps_unref(caps);
 
-        PPayloadInfo opusnb;
-        opusnb.id        = 97;
-        opusnb.name      = "OPUS";
-        opusnb.clockrate = 8000;
-        opusnb.channels  = 1;
-        opusnb.ptime     = pi.ptime;
-        opusnb.maxptime  = pi.maxptime;
-
-        QList<PPayloadInfo> ppil;
-        ppil << pi;
-        ppil << opusnb;
-
-        localAudioPayloadInfo = ppil;
+        localAudioPayloadInfo << pi;
         canTransmitAudio      = true;
     }
 
@@ -1688,7 +1668,7 @@ bool RtpWorker::getCaps()
 
         gst_caps_unref(caps);
 
-        localVideoPayloadInfo = QList<PPayloadInfo>() << pi;
+        localVideoPayloadInfo << pi;
         canTransmitVideo      = true;
     }
 
@@ -1710,7 +1690,7 @@ bool RtpWorker::updateTheoraConfig()
         return false;
 
     // if so, update the videortpsrc caps
-    for (int n = 0; n < remoteAudioPayloadInfo.count(); ++n) {
+    for (int n = 0; n < remoteVideoPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteVideoPayloadInfo[n];
         if (ri.name.toUpper() == "THEORA" && ri.clockrate == 90000
             && ri.id == actual_remoteVideoPayloadInfo[theora_at].id) {
@@ -1732,7 +1712,7 @@ bool RtpWorker::updateTheoraConfig()
             g_object_set(G_OBJECT(videortpsrc), "caps", caps, nullptr);
             gst_caps_unref(caps);
 
-            actual_remoteAudioPayloadInfo[theora_at] = ri;
+            actual_remoteVideoPayloadInfo[theora_at] = ri;
             return true;
         }
     }
