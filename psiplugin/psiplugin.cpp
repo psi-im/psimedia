@@ -20,6 +20,7 @@
 #include "psiplugin.h"
 #include "applicationinfoaccessinghost.h"
 #include "applicationinfoaccessor.h"
+#include "gstprovider.h"
 #include "iconfactoryaccessinghost.h"
 #include "iconfactoryaccessor.h"
 #include "opt_avcall.h"
@@ -130,6 +131,6 @@ QString PsiMediaPlugin::pluginInfo()
 
 QPixmap PsiMediaPlugin::icon() const { return QPixmap(":/icons/avcall.png"); }
 
-PsiMedia::Provider *PsiMediaPlugin::createProvider() { return nullptr; /*fixme*/ }
+PsiMedia::Provider *PsiMediaPlugin::createProvider() { return new PsiMedia::GstProvider(); }
 
 #include "psiplugin.moc"

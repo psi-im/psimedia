@@ -88,10 +88,8 @@ if(WIN32)
     endif()
 endif()
 
-get_filename_component(ABS_PARENT_DIR "${CMAKE_CURRENT_LIST_DIR}/../psimedia" ABSOLUTE)
-include_directories(${GST_INCLUDES} ${ABS_PARENT_DIR})
-
 add_library(gstprovider STATIC ${SOURCES})
+target_include_directories(gstprovider PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/psimedia ${GST_INCLUDES})
 target_link_libraries(${PROJECT_NAME}
                       ${GSTMODULES_LIBRARIES}
                       ${GLIBMODULES_LIBRARIES}
@@ -105,4 +103,4 @@ endif()
 
 target_link_libraries(${PROJECT_NAME} Qt5::Core Qt5::Gui Qt5::Widgets)
 
-install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${LIB_INSTALL_DIR})
+

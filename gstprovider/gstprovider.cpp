@@ -21,6 +21,7 @@
 #include "psimediaprovider.h"
 
 #include "devices.h"
+#include "gstprovider.h"
 #include "gstthread.h"
 #include "modes.h"
 #include "rwcontrol.h"
@@ -852,84 +853,63 @@ void GstRtpChannel::receiver_push_packet_for_write(const PRtpPacket &rtp)
 //----------------------------------------------------------------------------
 // GstProvider
 //----------------------------------------------------------------------------
-class GstProvider : public QObject, public Provider {
-    Q_OBJECT
-    Q_INTERFACES(PsiMedia::Provider)
+GstProvider::GstProvider() { gstEventLoopThread.setObjectName("GstEventLoop"); }
 
-public:
-    QThread               gstEventLoopThread;
-    QPointer<GstMainLoop> gstEventLoop;
+GstProvider::~GstProvider()
+{
+    gstEventLoop->stop();
+    gstEventLoopThread.quit();
+    gstEventLoopThread.wait();
+}
 
-    GstProvider() { gstEventLoopThread.setObjectName("GstEventLoop"); }
+QObject *GstProvider::qobject() { return this; }
 
-    ~GstProvider() override
-    {
-        gstEventLoop->stop();
-        gstEventLoopThread.quit();
-        gstEventLoopThread.wait();
-    }
+bool GstProvider::init(const QString &resourcePath)
+{
+    gstEventLoop = new GstMainLoop(resourcePath);
+    gstEventLoop->moveToThread(&gstEventLoopThread);
 
-    QObject *qobject() override { return this; }
+    connect(&gstEventLoopThread, &QThread::finished, gstEventLoop, &QObject::deleteLater, Qt::QueuedConnection);
+    connect(&gstEventLoopThread, &QThread::started, gstEventLoop, &GstMainLoop::init, Qt::QueuedConnection);
+    connect(
+        gstEventLoop, &GstMainLoop::initialized, this,
+        [this]() {
+            // do any custom stuff here before glib event loop started. it's already initialized
+            if (!gstEventLoop->isInitialized()) {
+                qWarning("glib event loop failed to initialize");
+            }
+        },
+        Qt::QueuedConnection);
+    connect(gstEventLoop, &GstMainLoop::initialized, gstEventLoop, &GstMainLoop::start, Qt::QueuedConnection);
+    connect(gstEventLoop, &GstMainLoop::started, this, &GstProvider::initialized, Qt::QueuedConnection);
 
-    bool init(const QString &resourcePath) override
-    {
-        gstEventLoop = new GstMainLoop(resourcePath);
-        gstEventLoop->moveToThread(&gstEventLoopThread);
+    gstEventLoopThread.start();
 
-        connect(&gstEventLoopThread, &QThread::finished, gstEventLoop, &QObject::deleteLater, Qt::QueuedConnection);
-        connect(&gstEventLoopThread, &QThread::started, gstEventLoop, &GstMainLoop::init, Qt::QueuedConnection);
-        connect(
-            gstEventLoop, &GstMainLoop::initialized, this,
-            [this]() {
-                // do any custom stuff here before glib event loop started. it's already initialized
-                if (!gstEventLoop->isInitialized()) {
-                    qWarning("glib event loop failed to initialize");
-                }
-            },
-            Qt::QueuedConnection);
-        connect(gstEventLoop, &GstMainLoop::initialized, gstEventLoop, &GstMainLoop::start, Qt::QueuedConnection);
-        connect(gstEventLoop, &GstMainLoop::started, this, &GstProvider::initialized, Qt::QueuedConnection);
+    return true;
+}
 
-        gstEventLoopThread.start();
+bool GstProvider::isInitialized() const { return gstEventLoop && gstEventLoop->isInitialized(); }
 
-        return true;
-    }
+QString GstProvider::creditName() { return "GStreamer"; }
 
-    bool isInitialized() const override { return gstEventLoop && gstEventLoop->isInitialized(); }
+QString GstProvider::creditText()
+{
+    QString str = QString("This application uses GStreamer %1, a comprehensive "
+                          "open-source and cross-platform multimedia framework.  For "
+                          "more information, see http://www.gstreamer.net/\n\n"
+                          "If you enjoy this software, please give the GStreamer "
+                          "people a million dollars.")
+                      .arg(gstEventLoop->gstVersion());
+    return str;
+}
 
-    QString creditName() override { return "GStreamer"; }
+FeaturesContext *GstProvider::createFeatures()
+{
+    qDebug("GstProvider::createFeatures DeviceMonitor will be allocated now");
+    return new GstFeaturesContext(gstEventLoop);
+}
 
-    QString creditText() override
-    {
-        QString str = QString("This application uses GStreamer %1, a comprehensive "
-                              "open-source and cross-platform multimedia framework.  For "
-                              "more information, see http://www.gstreamer.net/\n\n"
-                              "If you enjoy this software, please give the GStreamer "
-                              "people a million dollars.")
-                          .arg(gstEventLoop->gstVersion());
-        return str;
-    }
-
-    FeaturesContext *createFeatures() override
-    {
-        qDebug("GstProvider::createFeatures DeviceMonitor will be allocated now");
-        return new GstFeaturesContext(gstEventLoop);
-    }
-
-    RtpSessionContext *createRtpSession() override { return new GstRtpSessionContext(gstEventLoop); }
-
-signals:
-    void initialized();
-};
-
-class GstPlugin : public QObject, public Plugin {
-    Q_OBJECT
-    Q_PLUGIN_METADATA(IID "org.psi-im.GstPlugin")
-    Q_INTERFACES(PsiMedia::Plugin)
-
-public:
-    virtual Provider *createProvider() { return new GstProvider; }
-};
+RtpSessionContext *GstProvider::createRtpSession() { return new GstRtpSessionContext(gstEventLoop); }
 
 }
 
