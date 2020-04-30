@@ -13,3 +13,4 @@ conf.pri
 demo/demo
 gstprovider/libgstprovider.*
 CMakeLists.txt.*
+*.autosave
