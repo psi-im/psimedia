@@ -36,6 +36,7 @@
 #ifdef QT_GUI_LIB
 #include <QPainter>
 #include <QThread>
+#include <QVariantMap>
 #include <QWidget>
 #endif
 
@@ -853,22 +854,14 @@ void GstRtpChannel::receiver_push_packet_for_write(const PRtpPacket &rtp)
 //----------------------------------------------------------------------------
 // GstProvider
 //----------------------------------------------------------------------------
-GstProvider::GstProvider() { gstEventLoopThread.setObjectName("GstEventLoop"); }
-
-GstProvider::~GstProvider()
+GstProvider::GstProvider(const QVariantMap &params)
 {
-    gstEventLoop->stop();
-    gstEventLoopThread.quit();
-    gstEventLoopThread.wait();
-}
-
-QObject *GstProvider::qobject() { return this; }
-
-bool GstProvider::init(const QString &resourcePath)
-{
+    auto resourcePath = params.value("resourcePath").toString();
+    gstEventLoopThread.setObjectName("GstEventLoop");
     gstEventLoop = new GstMainLoop(resourcePath);
     gstEventLoop->moveToThread(&gstEventLoopThread);
 
+    // delete event loop after gstreamer thread is has finished
     connect(&gstEventLoopThread, &QThread::finished, gstEventLoop, &QObject::deleteLater, Qt::QueuedConnection);
     connect(&gstEventLoopThread, &QThread::started, gstEventLoop, &GstMainLoop::init, Qt::QueuedConnection);
     connect(
@@ -882,9 +875,22 @@ bool GstProvider::init(const QString &resourcePath)
         Qt::QueuedConnection);
     connect(gstEventLoop, &GstMainLoop::initialized, gstEventLoop, &GstMainLoop::start, Qt::QueuedConnection);
     connect(gstEventLoop, &GstMainLoop::started, this, &GstProvider::initialized, Qt::QueuedConnection);
+}
 
+GstProvider::~GstProvider()
+{
+    if (gstEventLoopThread.isRunning()) {
+        gstEventLoop->stop();      // stop glib event loop
+        gstEventLoopThread.quit(); // stop qt even loop in its thread
+        gstEventLoopThread.wait(); // wait till everything is eventually stopped
+    }
+}
+
+QObject *GstProvider::qobject() { return this; }
+
+bool GstProvider::init()
+{
     gstEventLoopThread.start();
-
     return true;
 }
 

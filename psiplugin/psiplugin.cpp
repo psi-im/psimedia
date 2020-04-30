@@ -61,7 +61,7 @@ public:
     void                setIconFactoryAccessingHost(IconFactoryAccessingHost *host) override;
     QString             pluginInfo() override;
     QPixmap             icon() const override;
-    PsiMedia::Provider *createProvider() override;
+    PsiMedia::Provider *createProvider(const QVariantMap &vm = QVariantMap()) override;
 
 private:
     OptionAccessingHost *         psiOptions = nullptr;
@@ -131,6 +131,6 @@ QString PsiMediaPlugin::pluginInfo()
 
 QPixmap PsiMediaPlugin::icon() const { return QPixmap(":/icons/avcall.png"); }
 
-PsiMedia::Provider *PsiMediaPlugin::createProvider() { return new PsiMedia::GstProvider(); }
+PsiMedia::Provider *PsiMediaPlugin::createProvider(const QVariantMap &vm) { return new PsiMedia::GstProvider(vm); }
 
 #include "psiplugin.moc"

@@ -23,6 +23,7 @@
 
 #include <QPointer>
 #include <QThread>
+#include <QVariantMap>
 
 namespace PsiMedia {
 
@@ -36,10 +37,10 @@ public:
     QThread               gstEventLoopThread;
     QPointer<GstMainLoop> gstEventLoop;
 
-    GstProvider();
+    GstProvider(const QVariantMap &params = QVariantMap());
     ~GstProvider() override;
     QObject *          qobject() override;
-    bool               init(const QString &resourcePath) override;
+    bool               init() override;
     bool               isInitialized() const override;
     QString            creditName() override;
     QString            creditText() override;

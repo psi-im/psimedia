@@ -32,7 +32,7 @@ class GstPlugin : public QObject, public Plugin {
     Q_INTERFACES(PsiMedia::Plugin)
 
 public:
-    virtual Provider *createProvider() { return new GstProvider(); }
+    virtual Provider *createProvider(const QVariantMap &vm) { return new GstProvider(vm); }
 };
 
 }
