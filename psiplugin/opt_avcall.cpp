@@ -6,6 +6,7 @@
 //#include "common.h"
 //#include "iconwidget.h"
 //#include "psioptions.h"
+#include "gstprovider.h"
 #include "ui_opt_avcall.h"
 
 #include <QComboBox>
@@ -21,12 +22,12 @@ public:
 // OptionsTabAvCall
 //----------------------------------------------------------------------------
 
-OptionsTabAvCall::OptionsTabAvCall(QIcon icon) : _icon(icon)
+OptionsTabAvCall::OptionsTabAvCall(PsiMedia::Provider *provider, QIcon icon) : _icon(icon), provider(provider)
 {
     // connect(MediaDeviceWatcher::instance(), &MediaDeviceWatcher::updated, this, [this]() { restoreOptions(); });
 }
 
-OptionsTabAvCall::~OptionsTabAvCall() { }
+OptionsTabAvCall::~OptionsTabAvCall() { delete features; }
 
 QWidget *OptionsTabAvCall::widget()
 {
@@ -34,7 +35,9 @@ QWidget *OptionsTabAvCall::widget()
         return nullptr;
 
     w = new OptAvCallUI();
-    // OptAvCallUI *d = static_cast<OptAvCallUI *>(w);
+    if (!features) {
+        features = provider->createFeatures();
+    }
 
     return w;
 }
@@ -64,25 +67,42 @@ void OptionsTabAvCall::restoreOptions()
         return;
 
     OptAvCallUI *d = static_cast<OptAvCallUI *>(w.data());
-    /*
-        auto dw = MediaDeviceWatcher::instance();
+    auto         devs
+        = PsiMedia::FeaturesContext::AudioOut | PsiMedia::FeaturesContext::AudioIn | PsiMedia::FeaturesContext::VideoIn;
+
+    auto handler = [this, d](const PsiMedia::PFeatures &features) {
         d->cb_audioOutDevice->clear();
-        if (dw->audioOutputDevices().isEmpty())
+        if (features.audioOutputDevices.isEmpty())
             d->cb_audioOutDevice->addItem("<None>", QString());
-        for (const PsiMedia::Device &dev : dw->audioOutputDevices())
-            d->cb_audioOutDevice->addItem(dev.name(), dev.id());
+        for (const PsiMedia::PDevice &dev : features.audioOutputDevices)
+            d->cb_audioOutDevice->addItem(dev.name, dev.id);
 
         d->cb_audioInDevice->clear();
-        if (dw->audioInputDevices().isEmpty())
+        if (features.audioInputDevices.isEmpty())
             d->cb_audioInDevice->addItem("<None>", QString());
-        for (const PsiMedia::Device &dev : dw->audioInputDevices())
-            d->cb_audioInDevice->addItem(dev.name(), dev.id());
+        for (const PsiMedia::PDevice &dev : features.audioInputDevices)
+            d->cb_audioInDevice->addItem(dev.name, dev.id);
 
         d->cb_videoInDevice->clear();
-        if (dw->videoInputDevices().isEmpty())
+        if (features.videoInputDevices.isEmpty())
             d->cb_videoInDevice->addItem("<None>", QString());
-        for (const PsiMedia::Device &dev : dw->videoInputDevices())
-            d->cb_videoInDevice->addItem(dev.name(), dev.id());
+        for (const PsiMedia::PDevice &dev : features.videoInputDevices)
+            d->cb_videoInDevice->addItem(dev.name, dev.id);
+
+        if (this->connectDataChanged) {
+            this->connectDataChanged(w);
+
+            // it's a hack to not play with other signals much
+            this->connectDataChanged = std::function<void(QWidget *)>();
+        }
+    };
+
+    features->lookup(devs, w, handler);
+
+    /*
+        auto dw = MediaDeviceWatcher::instance();
+
+
 
         auto config = dw->configuration();
 
@@ -108,4 +128,7 @@ QString OptionsTabAvCall::desc() const { return QObject::tr("Audio and video dev
 void OptionsTabAvCall::setCallbacks(std::function<void()> dataChanged, std::function<void(bool)> noDirty,
                                     std::function<void(QWidget *)> connectDataChanged)
 {
+    this->dataChanged        = dataChanged;
+    this->noDirty            = noDirty;
+    this->connectDataChanged = connectDataChanged;
 }

@@ -7,13 +7,20 @@
     <x>0</x>
     <y>0</y>
     <width>400</width>
-    <height>114</height>
+    <height>130</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QGridLayout">
+   <item row="2" column="0">
+    <widget class="QLabel" name="lb_videoInDevice">
+     <property name="text">
+      <string>Video input:</string>
+     </property>
+    </widget>
+   </item>
    <item row="0" column="0">
     <widget class="QLabel" name="label">
      <property name="text">
@@ -21,8 +28,8 @@
      </property>
     </widget>
    </item>
-   <item row="0" column="2">
-    <widget class="QComboBox" name="cb_audioOutDevice">
+   <item row="2" column="2">
+    <widget class="QComboBox" name="cb_videoInDevice">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
        <horstretch>0</horstretch>
@@ -48,15 +55,8 @@
      </property>
     </widget>
    </item>
-   <item row="3" column="0">
-    <widget class="QLabel" name="lb_videoInDevice">
-     <property name="text">
-      <string>Video input:</string>
-     </property>
-    </widget>
-   </item>
-   <item row="3" column="2">
-    <widget class="QComboBox" name="cb_videoInDevice">
+   <item row="0" column="2">
+    <widget class="QComboBox" name="cb_audioOutDevice">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
        <horstretch>0</horstretch>
@@ -65,26 +65,11 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="0">
-    <widget class="QLabel" name="label_2">
-     <property name="text">
-      <string>Video support:</string>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="2">
-    <widget class="QCheckBox" name="cb_videoSupport">
-     <property name="text">
-      <string/>
-     </property>
-    </widget>
-   </item>
   </layout>
  </widget>
  <tabstops>
   <tabstop>cb_audioOutDevice</tabstop>
   <tabstop>cb_audioInDevice</tabstop>
-  <tabstop>cb_videoSupport</tabstop>
   <tabstop>cb_videoInDevice</tabstop>
  </tabstops>
  <resources/>

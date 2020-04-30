@@ -5,9 +5,14 @@
 
 #include <QIcon>
 
+namespace PsiMedia {
+class Provider;
+class FeaturesContext;
+}
+
 class OptionsTabAvCall : public OAH_PluginOptionsTab {
 public:
-    OptionsTabAvCall(QIcon icon);
+    OptionsTabAvCall(PsiMedia::Provider *provider, QIcon icon);
     ~OptionsTabAvCall();
 
     QWidget *widget() override;
@@ -27,8 +32,14 @@ public:
                       std::function<void(QWidget *)> connectDataChanged) override;
 
 private:
-    QPointer<QWidget> w;
-    QIcon             _icon;
+    QPointer<QWidget>          w;
+    QIcon                      _icon;
+    PsiMedia::Provider *       provider;
+    PsiMedia::FeaturesContext *features = nullptr;
+
+    std::function<void()>          dataChanged;
+    std::function<void(bool)>      noDirty;
+    std::function<void(QWidget *)> connectDataChanged;
 };
 
 #endif // OPT_AVCALL_H

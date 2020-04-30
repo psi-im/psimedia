@@ -100,6 +100,7 @@ if(CLF_BIN)
     )
 endif()
 
+set(CMAKE_CXX_STANDARD 14)
 if(BUILD_DEMO)
   add_subdirectory(demo)
   add_subdirectory(gstplugin)

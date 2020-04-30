@@ -119,17 +119,32 @@ class GstFeaturesContext : public QObject, public FeaturesContext {
     Q_OBJECT
     Q_INTERFACES(PsiMedia::FeaturesContext)
 
+    struct Watcher {
+        Watcher(int types, bool oneShot, QPointer<QObject> context, std::function<void(const PFeatures &)> &&callback) :
+            types(types), oneShot(oneShot), context(context), callback(std::move(callback))
+        {
+        }
+        int                                    types   = 0;
+        bool                                   oneShot = true;
+        QPointer<QObject>                      context;
+        std::function<void(const PFeatures &)> callback;
+    };
+
 public:
-    GstMainLoop *  gstLoop;
-    DeviceMonitor *deviceMonitor = nullptr;
-    PFeatures      features;
+    QPointer<GstMainLoop> gstLoop;
+    DeviceMonitor *       deviceMonitor = nullptr;
+    PFeatures             features;
+    bool                  updated = false;
+    std::list<Watcher>    watchers;
 
     explicit GstFeaturesContext(GstMainLoop *_gstLoop, QObject *parent = nullptr) : QObject(parent), gstLoop(_gstLoop)
     {
+        Q_ASSERT(!gstLoop.isNull());
         gstLoop->execInContext(
             [this](void *userData) {
                 Q_UNUSED(userData);
                 deviceMonitor = new DeviceMonitor(gstLoop);
+                // we should set flags which exactly devices were 'updated'. will be implemenented later
                 connect(deviceMonitor, &DeviceMonitor::updated, this, &GstFeaturesContext::devicesUpdated,
                         Qt::QueuedConnection);
                 QTimer::singleShot(0, this, SIGNAL(devicesUpdated())); // queue signal to other thread
@@ -139,16 +154,46 @@ public:
 
     ~GstFeaturesContext() override
     {
-        delete deviceMonitor; // thread safe?
+        if (gstLoop) {
+            disconnect(deviceMonitor);
+            gstLoop->execInContext([](void *userData) { delete reinterpret_cast<DeviceMonitor *>(userData); },
+                                   deviceMonitor);
+        } // else gstLoop was already destroyed??
     }
 
     QObject *qobject() override { return this; }
 
-    void lookup(int types) override { Q_UNUSED(types); }
-
-    PFeatures results() const override { return features; }
+    void lookup(int types, QObject *receiver, std::function<void(const PFeatures &)> &&callback) override
+    {
+        watchers.emplace_back(types, true, QPointer<QObject>(receiver), std::move(callback));
+        watch();
+    }
+    void monitor(int types, QObject *receiver, std::function<void(const PFeatures &)> &&callback) override
+    {
+        watchers.emplace_back(types, false, QPointer<QObject>(receiver), std::move(callback));
+    }
 
 private:
+    void watch()
+    {
+        if (!updated)
+            return;
+        auto it = watchers.cbegin();
+        while (it != watchers.cend()) {
+            if (!it->context) {
+                it = watchers.erase(it);
+                continue;
+            }
+            // we should check updated flags/types here when implemented
+            it->callback(features);
+            if (it->oneShot) {
+                it = watchers.erase(it);
+                continue;
+            }
+            ++it;
+        }
+    }
+
     QList<PDevice> audioOutputDevices()
     {
         QList<PDevice> list;
@@ -176,16 +221,14 @@ private:
 private slots:
     void devicesUpdated()
     {
+        updated                      = true;
         features.audioInputDevices   = audioInputDevices();
         features.audioOutputDevices  = audioOutputDevices();
         features.videoInputDevices   = videoInputDevices();
         features.supportedAudioModes = modes_supportedAudio();
         features.supportedVideoModes = modes_supportedVideo();
-        emit updated();
+        watch();
     }
-
-signals:
-    void updated();
 };
 
 //----------------------------------------------------------------------------
@@ -856,25 +899,26 @@ void GstRtpChannel::receiver_push_packet_for_write(const PRtpPacket &rtp)
 //----------------------------------------------------------------------------
 GstProvider::GstProvider(const QVariantMap &params)
 {
-    auto resourcePath = params.value("resourcePath").toString();
     gstEventLoopThread.setObjectName("GstEventLoop");
-    gstEventLoop = new GstMainLoop(resourcePath);
+
+    auto resourcePath = params.value("resourcePath").toString();
+    gstEventLoop      = new GstMainLoop(resourcePath);
     gstEventLoop->moveToThread(&gstEventLoopThread);
 
-    // delete event loop after gstreamer thread is has finished
-    connect(&gstEventLoopThread, &QThread::finished, gstEventLoop, &QObject::deleteLater, Qt::QueuedConnection);
-    connect(&gstEventLoopThread, &QThread::started, gstEventLoop, &GstMainLoop::init, Qt::QueuedConnection);
     connect(
-        gstEventLoop, &GstMainLoop::initialized, this,
+        &gstEventLoopThread, &QThread::started, gstEventLoop,
         [this]() {
+            Q_ASSERT(QThread::currentThread() == &gstEventLoopThread);
+            connect(&gstEventLoopThread, &QThread::finished, gstEventLoop, &QObject::deleteLater);
+            connect(gstEventLoop, &GstMainLoop::started, this, &GstProvider::initialized, Qt::QueuedConnection);
             // do any custom stuff here before glib event loop started. it's already initialized
-            if (!gstEventLoop->isInitialized()) {
+            if (!gstEventLoop->start()) {
                 qWarning("glib event loop failed to initialize");
+                gstEventLoopThread.exit(1);
+                return;
             }
         },
         Qt::QueuedConnection);
-    connect(gstEventLoop, &GstMainLoop::initialized, gstEventLoop, &GstMainLoop::start, Qt::QueuedConnection);
-    connect(gstEventLoop, &GstMainLoop::started, this, &GstProvider::initialized, Qt::QueuedConnection);
 }
 
 GstProvider::~GstProvider()

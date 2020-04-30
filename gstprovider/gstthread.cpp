@@ -275,8 +275,9 @@ public:
     bool                                                success     = false;
     GMainContext *                                      mainContext = nullptr;
     GMainLoop *                                         mainLoop    = nullptr;
-    QMutex                                              m;
-    QWaitCondition                                      w;
+    QMutex                                              queueMutex;
+    QMutex                                              stateMutex;
+    QWaitCondition                                      waitCond;
     BridgeQueueSource *                                 bridgeSource = nullptr;
     guint                                               bridgeId     = 0;
     QQueue<QPair<GstMainLoop::ContextCallback, void *>> bridgeQueue;
@@ -287,8 +288,6 @@ public:
 
     gboolean loop_started()
     {
-        w.wakeOne();
-        m.unlock();
         emit q->started();
         return FALSE;
     }
@@ -297,12 +296,12 @@ public:
     {
         auto d = static_cast<GstMainLoop::Private *>(data);
         while (!d->bridgeQueue.empty()) {
-            d->m.lock();
+            d->queueMutex.lock();
             QPair<GstMainLoop::ContextCallback, void *> p;
             bool                                        exist = !d->bridgeQueue.empty();
             if (exist)
                 p = d->bridgeQueue.dequeue();
-            d->m.unlock();
+            d->queueMutex.unlock();
             if (exist)
                 p.first(p.second);
         }
@@ -314,14 +313,14 @@ public:
     {
         *timeout_      = -1;
         auto         d = reinterpret_cast<Private::BridgeQueueSource *>(source)->d;
-        QMutexLocker locker(&d->m);
+        QMutexLocker locker(&d->queueMutex);
         return !d->bridgeQueue.empty() ? TRUE : FALSE;
     }
 
     static gboolean bridge_check(GSource *source)
     {
         auto         d = reinterpret_cast<Private::BridgeQueueSource *>(source)->d;
-        QMutexLocker locker(&d->m);
+        QMutexLocker locker(&d->queueMutex);
         return !d->bridgeQueue.empty() ? TRUE : FALSE;
     }
 
@@ -370,35 +369,32 @@ GstMainLoop::~GstMainLoop()
 
 void GstMainLoop::stop()
 {
-    bool stopped = execInContext([this](void *) { g_main_loop_quit(d->mainLoop); }, this);
+    bool stopped = execInContext(
+        [this](void *) {
+            g_main_loop_quit(d->mainLoop);
+            qDebug("g_main_loop_quit");
+            d->waitCond.wakeOne();
+        },
+        this);
 
     if (stopped) {
-        d->w.wait(&d->m);
+        d->stateMutex.lock();
+        d->waitCond.wait(&d->stateMutex);
+        d->stateMutex.unlock();
     }
+    qDebug("GstMainLoop::stop() finished");
 }
 
-QString GstMainLoop::gstVersion() const
-{
-    QMutexLocker locker(&d->m);
-    return d->gstSession->version;
-}
+QString GstMainLoop::gstVersion() const { return d->gstSession->version; }
 
-GMainContext *GstMainLoop::mainContext()
-{
-    QMutexLocker locker(&d->m);
-    return d->mainContext;
-}
+GMainContext *GstMainLoop::mainContext() { return d->mainContext; }
 
-bool GstMainLoop::isInitialized() const
-{
-    QMutexLocker locker(&d->m);
-    return d->success;
-}
+bool GstMainLoop::isInitialized() const { return d->success; }
 
 bool GstMainLoop::execInContext(const ContextCallback &cb, void *userData)
 {
-    QMutexLocker locker(&d->m);
     if (d->mainLoop) {
+        QMutexLocker(&d->queueMutex);
         d->bridgeQueue.enqueue({ cb, userData });
         g_main_context_wakeup(d->mainContext);
         return true;
@@ -406,12 +402,12 @@ bool GstMainLoop::execInContext(const ContextCallback &cb, void *userData)
     return false;
 }
 
-void GstMainLoop::init()
+bool GstMainLoop::start()
 {
     qDebug("GStreamer thread started");
 
     // this will be unlocked as soon as the mainloop runs
-    d->m.lock();
+    // d->stateMutex.lock();
 
     d->gstSession = new GstSession(d->pluginPath);
 
@@ -420,10 +416,9 @@ void GstMainLoop::init()
         d->success = false;
         delete d->gstSession;
         d->gstSession = nullptr;
-        d->w.wakeOne();
-        d->m.unlock();
-        // qDebug("GStreamer thread completed (error)");
-        emit finished();
+        qWarning("GStreamer thread completed (error)");
+        // d->stateMutex.unlock();
+        return false;
     }
 
     d->success = true;
@@ -441,16 +436,12 @@ void GstMainLoop::init()
     GSource *timer = g_timeout_source_new(0);
     g_source_attach(timer, d->mainContext);
     g_source_set_callback(timer, GstMainLoop::Private::cb_loop_started, d, nullptr);
-    d->m.unlock();
-    emit initialized();
-}
+    // d->stateMutex.unlock();
 
-void GstMainLoop::start()
-{
+    qDebug("kick off glib event loop");
     // kick off the event loop
     g_main_loop_run(d->mainLoop);
 
-    QMutexLocker locker(&d->m);
     g_main_loop_unref(d->mainLoop);
     d->mainLoop = nullptr;
     g_main_context_unref(d->mainContext);
@@ -458,9 +449,7 @@ void GstMainLoop::start()
     delete d->gstSession;
     d->gstSession = nullptr;
 
-    d->w.wakeOne();
-    emit finished();
-    // qDebug("GStreamer thread completed");
+    return true;
 }
 
 }

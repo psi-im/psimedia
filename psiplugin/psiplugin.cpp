@@ -61,7 +61,7 @@ public:
     void                setIconFactoryAccessingHost(IconFactoryAccessingHost *host) override;
     QString             pluginInfo() override;
     QPixmap             icon() const override;
-    PsiMedia::Provider *createProvider(const QVariantMap &vm = QVariantMap()) override;
+    PsiMedia::Provider *createProvider(const QVariantMap &) override;
 
 private:
     OptionAccessingHost *         psiOptions = nullptr;
@@ -70,7 +70,8 @@ private:
     bool                          enabled    = false;
     QPointer<QWidget>             options_;
 
-    OAH_PluginOptionsTab *tab = nullptr;
+    OAH_PluginOptionsTab * tab      = nullptr;
+    PsiMedia::GstProvider *provider = nullptr;
 };
 
 QString PsiMediaPlugin::name() const { return "Psi Multimedia"; }
@@ -85,8 +86,12 @@ bool PsiMediaPlugin::enable()
         return false;
     enabled = true;
 
+    if (!provider) {
+        provider = new PsiMedia::GstProvider();
+        provider->init();
+    }
     if (!tab)
-        tab = new OptionsTabAvCall(icon());
+        tab = new OptionsTabAvCall(provider, icon());
     psiOptions->addSettingPage(tab);
 
     return enabled;
@@ -96,10 +101,15 @@ bool PsiMediaPlugin::disable()
 {
     if (!enabled)
         return true;
+
     if (tab)
         psiOptions->removeSettingPage(tab);
     delete tab;
     tab = nullptr;
+
+    if (provider)
+        delete provider;
+    provider = nullptr;
 
     enabled = false;
     return true;
@@ -131,6 +141,10 @@ QString PsiMediaPlugin::pluginInfo()
 
 QPixmap PsiMediaPlugin::icon() const { return QPixmap(":/icons/avcall.png"); }
 
-PsiMedia::Provider *PsiMediaPlugin::createProvider(const QVariantMap &vm) { return new PsiMedia::GstProvider(vm); }
+PsiMedia::Provider *PsiMediaPlugin::createProvider(const QVariantMap &)
+{
+    // We don't need more than one provider in Psi
+    return provider;
+}
 
 #include "psiplugin.moc"

@@ -46,15 +46,12 @@ public:
     GMainContext *mainContext();
     bool          isInitialized() const;
     bool          execInContext(const ContextCallback &cb, void *userData);
+    bool          start();
 
 signals:
-    void initialized();
     void started();
-    void finished();
 
 public slots:
-    void init();
-    void start();
     void stop();
 
 private:

@@ -147,12 +147,8 @@ class FeaturesContext : public QObjectInterface {
 public:
     enum Type { AudioOut = 0x01, AudioIn = 0x02, VideoIn = 0x04, AudioModes = 0x08, VideoModes = 0x10 };
 
-    virtual void      lookup(int types) = 0;
-    virtual PFeatures results() const   = 0;
-
-    HINT_SIGNALS : HINT_METHOD(updated())
-    // TODO one day this should be converted to something more dynamic.
-    // For example we attach a camera and now we want to enable video button.
+    virtual void lookup(int types, QObject *receiver, std::function<void(const PFeatures &)> &&callback)  = 0;
+    virtual void monitor(int types, QObject *receiver, std::function<void(const PFeatures &)> &&callback) = 0;
 };
 
 class RtpChannelContext : public QObjectInterface {

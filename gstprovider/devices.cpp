@@ -291,7 +291,7 @@ void DeviceMonitor::onDeviceRemoved(const GstDevice &dev)
     }
 }
 
-DeviceMonitor::DeviceMonitor(GstMainLoop *mainLoop) : d(new Private(this))
+DeviceMonitor::DeviceMonitor(GstMainLoop *mainLoop) : QObject(mainLoop), d(new Private(this))
 {
     qRegisterMetaType<GstDevice>("GstDevice");
 
