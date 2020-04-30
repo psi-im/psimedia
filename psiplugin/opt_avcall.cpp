@@ -111,7 +111,7 @@ void OptionsTabAvCall::restoreOptions()
     };
 
     features->lookup(devs, w, handler);
-    features->monitor(devs, w, handler);
+    // features->monitor(devs, w, handler);
 }
 
 QByteArray OptionsTabAvCall::id() const { return "avcall"; }

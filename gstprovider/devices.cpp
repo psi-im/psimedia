@@ -339,8 +339,10 @@ QList<GstDevice> DeviceMonitor::devices(PDevice::Type type)
     QList<GstDevice> ret;
     QMutexLocker     locker(&d->m);
 
-    bool hasPulsesrc        = false;
-    bool hasDefaultPulsesrc = false;
+    bool hasPulsesrc         = false;
+    bool hasDefaultPulsesrc  = false;
+    bool hasPulsesink        = false;
+    bool hasDefaultPulsesink = false;
     for (auto const &dev : d->_devices) {
         if (dev.type == type)
             ret.append(dev);
@@ -350,16 +352,29 @@ QList<GstDevice> DeviceMonitor::devices(PDevice::Type type)
             if (dev.id == QLatin1String("pulsesrc"))
                 hasDefaultPulsesrc = true;
         }
+        if (type == PDevice::AudioOut && dev.id.startsWith(QLatin1String("pulsesink"))) {
+            hasPulsesink = true;
+            if (dev.id == QLatin1String("pulsesink"))
+                hasDefaultPulsesink = true;
+        }
     }
 
     std::sort(ret.begin(), ret.end(), [](const GstDevice &a, const GstDevice &b) { return a.name < b.name; });
     if (hasPulsesrc && !hasDefaultPulsesrc) {
-        GstDevice defaltPulsesrc;
-        defaltPulsesrc.isDefault = true;
-        defaltPulsesrc.id        = "pulsesrc";
-        defaltPulsesrc.name      = tr("Default");
-        defaltPulsesrc.type      = type;
-        ret.prepend(defaltPulsesrc);
+        GstDevice defalt;
+        defalt.isDefault = true;
+        defalt.id        = "pulsesrc";
+        defalt.name      = tr("Default");
+        defalt.type      = type;
+        ret.prepend(defalt);
+    }
+    if (hasPulsesink && !hasDefaultPulsesink) {
+        GstDevice defalt;
+        defalt.isDefault = true;
+        defalt.id        = "pulsesink";
+        defalt.name      = tr("Default");
+        defalt.type      = type;
+        ret.prepend(defalt);
     }
     return ret;
 }
