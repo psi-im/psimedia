@@ -86,6 +86,15 @@ if(WIN32)
             dxerr9
         )
     endif()
+    if(MSVC)
+        set(CompilerFlags
+                CMAKE_CXX_FLAGS_DEBUG
+                CMAKE_C_FLAGS_DEBUG
+                )
+        foreach(CompilerFlag ${CompilerFlags})
+          string(REPLACE "/MTd" "/MDd" ${CompilerFlag} "${${CompilerFlag}}")
+        endforeach()
+    endif()
 endif()
 
 set(PROVIDERLIB gstprovidersrc)

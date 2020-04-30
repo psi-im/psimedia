@@ -55,6 +55,16 @@ else()
     set(LIB_TYPE "SHARED")
 endif()
 
+if(MSVC)
+    set(CompilerFlags
+            CMAKE_CXX_FLAGS_DEBUG
+            CMAKE_C_FLAGS_DEBUG
+            )
+    foreach(CompilerFlag ${CompilerFlags})
+      string(REPLACE "/MTd" "/MDd" ${CompilerFlag} "${${CompilerFlag}}")
+    endforeach()
+endif()
+
 add_library(
     ${PLUGIN}
     ${LIB_TYPE}
