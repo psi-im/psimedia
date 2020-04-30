@@ -132,7 +132,7 @@ public:
                 deviceMonitor = new DeviceMonitor(gstLoop);
                 connect(deviceMonitor, &DeviceMonitor::updated, this, &GstFeaturesContext::devicesUpdated,
                         Qt::QueuedConnection);
-                devicesUpdated();
+                QTimer::singleShot(0, this, SIGNAL(devicesUpdated())); // queue signal to other thread
             },
             this);
     }
