@@ -60,6 +60,7 @@ static bool test_element(const QString &element_name)
 #endif
 
 // copied from gst-inspect-1.0. perfect for identifying devices
+// https://github.com/freedesktop/gstreamer-gst-plugins-base/blob/master/tools/gst-device-monitor.c
 static gchar *get_launch_line(::GstDevice *device)
 {
     static const char *const ignored_propnames[] = { "name", "parent", "direction", "template", "caps", nullptr };
@@ -337,11 +338,29 @@ QList<GstDevice> DeviceMonitor::devices(PDevice::Type type)
 {
     QList<GstDevice> ret;
     QMutexLocker     locker(&d->m);
+
+    bool hasPulsesrc        = false;
+    bool hasDefaultPulsesrc = false;
     for (auto const &dev : d->_devices) {
         if (dev.type == type)
             ret.append(dev);
+        // hack for pulsesrc
+        if (type == PDevice::AudioIn && dev.id.startsWith(QLatin1String("pulsesrc"))) {
+            hasPulsesrc = true;
+            if (dev.id == QLatin1String("pulsesrc"))
+                hasDefaultPulsesrc = true;
+        }
     }
+
     std::sort(ret.begin(), ret.end(), [](const GstDevice &a, const GstDevice &b) { return a.name < b.name; });
+    if (hasPulsesrc && !hasDefaultPulsesrc) {
+        GstDevice defaltPulsesrc;
+        defaltPulsesrc.isDefault = true;
+        defaltPulsesrc.id        = "pulsesrc";
+        defaltPulsesrc.name      = tr("Default");
+        defaltPulsesrc.type      = type;
+        ret.prepend(defaltPulsesrc);
+    }
     return ret;
 }
 

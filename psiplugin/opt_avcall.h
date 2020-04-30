@@ -9,10 +9,11 @@ namespace PsiMedia {
 class Provider;
 class FeaturesContext;
 }
+class OptionAccessingHost;
 
 class OptionsTabAvCall : public OAH_PluginOptionsTab {
 public:
-    OptionsTabAvCall(PsiMedia::Provider *provider, QIcon icon);
+    OptionsTabAvCall(PsiMedia::Provider *provider, OptionAccessingHost *optHost, QIcon icon);
     ~OptionsTabAvCall();
 
     QWidget *widget() override;
@@ -36,6 +37,7 @@ private:
     QIcon                      _icon;
     PsiMedia::Provider *       provider;
     PsiMedia::FeaturesContext *features = nullptr;
+    OptionAccessingHost *      optHost  = nullptr;
 
     std::function<void()>          dataChanged;
     std::function<void(bool)>      noDirty;

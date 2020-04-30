@@ -91,7 +91,7 @@ bool PsiMediaPlugin::enable()
         provider->init();
     }
     if (!tab)
-        tab = new OptionsTabAvCall(provider, icon());
+        tab = new OptionsTabAvCall(provider, psiOptions, icon());
     psiOptions->addSettingPage(tab);
 
     return enabled;

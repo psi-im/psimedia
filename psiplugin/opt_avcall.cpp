@@ -7,6 +7,7 @@
 //#include "iconwidget.h"
 //#include "psioptions.h"
 #include "gstprovider.h"
+#include "optionaccessinghost.h"
 #include "ui_opt_avcall.h"
 
 #include <QComboBox>
@@ -22,7 +23,8 @@ public:
 // OptionsTabAvCall
 //----------------------------------------------------------------------------
 
-OptionsTabAvCall::OptionsTabAvCall(PsiMedia::Provider *provider, QIcon icon) : _icon(icon), provider(provider)
+OptionsTabAvCall::OptionsTabAvCall(PsiMedia::Provider *provider, OptionAccessingHost *optHost, QIcon icon) :
+    _icon(icon), provider(provider), optHost(optHost)
 {
     // connect(MediaDeviceWatcher::instance(), &MediaDeviceWatcher::updated, this, [this]() { restoreOptions(); });
 }
@@ -89,6 +91,17 @@ void OptionsTabAvCall::restoreOptions()
         for (const PsiMedia::PDevice &dev : features.videoInputDevices)
             d->cb_videoInDevice->addItem(dev.name, dev.id);
 
+        auto ain  = optHost->getPluginOption("audio-input", QString()).toString();
+        auto aout = optHost->getPluginOption("audio-out", QString()).toString();
+        auto vin  = optHost->getPluginOption("video-input", QString()).toString();
+
+        if (!aout.isEmpty())
+            d->cb_audioOutDevice->setCurrentIndex(d->cb_audioOutDevice->findData(aout));
+        if (!ain.isEmpty())
+            d->cb_audioInDevice->setCurrentIndex(d->cb_audioInDevice->findData(ain));
+        if (!vin.isEmpty())
+            d->cb_videoInDevice->setCurrentIndex(d->cb_videoInDevice->findData(vin));
+
         if (this->connectDataChanged) {
             this->connectDataChanged(w);
 
@@ -98,19 +111,7 @@ void OptionsTabAvCall::restoreOptions()
     };
 
     features->lookup(devs, w, handler);
-
-    /*
-        auto dw = MediaDeviceWatcher::instance();
-
-
-
-        auto config = dw->configuration();
-
-        d->cb_audioOutDevice->setCurrentIndex(d->cb_audioOutDevice->findData(config.audioOutDeviceId));
-        d->cb_audioInDevice->setCurrentIndex(d->cb_audioInDevice->findData(config.audioInDeviceId));
-        d->cb_videoInDevice->setCurrentIndex(d->cb_videoInDevice->findData(config.videoInDeviceId));
-        d->cb_videoSupport->setChecked(PsiOptions::instance()->getOption("options.media.video-support").toBool());
-        */
+    features->monitor(devs, w, handler);
 }
 
 QByteArray OptionsTabAvCall::id() const { return "avcall"; }
