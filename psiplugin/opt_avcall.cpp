@@ -23,8 +23,10 @@ public:
 // OptionsTabAvCall
 //----------------------------------------------------------------------------
 
-OptionsTabAvCall::OptionsTabAvCall(PsiMedia::Provider *provider, OptionAccessingHost *optHost, QIcon icon) :
-    _icon(icon), provider(provider), optHost(optHost)
+OptionsTabAvCall::OptionsTabAvCall(PsiMedia::Provider *provider, OptionAccessingHost *optHost, PsiMediaHost *mediaHost,
+                                   QIcon icon) :
+    _icon(icon),
+    provider(provider), optHost(optHost), mediaHost(mediaHost)
 {
     // connect(MediaDeviceWatcher::instance(), &MediaDeviceWatcher::updated, this, [this]() { restoreOptions(); });
 }
@@ -50,15 +52,15 @@ void OptionsTabAvCall::applyOptions()
         return;
 
     OptAvCallUI *d = static_cast<OptAvCallUI *>(w.data());
-    optHost->setPluginOption("devices.audio-output",
-                             d->cb_audioOutDevice->itemData(d->cb_audioOutDevice->currentIndex()).toString());
-    optHost->setPluginOption("devices.audio-input",
-                             d->cb_audioInDevice->itemData(d->cb_audioInDevice->currentIndex()).toString());
-    optHost->setPluginOption("devices.video-input",
-                             d->cb_videoInDevice->itemData(d->cb_videoInDevice->currentIndex()).toString());
-    /*
-     MediaDeviceWatcher::instance()->updateDefaults();
-    */
+
+    QString aout = d->cb_audioOutDevice->itemData(d->cb_audioOutDevice->currentIndex()).toString();
+    QString ain  = d->cb_audioInDevice->itemData(d->cb_audioInDevice->currentIndex()).toString();
+    QString vin  = d->cb_videoInDevice->itemData(d->cb_videoInDevice->currentIndex()).toString();
+
+    optHost->setPluginOption("devices.audio-output", aout);
+    optHost->setPluginOption("devices.audio-input", ain);
+    optHost->setPluginOption("devices.video-input", vin);
+    mediaHost->selectMediaDevices(ain, aout, vin);
 }
 
 void OptionsTabAvCall::restoreOptions()

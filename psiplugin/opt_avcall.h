@@ -2,6 +2,7 @@
 #define OPT_AVCALL_H
 
 #include "optionaccessinghost.h"
+#include "psimediahost.h"
 
 #include <QIcon>
 
@@ -13,7 +14,7 @@ class OptionAccessingHost;
 
 class OptionsTabAvCall : public OAH_PluginOptionsTab {
 public:
-    OptionsTabAvCall(PsiMedia::Provider *provider, OptionAccessingHost *optHost, QIcon icon);
+    OptionsTabAvCall(PsiMedia::Provider *provider, OptionAccessingHost *optHost, PsiMediaHost *mediaHost, QIcon icon);
     ~OptionsTabAvCall();
 
     QWidget *widget() override;
@@ -36,8 +37,9 @@ private:
     QPointer<QWidget>          w;
     QIcon                      _icon;
     PsiMedia::Provider *       provider;
-    PsiMedia::FeaturesContext *features = nullptr;
-    OptionAccessingHost *      optHost  = nullptr;
+    PsiMedia::FeaturesContext *features  = nullptr;
+    OptionAccessingHost *      optHost   = nullptr;
+    PsiMediaHost *             mediaHost = nullptr;
 
     std::function<void()>          dataChanged;
     std::function<void(bool)>      noDirty;

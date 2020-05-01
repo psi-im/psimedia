@@ -27,6 +27,7 @@
 #include "optionaccessinghost.h"
 #include "optionaccessor.h"
 #include "plugininfoprovider.h"
+#include "psimediaaccessor.h"
 #include "psimediaprovider.h"
 
 #include <QIcon>
@@ -39,11 +40,12 @@ class PsiMediaPlugin : public QObject,
                        public ApplicationInfoAccessor,
                        public IconFactoryAccessor,
                        public PluginInfoProvider,
-                       public PsiMedia::Plugin {
+                       public PsiMedia::Plugin,
+                       public PsiMediaAccessor {
     Q_OBJECT
     Q_PLUGIN_METADATA(IID "org.psi-im.PsiMediaPlugin")
-    Q_INTERFACES(
-        PsiPlugin OptionAccessor ApplicationInfoAccessor PluginInfoProvider IconFactoryAccessor PsiMedia::Plugin)
+    Q_INTERFACES(PsiPlugin OptionAccessor ApplicationInfoAccessor PluginInfoProvider IconFactoryAccessor
+                     PsiMedia::Plugin PsiMediaAccessor)
 
 public:
     PsiMediaPlugin() = default;
@@ -59,6 +61,7 @@ public:
     void                setOptionAccessingHost(OptionAccessingHost *host) override;
     void                setApplicationInfoAccessingHost(ApplicationInfoAccessingHost *host) override;
     void                setIconFactoryAccessingHost(IconFactoryAccessingHost *host) override;
+    void                setPsiMediaHost(PsiMediaHost *host) override;
     QString             pluginInfo() override;
     QPixmap             icon() const override;
     PsiMedia::Provider *createProvider(const QVariantMap &) override;
@@ -67,6 +70,7 @@ private:
     OptionAccessingHost *         psiOptions = nullptr;
     IconFactoryAccessingHost *    iconHost   = nullptr;
     ApplicationInfoAccessingHost *appInfo    = nullptr;
+    PsiMediaHost *                mediaHost  = nullptr;
     bool                          enabled    = false;
     QPointer<QWidget>             options_;
 
@@ -82,7 +86,7 @@ QString PsiMediaPlugin::version() const { return constVersion; }
 
 bool PsiMediaPlugin::enable()
 {
-    if (!psiOptions)
+    if (!psiOptions || !mediaHost)
         return false;
     enabled = true;
 
@@ -91,8 +95,13 @@ bool PsiMediaPlugin::enable()
         provider->init();
     }
     if (!tab)
-        tab = new OptionsTabAvCall(provider, psiOptions, icon());
+        tab = new OptionsTabAvCall(provider, psiOptions, mediaHost, icon());
     psiOptions->addSettingPage(tab);
+
+    auto ain  = psiOptions->getPluginOption("devices.audio-input", QString()).toString();
+    auto aout = psiOptions->getPluginOption("devices.audio-output", QString()).toString();
+    auto vin  = psiOptions->getPluginOption("devices.video-input", QString()).toString();
+    mediaHost->selectMediaDevices(ain, aout, vin);
 
     return enabled;
 }
@@ -123,6 +132,8 @@ void PsiMediaPlugin::restoreOptions() { return; }
 
 void PsiMediaPlugin::setOptionAccessingHost(OptionAccessingHost *host) { psiOptions = host; }
 void PsiMediaPlugin::setIconFactoryAccessingHost(IconFactoryAccessingHost *host) { iconHost = host; }
+
+void PsiMediaPlugin::setPsiMediaHost(PsiMediaHost *host) { mediaHost = host; }
 void PsiMediaPlugin::setApplicationInfoAccessingHost(ApplicationInfoAccessingHost *host) { appInfo = host; }
 
 void PsiMediaPlugin::optionChanged(const QString &option) { Q_UNUSED(option); }
