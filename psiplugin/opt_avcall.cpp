@@ -50,17 +50,15 @@ void OptionsTabAvCall::applyOptions()
         return;
 
     OptAvCallUI *d = static_cast<OptAvCallUI *>(w.data());
+    optHost->setPluginOption("devices.audio-output",
+                             d->cb_audioOutDevice->itemData(d->cb_audioOutDevice->currentIndex()).toString());
+    optHost->setPluginOption("devices.audio-input",
+                             d->cb_audioInDevice->itemData(d->cb_audioInDevice->currentIndex()).toString());
+    optHost->setPluginOption("devices.video-input",
+                             d->cb_videoInDevice->itemData(d->cb_videoInDevice->currentIndex()).toString());
     /*
-        PsiOptions::instance()->setOption("options.media.devices.audio-output",
-                                          d->cb_audioOutDevice->itemData(d->cb_audioOutDevice->currentIndex()).toString());
-        PsiOptions::instance()->setOption("options.media.devices.audio-input",
-                                          d->cb_audioInDevice->itemData(d->cb_audioInDevice->currentIndex()).toString());
-        PsiOptions::instance()->setOption("options.media.devices.video-input",
-                                          d->cb_videoInDevice->itemData(d->cb_videoInDevice->currentIndex()).toString());
-        PsiOptions::instance()->setOption("options.media.video-support", d->cb_videoSupport->isChecked());
-
-        MediaDeviceWatcher::instance()->updateDefaults();
-        */
+     MediaDeviceWatcher::instance()->updateDefaults();
+    */
 }
 
 void OptionsTabAvCall::restoreOptions()
@@ -91,9 +89,9 @@ void OptionsTabAvCall::restoreOptions()
         for (const PsiMedia::PDevice &dev : features.videoInputDevices)
             d->cb_videoInDevice->addItem(dev.name, dev.id);
 
-        auto ain  = optHost->getPluginOption("audio-input", QString()).toString();
-        auto aout = optHost->getPluginOption("audio-out", QString()).toString();
-        auto vin  = optHost->getPluginOption("video-input", QString()).toString();
+        auto ain  = optHost->getPluginOption("devices.audio-input", QString()).toString();
+        auto aout = optHost->getPluginOption("devices.audio-output", QString()).toString();
+        auto vin  = optHost->getPluginOption("devices.video-input", QString()).toString();
 
         if (!aout.isEmpty())
             d->cb_audioOutDevice->setCurrentIndex(d->cb_audioOutDevice->findData(aout));
