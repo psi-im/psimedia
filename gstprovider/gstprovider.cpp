@@ -197,6 +197,10 @@ private:
     QList<PDevice> audioOutputDevices()
     {
         QList<PDevice> list;
+        if (!deviceMonitor) {
+            qCritical("device monitor is not initialized or destroyed");
+            return list;
+        }
         foreach (const GstDevice &i, deviceMonitor->devices(PDevice::AudioOut))
             list += gstDeviceToPDevice(i, PDevice::AudioOut);
         return list;
@@ -205,6 +209,10 @@ private:
     QList<PDevice> audioInputDevices()
     {
         QList<PDevice> list;
+        if (!deviceMonitor) {
+            qCritical("device monitor is not initialized or destroyed");
+            return list;
+        }
         foreach (const GstDevice &i, deviceMonitor->devices(PDevice::AudioIn))
             list += gstDeviceToPDevice(i, PDevice::AudioIn);
         return list;
@@ -213,6 +221,10 @@ private:
     QList<PDevice> videoInputDevices()
     {
         QList<PDevice> list;
+        if (!deviceMonitor) {
+            qCritical("device monitor is not initialized or destroyed");
+            return list;
+        }
         foreach (const GstDevice &i, deviceMonitor->devices(PDevice::VideoIn))
             list += gstDeviceToPDevice(i, PDevice::VideoIn);
         return list;

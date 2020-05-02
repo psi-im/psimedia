@@ -288,6 +288,7 @@ public:
 
     gboolean loop_started()
     {
+        success = true;
         emit q->started();
         return FALSE;
     }
@@ -420,8 +421,6 @@ bool GstMainLoop::start()
         // d->stateMutex.unlock();
         return false;
     }
-
-    d->success = true;
 
     // qDebug("Using GStreamer version %s", qPrintable(d->gstSession->version));
 

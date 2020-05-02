@@ -28,6 +28,7 @@
 #include "optionaccessor.h"
 #include "plugininfoprovider.h"
 #include "psimediaaccessor.h"
+#include "psimediahost.h"
 #include "psimediaprovider.h"
 
 #include <QIcon>
@@ -92,16 +93,19 @@ bool PsiMediaPlugin::enable()
 
     if (!provider) {
         provider = new PsiMedia::GstProvider();
+        connect(provider, &PsiMedia::GstProvider::initialized, this, [this]() {
+            mediaHost->setMediaProvider(provider);
+
+            tab = new OptionsTabAvCall(provider, psiOptions, mediaHost, icon());
+            psiOptions->addSettingPage(tab);
+
+            auto ain  = psiOptions->getPluginOption("devices.audio-input", QString()).toString();
+            auto aout = psiOptions->getPluginOption("devices.audio-output", QString()).toString();
+            auto vin  = psiOptions->getPluginOption("devices.video-input", QString()).toString();
+            mediaHost->selectMediaDevices(ain, aout, vin);
+        });
         provider->init();
     }
-    if (!tab)
-        tab = new OptionsTabAvCall(provider, psiOptions, mediaHost, icon());
-    psiOptions->addSettingPage(tab);
-
-    auto ain  = psiOptions->getPluginOption("devices.audio-input", QString()).toString();
-    auto aout = psiOptions->getPluginOption("devices.audio-output", QString()).toString();
-    auto vin  = psiOptions->getPluginOption("devices.video-input", QString()).toString();
-    mediaHost->selectMediaDevices(ain, aout, vin);
 
     return enabled;
 }
