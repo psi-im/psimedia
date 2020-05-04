@@ -4,6 +4,12 @@ cmake_minimum_required(VERSION 3.1.0)
 
 get_directory_property(IS_SUBPROJECT PARENT_DIRECTORY)
 
+set(CMAKE_CXX_STANDARD 14)
+
+set( CMAKE_MODULE_PATH
+    ${CMAKE_MODULE_PATH}
+    ${PROJECT_SOURCE_DIR}/cmake/modules
+)
 #Detect MXE cross-compilation
 if( (CMAKE_CROSSCOMPILING) AND (DEFINED MSYS) )
     message(STATUS "MXE environment detected")
@@ -50,15 +56,28 @@ option(BUILD_DEMO "Build psimedia-demo" ON)
 option(BUILD_PSIPLUGIN "Build a regular Psi plugin" ON)
 option(BUILD_GSTPLUGIN "Build a standalone plugin" OFF)
 
-if(USE_PSI)
-    set(CLIENT_NAME "psi")
-else()
-    set(CLIENT_NAME "psi-plus")
+if(BUILD_PSIPLUGIN)
+    find_package(PsiPluginsApi REQUIRED)
+    if(PsiPluginsApi_FOUND)
+        include_directories(${PsiPluginsApi_INCLUDE_DIR})
+        include(${PsiPluginsApi_DIR}/variables.cmake)
+    endif()
 endif()
 
-message(STATUS "${PROJECT_NAME} module will be installed in plugins directory for client: \"${CLIENT_NAME}\"")
+if(NOT DEFINED USE_PSI)
+    if(MAIN_PROGRAM_NAME AND (${MAIN_PROGRAM_NAME} STREQUAL "psi"))
+        set(USE_PSI ON)
+    else()
+        set(USE_PSI OFF)
+    endif()
+elseif(USE_PSI)
+    set(MAIN_PROGRAM_NAME "psi")
+elseif(NOT USE_PSI)
+    set(MAIN_PROGRAM_NAME "psi-plus")
+endif()
+set(CLIENT_NAME ${MAIN_PROGRAM_NAME})
 
-set(CMAKE_CXX_STANDARD 11)
+message(STATUS "${PROJECT_NAME} module will be installed in plugins directory for client: \"${CLIENT_NAME}\"")
 
 #add extra search paths for libraries and includes
 if(WIN32)
@@ -75,32 +94,29 @@ if(IS_SUBPROJECT)
 else()
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/psimedia")
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/")
-endif()
-
-find_program(CLF_BIN clang-format DOC "Path to clang-format binary")
-if(CLF_BIN)
+    find_program(CLF_BIN clang-format DOC "Path to clang-format binary")
+    if(CLF_BIN)
     #Obtain list of source files
-    file(GLOB_RECURSE SRC_LIST
-        *.c
-        *.cc
-        *.cpp
-        *.hpp
-        *.h
-        *.mm
-        qcm/*.qcm
-    )
-    add_custom_target(fix-codestyle
-        COMMAND ${CLF_BIN}
-        --verbose
-        -style=file
-        -i ${SRC_LIST}
-        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-        COMMENT "Fix codestyle with clang-format"
-        VERBATIM
-    )
+        file(GLOB_RECURSE SRC_LIST
+            *.c
+            *.cc
+            *.cpp
+            *.hpp
+            *.h
+            *.mm
+        )
+        add_custom_target(fix-codestyle
+            COMMAND ${CLF_BIN}
+            --verbose
+            -style=file
+            -i ${SRC_LIST}
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            COMMENT "Fix codestyle with clang-format"
+            VERBATIM
+        )
+    endif()
 endif()
 
-set(CMAKE_CXX_STANDARD 14)
 if(BUILD_DEMO)
   add_subdirectory(demo)
   add_subdirectory(gstplugin)

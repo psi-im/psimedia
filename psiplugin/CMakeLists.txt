@@ -27,6 +27,7 @@ include_directories(
     ${CMAKE_CURRENT_LIST_DIR}
     ${PsiPluginsApi_INCLUDE_DIR}
 )
+
 if(NOT PLUGINS_INSTALL_PATH)
     set(PLUGINS_INSTALL_PATH "${CMAKE_INSTALL_PREFIX}/${PLUGINS_PATH}")
 endif()
