@@ -79,7 +79,7 @@ private:
     PsiMedia::GstProvider *provider = nullptr;
 };
 
-QString PsiMediaPlugin::name() const { return "Psi Multimedia"; }
+QString PsiMediaPlugin::name() const { return "Psi Multimedia Plugin"; }
 
 QString PsiMediaPlugin::shortName() const { return "psimedia"; }
 
