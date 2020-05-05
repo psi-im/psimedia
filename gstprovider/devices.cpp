@@ -316,6 +316,7 @@ DeviceMonitor::DeviceMonitor(GstMainLoop *mainLoop) : QObject(mainLoop), d(new P
     GstCaps *caps;
     caps = gst_caps_new_empty_simple("video/x-raw");
     gst_device_monitor_add_filter(d->_monitor, "Video/Source", caps);
+    gst_caps_unref(caps);
     caps = gst_caps_new_empty_simple("image/jpeg");
     gst_device_monitor_add_filter(d->_monitor, "Video/Source", caps);
     gst_caps_unref(caps);

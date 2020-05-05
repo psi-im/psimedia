@@ -365,6 +365,7 @@ GstMainLoop::GstMainLoop(const QString &resPath) : QObject()
 GstMainLoop::~GstMainLoop()
 {
     stop();
+    g_source_unref(&d->bridgeSource->parent);
     delete d;
 }
 
@@ -440,6 +441,9 @@ bool GstMainLoop::start()
     qDebug("kick off glib event loop");
     // kick off the event loop
     g_main_loop_run(d->mainLoop);
+
+    g_source_destroy(timer);
+    g_source_unref(timer);
 
     g_main_loop_unref(d->mainLoop);
     d->mainLoop = nullptr;
