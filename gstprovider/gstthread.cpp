@@ -144,7 +144,7 @@ public:
 
         // ignore "system" plugins
         if (!pluginPath.isEmpty()) {
-            qputenv("GST_PLUGIN_SYSTEM_PATH", pluginPath.toLocal8Bit()); // not sure about windows
+            qEnvironmentVariable("GST_PLUGIN_SYSTEM_PATH", pluginPath); // not sure about windows
             // qputenv("GST_PLUGIN_PATH", "");
         }
 

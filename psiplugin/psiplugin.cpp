@@ -87,12 +87,16 @@ QString PsiMediaPlugin::version() const { return constVersion; }
 
 bool PsiMediaPlugin::enable()
 {
-    if (!psiOptions || !mediaHost)
+    if (!psiOptions || !mediaHost || !appInfo)
         return false;
     enabled = true;
 
     if (!provider) {
-        provider = new PsiMedia::GstProvider();
+        QVariantMap params;
+#ifdef Q_OS_WIN
+        params["resourcePath"] = QDir::toNativeSeparators(appInfo->appResourcesDir() + "/gstreamer");
+#endif
+        provider = new PsiMedia::GstProvider(params);
         connect(provider, &PsiMedia::GstProvider::initialized, this, [this]() {
             mediaHost->setMediaProvider(provider);
 
