@@ -613,7 +613,7 @@ void MainWin::setSendConfig(const QString &s)
         ui.le_sendConfig->setEnabled(true);
         ui.le_sendConfig->setText(s);
         ui.le_sendConfig->setCursorPosition(0);
-        if(ui.le_receiveConfig->text().isEmpty())
+        if (ui.le_receiveConfig->text().isEmpty())
             ui.le_receiveConfig->setText(s);
     } else {
         ui.lb_sendConfig->setEnabled(false);

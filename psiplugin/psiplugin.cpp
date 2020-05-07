@@ -94,7 +94,7 @@ bool PsiMediaPlugin::enable()
     if (!provider) {
         QVariantMap params;
 #ifdef Q_OS_WIN
-        params["resourcePath"] = QDir::toNativeSeparators(appInfo->appResourcesDir() + "/gstreamer");
+        params["resourcePath"] = QDir::toNativeSeparators(appInfo->appResourcesDir() + "/gstreamer-1.0");
 #endif
         provider = new PsiMedia::GstProvider(params);
         connect(provider, &PsiMedia::GstProvider::initialized, this, [this]() {

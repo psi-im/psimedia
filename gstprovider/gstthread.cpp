@@ -83,7 +83,7 @@ private:
     char **data;
 };
 
-static void loadPlugins(const QString &pluginPath, bool print = false)
+/*static void loadPlugins(const QString &pluginPath, bool print = false)
 {
     if (print)
         qDebug("Loading plugins in [%s]", qPrintable(pluginPath));
@@ -110,7 +110,7 @@ static void loadPlugins(const QString &pluginPath, bool print = false)
 
     if (print)
         qDebug("");
-}
+}*/
 
 static int compare_gst_version(uint a1, uint a2, uint a3, uint b1, uint b2, uint b3)
 {
@@ -143,9 +143,8 @@ public:
         args.set(QCoreApplication::instance()->arguments());
 
         // ignore "system" plugins
-        if (!pluginPath.isEmpty()) {
-            qEnvironmentVariable("GST_PLUGIN_SYSTEM_PATH", pluginPath); // not sure about windows
-            // qputenv("GST_PLUGIN_PATH", "");
+        if (!qEnvironmentVariableIsSet("GST_PLUGIN_SYSTEM_PATH") && !pluginPath.isEmpty()) {
+            qputenv("GST_PLUGIN_SYSTEM_PATH", pluginPath.toLocal8Bit());
         }
 
         // you can also use NULLs here if you don't want to pass args
@@ -186,34 +185,15 @@ public:
         // gstcustomelements_register();
         // gstelements_register();
 
-        QStringList reqelem = QStringList() << "opusenc"
-                                            << "opusdec"
-                                            << "vorbisenc"
-                                            << "vorbisdec"
-                                            << "theoraenc"
-                                            << "theoradec"
-                                            << "rtpopuspay"
-                                            << "rtpopusdepay"
-                                            << "rtpvorbispay"
-                                            << "rtpvorbisdepay"
-                                            << "rtptheorapay"
-                                            << "rtptheoradepay"
-                                            << "filesrc"
-                                            << "decodebin"
-                                            << "jpegdec"
-                                            << "oggmux"
-                                            << "oggdemux"
-                                            << "audioconvert"
-                                            << "audioresample"
-                                            << "volume"
-                                            << "level"
-                                            << "videoconvert"
-                                            << "videorate"
-                                            << "videoscale"
-                                            << "rtpjitterbuffer"
-                                            << "audiomixer"
-                                            << "appsink"
-                                            << "webrtcechoprobe";
+        QStringList reqelem
+            = { "opusenc",         "opusdec",      "vorbisenc",    "vorbisdec",      "theoraenc",    "theoradec",
+                "rtpopuspay",      "rtpopusdepay", "rtpvorbispay", "rtpvorbisdepay", "rtptheorapay", "rtptheoradepay",
+                "filesrc",         "decodebin",    "jpegdec",      "oggmux",         "oggdemux",     "audioconvert",
+                "audioresample",   "volume",       "level",        "videoconvert",   "videorate",    "videoscale",
+                "rtpjitterbuffer", "audiomixer",   "appsink" };
+#ifndef Q_OS_WIN
+        reqelem << "webrtcechoprobe";
+#endif
 
 #if defined(Q_OS_MAC)
         reqelem << "osxaudiosrc"
