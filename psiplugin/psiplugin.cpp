@@ -148,12 +148,15 @@ void PsiMediaPlugin::optionChanged(const QString &option) { Q_UNUSED(option); }
 
 QString PsiMediaPlugin::pluginInfo()
 {
-    return tr("Authors: ")
-        + "\n  Justing Kerneges (Barracuda Networks)\n"
+    return name() + "\n\n"
+        + tr("Authors: ")
+        + "\n"
+          "  Justing Kerneges (Barracuda Networks)\n"
           "  Sergey Ilinykh <rion4ik@gmail.com>\n"
-        + tr("Thanks To")
-        + ":\n"
-          "  Vitaly Tonkacheyev <thetvg@gmail.com>\n\n"
+          "\n"
+        + tr("Thanks To") + ":\n"
+          "  Vitaly Tonkacheyev <thetvg@gmail.com>\n"
+          "\n"
         + tr("Media plugin provides functionality required for Audio/Video calls and can also replace some parts of "
              "QtMultimedia.");
 }

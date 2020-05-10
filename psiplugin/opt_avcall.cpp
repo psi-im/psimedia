@@ -120,7 +120,7 @@ QByteArray OptionsTabAvCall::nextToId() const { return "sound"; }
 
 QByteArray OptionsTabAvCall::parentId() const { return ""; }
 
-QString OptionsTabAvCall::title() const { return QObject::tr("Voice Calling"); }
+QString OptionsTabAvCall::title() const { return QObject::tr("Multimedia"); }
 
 QIcon OptionsTabAvCall::icon() const { return _icon; }
 
