@@ -44,7 +44,7 @@ class PsiMediaPlugin : public QObject,
                        public PsiMedia::Plugin,
                        public PsiMediaAccessor {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID "org.psi-im.PsiMediaPlugin")
+    Q_PLUGIN_METADATA(IID "org.psi-im.PsiMediaPlugin" FILE "psiplugin.json")
     Q_INTERFACES(PsiPlugin OptionAccessor ApplicationInfoAccessor PluginInfoProvider IconFactoryAccessor
                      PsiMedia::Plugin PsiMediaAccessor)
 
@@ -148,13 +148,13 @@ void PsiMediaPlugin::optionChanged(const QString &option) { Q_UNUSED(option); }
 
 QString PsiMediaPlugin::pluginInfo()
 {
-    return name() + "\n\n"
-        + tr("Authors: ")
+    return name() + "\n\n" + tr("Authors: ")
         + "\n"
           "  Justing Kerneges (Barracuda Networks)\n"
           "  Sergey Ilinykh <rion4ik@gmail.com>\n"
           "\n"
-        + tr("Thanks To") + ":\n"
+        + tr("Thanks To")
+        + ":\n"
           "  Vitaly Tonkacheyev <thetvg@gmail.com>\n"
           "\n"
         + tr("Media plugin provides functionality required for Audio/Video calls and can also replace some parts of "
