@@ -30,6 +30,8 @@
 #include <QWaitCondition>
 #include <gst/gst.h>
 
+#include <atomic>
+
 namespace PsiMedia {
 
 //----------------------------------------------------------------------------
@@ -251,8 +253,9 @@ public:
 
     GstMainLoop *                                       q = nullptr;
     QString                                             pluginPath;
-    GstSession *                                        gstSession  = nullptr;
-    bool                                                success     = false;
+    GstSession *                                        gstSession = nullptr;
+    std::atomic_bool                                    success;
+    bool                                                stopping;
     GMainContext *                                      mainContext = nullptr;
     GMainLoop *                                         mainLoop    = nullptr;
     QMutex                                              queueMutex;
@@ -262,7 +265,7 @@ public:
     guint                                               bridgeId     = 0;
     QQueue<QPair<GstMainLoop::ContextCallback, void *>> bridgeQueue;
 
-    Private(GstMainLoop *q) : q(q) { }
+    Private(GstMainLoop *q) : q(q), success(false), stopping(false) { }
 
     static gboolean cb_loop_started(gpointer data) { return static_cast<Private *>(data)->loop_started(); }
 
@@ -351,6 +354,10 @@ GstMainLoop::~GstMainLoop()
 
 void GstMainLoop::stop()
 {
+    if (d->stopping || !d->success)
+        return;
+    d->stopping = true;
+
     bool stopped = execInContext(
         [this](void *) {
             g_main_loop_quit(d->mainLoop);
@@ -363,7 +370,9 @@ void GstMainLoop::stop()
         d->stateMutex.lock();
         d->waitCond.wait(&d->stateMutex);
         d->stateMutex.unlock();
+        d->success = false;
     }
+    d->stopping = false;
     qDebug("GstMainLoop::stop() finished");
 }
 
