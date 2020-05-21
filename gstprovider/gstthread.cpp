@@ -287,9 +287,10 @@ public:
             if (exist)
                 p = d->bridgeQueue.dequeue();
             d->queueMutex.unlock();
+            bool stopping = d->stopping.load();
             if (exist)
                 p.first(p.second);
-            if (d->stopping) // FIXME not a real fix for windows crash. Just slightly better than before
+            if (stopping) // REVIEW if it's possible to not have anything else at all on the queue during stop
                 return FALSE;
         }
 
