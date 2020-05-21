@@ -289,6 +289,8 @@ public:
             d->queueMutex.unlock();
             if (exist)
                 p.first(p.second);
+            if (d->stopping) // FIXME not a real fix for windows crash. Just slightly better than before
+                return FALSE;
         }
 
         return d->mainLoop == nullptr ? FALSE : TRUE;
