@@ -47,7 +47,7 @@ class PsiMediaPlugin : public QObject,
     Q_OBJECT
     Q_PLUGIN_METADATA(IID "org.psi-im.PsiMediaPlugin" FILE "psiplugin.json")
     Q_INTERFACES(PsiPlugin OptionAccessor ApplicationInfoAccessor PluginInfoProvider IconFactoryAccessor
-                     PsiMedia::Plugin PsiMediaAccessor)
+                     PsiMedia::Plugin PsiMediaAccessor PluginAccessor)
 
 public:
     PsiMediaPlugin() = default;
