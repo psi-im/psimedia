@@ -140,6 +140,12 @@ static void applyCodecsToWorker(RtpWorker *worker, const RwControlConfigCodecs &
     worker->maxbitrate = codecs.maximumSendingBitrate;
 }
 
+static void applyContainerToWorker(RtpWorker *worker, const RwControlConfigContainer &container)
+{
+    worker->containerName     = container.name;
+    worker->containerMetaData = container.metaData;
+}
+
 //----------------------------------------------------------------------------
 // RwControlLocal
 //----------------------------------------------------------------------------
@@ -481,6 +487,7 @@ bool RwControlRemote::processMessage(RwControlMessage *msg)
 
         applyDevicesToWorker(worker, smsg->devices);
         applyCodecsToWorker(worker, smsg->codecs);
+        applyContainerToWorker(worker, smsg->container);
 
         start_requested = true;
         pending_status  = true;

@@ -122,6 +122,13 @@ public:
     }
 };
 
+// for recoreding only (not rtp)
+class RwControlConfigContainer {
+public:
+    QString     name;
+    QVariantMap metaData;
+};
+
 class RwControlTransmit {
 public:
     bool useAudio;
@@ -205,8 +212,9 @@ public:
 
 class RwControlStartMessage : public RwControlMessage {
 public:
-    RwControlConfigDevices devices;
-    RwControlConfigCodecs  codecs;
+    RwControlConfigDevices   devices;
+    RwControlConfigCodecs    codecs;
+    RwControlConfigContainer container;
 
     RwControlStartMessage() : RwControlMessage(RwControlMessage::Start) { }
 };

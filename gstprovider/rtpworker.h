@@ -63,6 +63,10 @@ public:
     QList<PPayloadInfo> remoteVideoPayloadInfo;
     int                 maxbitrate = 0;
 
+    // only for recordings
+    QString     containerName;
+    QVariantMap containerMetaData;
+
     // read-only
     bool canTransmitAudio;
     bool canTransmitVideo;
