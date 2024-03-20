@@ -58,7 +58,7 @@ if(WIN32)
     endif()
 elseif(APPLE)
     set(CMAKE_DEBUG_POSTFIX "_debug")
-endif(WIN32)
+endif()
 
 include(FindPkgConfig)
 find_package(PkgConfig REQUIRED)
