@@ -76,7 +76,7 @@ add_dependencies(${PLUGIN} gstprovidersrc)
 
 target_link_libraries(
     ${PLUGIN}
-    INTERFACE
+    PRIVATE
     gstprovidersrc
 )
 

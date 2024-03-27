@@ -50,6 +50,7 @@ set(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/gstthread.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rwcontrol.cpp
     ${CMAKE_CURRENT_LIST_DIR}/gstprovider.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/gstprovider.h
     ${CMAKE_CURRENT_LIST_DIR}/gstrtpsessioncontext.cpp
     ${CMAKE_CURRENT_LIST_DIR}/gstrtpsessioncontext.h
     ${CMAKE_CURRENT_LIST_DIR}/gstvideowidget.cpp
@@ -78,10 +79,6 @@ else()
     )
 endif()
 
-include_directories(
-    ${CMAKE_CURRENT_LIST_DIR}
-    ${CMAKE_CURRENT_LIST_DIR}/devices
-)
 
 add_definitions(
     ${GLIBMODULES_CFLAGS}
@@ -130,6 +127,7 @@ endif()
 
 set(PROVIDERLIB gstprovidersrc)
 add_library(${PROVIDERLIB} STATIC ${SOURCES})
+
 target_include_directories(${PROVIDERLIB}
                            PUBLIC
                            ${CMAKE_CURRENT_SOURCE_DIR}
