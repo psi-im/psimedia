@@ -85,7 +85,6 @@ bool PsiMediaPlugin::enable()
 {
     if (!psiOptions || !mediaHost || !appInfo || !pluginHost)
         return false;
-    enabled = true;
 
     if (!provider) {
         QVariantMap params;
@@ -93,6 +92,10 @@ bool PsiMediaPlugin::enable()
         params["resourcePath"] = QDir::toNativeSeparators(appInfo->appResourcesDir() + "/gstreamer-1.0");
 #endif
         provider = new PsiMedia::GstProvider(params);
+        if (!provider->isInitialized()) {
+            delete provider;
+            return false;
+        }
         mediaHost->setMediaProvider(provider);
 
         tab = new OptionsTabAvCall(provider, psiOptions, mediaHost, pluginHost->selfMetadata()["icon"].value<QIcon>());
@@ -104,6 +107,7 @@ bool PsiMediaPlugin::enable()
         mediaHost->selectMediaDevices(ain, aout, vin);
     }
 
+    enabled = true;
     return enabled;
 }
 
