@@ -1331,6 +1331,7 @@ bool RtpWorker::startRecv()
         sinkVideoCb.new_sample  = cb_show_frame_output;
         sinkVideoCb.eos         = cb_packet_ready_eos_stub;     // TODO
         sinkVideoCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
+        sinkVideoCb.new_event   = cb_packet_ready_event_stub;   // TODO
         gst_app_sink_set_callbacks(appVideoSink, &sinkVideoCb, this, nullptr);
 
         gst_bin_add(GST_BIN(recvbin), videortpsrc);
