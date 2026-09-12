@@ -18,7 +18,10 @@
 namespace {
 
 constexpr int NegotiatedPayloadType = 109;
+constexpr int RawSampleRate         = 44100;
+constexpr int RawChannels           = 1;
 constexpr int OpusRtpClockRate      = 48000;
+constexpr int OpusRtpChannels       = 2;
 
 } // namespace
 
@@ -29,16 +32,18 @@ int main(int argc, char **argv)
 
     GstElement *pipeline = gst_pipeline_new(nullptr);
     GstElement *source   = gst_element_factory_make("audiotestsrc", nullptr);
-    GstElement *encoder
-        = PsiMedia::bins_audioenc_create(QStringLiteral("opus"), NegotiatedPayloadType, -1, 16, 2);
-    GstElement *sink = gst_element_factory_make("appsink", nullptr);
-    if (!pipeline || !source || !encoder || !sink) {
+    GstElement *filter   = gst_element_factory_make("capsfilter", nullptr);
+    GstElement *encoder  = PsiMedia::bins_audioenc_create(QStringLiteral("opus"), NegotiatedPayloadType);
+    GstElement *sink     = gst_element_factory_make("appsink", nullptr);
+    if (!pipeline || !source || !filter || !encoder || !sink) {
         qCritical() << "Failed to create Opus RTP test pipeline";
         if (pipeline)
             gst_object_unref(pipeline);
         else {
             if (source)
                 gst_object_unref(source);
+            if (filter)
+                gst_object_unref(filter);
             if (encoder)
                 gst_object_unref(encoder);
             if (sink)
@@ -47,10 +52,15 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    GstCaps *rawCaps = gst_caps_new_simple("audio/x-raw", "rate", G_TYPE_INT, RawSampleRate, "channels", G_TYPE_INT,
+                                           RawChannels, nullptr);
+    g_object_set(G_OBJECT(filter), "caps", rawCaps, nullptr);
+    gst_caps_unref(rawCaps);
+
     g_object_set(G_OBJECT(source), "num-buffers", 20, nullptr);
     g_object_set(G_OBJECT(sink), "sync", FALSE, nullptr);
-    gst_bin_add_many(GST_BIN(pipeline), source, encoder, sink, nullptr);
-    if (!gst_element_link_many(source, encoder, sink, nullptr)) {
+    gst_bin_add_many(GST_BIN(pipeline), source, filter, encoder, sink, nullptr);
+    if (!gst_element_link_many(source, filter, encoder, sink, nullptr)) {
         qCritical() << "Failed to link Opus RTP test pipeline";
         gst_object_unref(pipeline);
         return 2;
@@ -71,16 +81,41 @@ int main(int argc, char **argv)
         return 4;
     }
 
-    bool        ok     = true;
+    bool ok = true;
+
+    GstPad  *encoderSink = gst_element_get_static_pad(encoder, "sink");
+    GstCaps *inputCaps   = encoderSink ? gst_pad_get_current_caps(encoderSink) : nullptr;
+    if (encoderSink)
+        gst_object_unref(encoderSink);
+    const auto *inputStructure = inputCaps ? gst_caps_get_structure(inputCaps, 0) : nullptr;
+    gint        inputRate      = -1;
+    gint        inputChannels  = -1;
+    if (!inputStructure || !gst_structure_get_int(inputStructure, "rate", &inputRate)
+        || !gst_structure_get_int(inputStructure, "channels", &inputChannels) || inputRate != RawSampleRate
+        || inputChannels != RawChannels) {
+        gchar *capsString = inputCaps ? gst_caps_to_string(inputCaps) : nullptr;
+        qCritical() << "Unexpected raw audio caps at encoder input" << capsString;
+        g_free(capsString);
+        ok = false;
+    }
+    if (inputCaps)
+        gst_caps_unref(inputCaps);
+
     GstCaps    *caps   = gst_sample_get_caps(sample);
     GstBuffer  *buffer = gst_sample_get_buffer(sample);
     const auto *s      = caps ? gst_caps_get_structure(caps, 0) : nullptr;
 
-    gint         clockRate = -1;
-    const gchar *encoding  = s ? gst_structure_get_string(s, "encoding-name") : nullptr;
+    gint         clockRate      = -1;
+    const gchar *encoding       = s ? gst_structure_get_string(s, "encoding-name") : nullptr;
+    const gchar *encodingParams = s ? gst_structure_get_string(s, "encoding-params") : nullptr;
+    bool         channelsOk     = false;
+    const int    rtpChannels    = encodingParams ? QString::fromLatin1(encodingParams).toInt(&channelsOk) : -1;
     if (!s || !encoding || QString::fromLatin1(encoding).compare(QStringLiteral("OPUS"), Qt::CaseInsensitive) != 0
-        || !gst_structure_get_int(s, "clock-rate", &clockRate) || clockRate != OpusRtpClockRate) {
-        qCritical() << "Unexpected Opus RTP caps" << (caps ? gst_caps_to_string(caps) : nullptr);
+        || !gst_structure_get_int(s, "clock-rate", &clockRate) || clockRate != OpusRtpClockRate || !channelsOk
+        || rtpChannels != OpusRtpChannels) {
+        gchar *capsString = caps ? gst_caps_to_string(caps) : nullptr;
+        qCritical() << "Unexpected Opus RTP caps" << capsString;
+        g_free(capsString);
         ok = false;
     }
 
@@ -100,6 +135,7 @@ int main(int argc, char **argv)
     if (!ok)
         return 5;
 
-    qInfo() << "Opus RTP payloader emitted PT" << NegotiatedPayloadType << "with clock rate" << OpusRtpClockRate;
+    qInfo() << "Raw audio" << RawSampleRate << "Hz /" << RawChannels << "channel became Opus RTP"
+            << OpusRtpClockRate << "Hz /" << OpusRtpChannels << "channels with PT" << NegotiatedPayloadType;
     return 0;
 }
