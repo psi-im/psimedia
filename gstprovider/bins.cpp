@@ -404,21 +404,21 @@ GstElement *bins_videodec_create(const QString &codec)
 
     GstElement *videortpjitterbuffer = gst_element_factory_make("rtpjitterbuffer", nullptr);
 
-    gst_bin_add(GST_BIN(bin), audiortpjitterbuffer);
-    gst_bin_add(GST_BIN(bin), audiortpdepay);
-    gst_bin_add(GST_BIN(bin), audiodec);
+    gst_bin_add(GST_BIN(bin), videortpjitterbuffer);
+    gst_bin_add(GST_BIN(bin), videortpdepay);
+    gst_bin_add(GST_BIN(bin), videodec);
 
-    gst_element_link_many(audiortpjitterbuffer, audiortpdepay, audiodec, NULL);
+    gst_element_link_many(videortpjitterbuffer, videortpdepay, videodec, NULL);
 
-    g_object_set(G_OBJECT(audiortpjitterbuffer), "latency", (unsigned int)get_rtp_latency(), NULL);
+    g_object_set(G_OBJECT(videortpjitterbuffer), "latency", (unsigned int)get_rtp_latency(), NULL);
 
     GstPad *pad;
 
-    pad = gst_element_get_static_pad(audiortpjitterbuffer, "sink");
+    pad = gst_element_get_static_pad(videortpjitterbuffer, "sink");
     gst_element_add_pad(bin, gst_ghost_pad_new("sink", pad));
     gst_object_unref(GST_OBJECT(pad));
 
-    pad = gst_element_get_static_pad(audiodec, "src");
+    pad = gst_element_get_static_pad(videodec, "src");
     gst_element_add_pad(bin, gst_ghost_pad_new("src", pad));
     gst_object_unref(GST_OBJECT(pad));
 
