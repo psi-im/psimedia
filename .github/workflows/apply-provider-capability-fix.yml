@@ -26,109 +26,47 @@ jobs:
         run: |
           from pathlib import Path
 
-          def replace(path, old, new):
+          def replace(path, old, new, expected=1):
               p = Path(path)
               text = p.read_text()
               count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected one match, got {count}")
+              if count != expected:
+                  raise SystemExit(f"{path}: expected {expected} match(es), got {count}: {old!r}")
               p.write_text(text.replace(old, new))
 
           replace(
               "gstprovider/gstthread.cpp",
-              '''#ifndef Q_OS_WIN
-                  reqelem << "webrtcechoprobe";
-          #endif
-          ''',
-              '''// Echo cancellation is optional. The audio pipeline enables it when the
-                  // echo probe/DSP elements are available, but their absence must not make
-                  // the whole media provider unusable.
-          ''')
+              '#ifndef Q_OS_WIN\n        reqelem << "webrtcechoprobe";\n#endif\n',
+              '// Echo cancellation is optional. The audio pipeline enables it when the\n'
+              '        // echo probe/DSP elements are available, but their absence must not make\n'
+              '        // the whole media provider unusable.\n')
 
           replace(
               "gstprovider/devices.cpp",
-              '''    ~Private()
-              {
-                  delete _platform;
-                  gst_device_monitor_stop(_monitor);
-                  g_object_unref(_monitor);
-              }
-          ''',
-              '''    ~Private()
-              {
-                  delete _platform;
-                  if (_monitor) {
-                      gst_device_monitor_stop(_monitor);
-                      g_object_unref(_monitor);
-                  }
-              }
-          ''')
+              '        delete _platform;\n        gst_device_monitor_stop(_monitor);\n        g_object_unref(_monitor);',
+              '        delete _platform;\n        if (_monitor) {\n            gst_device_monitor_stop(_monitor);\n'
+              '            g_object_unref(_monitor);\n        }')
 
           replace(
               "gstprovider/rtpworker.cpp",
-              '''            if (pd_audiosrc) {
-                              PipelineDeviceOptions opts = pd_audiosrc->options();
-                              opts.aec                   = true;
-                              opts.echoProberName        = pd_audiosink->options().echoProberName;
-                              pd_audiosrc->setOptions(opts);
-                          }
-          ''',
-              '''            if (pd_audiosrc) {
-                              PipelineDeviceOptions opts = pd_audiosrc->options();
-                              opts.echoProberName        = pd_audiosink->options().echoProberName;
-                              opts.aec                   = !opts.echoProberName.isEmpty();
-                              pd_audiosrc->setOptions(opts);
-                          }
-          ''')
+              '                opts.aec                   = true;\n'
+              '                opts.echoProberName        = pd_audiosink->options().echoProberName;',
+              '                opts.echoProberName        = pd_audiosink->options().echoProberName;\n'
+              '                opts.aec                   = !opts.echoProberName.isEmpty();')
 
           replace(
               "gstprovider/pipeline.cpp",
-              '''            if (options.aec) {
-          
-                              GstElement *audioconvert  = gst_element_factory_make("audioconvert", nullptr);
-                              GstElement *audioresample = gst_element_factory_make("audioresample", nullptr);
-                              GstElement *capsfilter    = make_webrtcdsp_filter();
-                              GstElement *webrtcdsp     = gst_element_factory_make("webrtcdsp", nullptr);
-                              g_object_set(webrtcdsp, "probe", options.echoProberName.toLatin1().constData(), nullptr);
-          
-                              gst_bin_add(GST_BIN(bin), audioconvert);
-                              gst_bin_add(GST_BIN(bin), audioresample);
-                              gst_bin_add(GST_BIN(bin), capsfilter);
-                              gst_bin_add(GST_BIN(bin), webrtcdsp);
-          
-                              gst_element_link_many(deviceElement, audioconvert, audioresample, capsfilter, webrtcdsp, nullptr);
-                              pad = gst_element_get_static_pad(webrtcdsp, "src");
-          
-                              webrtcdspInitialized = true;
-                          } else {
-                              pad = gst_element_get_static_pad(deviceElement, "src");
-                          }
-          ''',
-              '''            GstElement *webrtcdsp = nullptr;
-                          if (options.aec)
-                              webrtcdsp = gst_element_factory_make("webrtcdsp", nullptr);
-          
-                          if (webrtcdsp) {
-                              GstElement *audioconvert  = gst_element_factory_make("audioconvert", nullptr);
-                              GstElement *audioresample = gst_element_factory_make("audioresample", nullptr);
-                              GstElement *capsfilter    = make_webrtcdsp_filter();
-                              g_object_set(webrtcdsp, "probe", options.echoProberName.toLatin1().constData(), nullptr);
-          
-                              gst_bin_add(GST_BIN(bin), audioconvert);
-                              gst_bin_add(GST_BIN(bin), audioresample);
-                              gst_bin_add(GST_BIN(bin), capsfilter);
-                              gst_bin_add(GST_BIN(bin), webrtcdsp);
-          
-                              gst_element_link_many(deviceElement, audioconvert, audioresample, capsfilter, webrtcdsp, nullptr);
-                              pad = gst_element_get_static_pad(webrtcdsp, "src");
-          
-                              webrtcdspInitialized = true;
-                          } else {
-                              if (options.aec)
-                                  qWarning("Failed to create GStreamer webrtcdsp element instance. Echo cancellation was disabled");
-                              pad = gst_element_get_static_pad(deviceElement, "src");
-                          }
-          ''')
+              '            if (options.aec) {\n',
+              '            bool aecAvailable = true;\n'
+              '            if (options.aec) {\n'
+              '                GstElementFactory *factory = gst_element_factory_find("webrtcdsp");\n'
+              '                aecAvailable               = factory != nullptr;\n'
+              '                if (factory)\n'
+              '                    gst_object_unref(factory);\n'
+              '                else\n'
+              '                    qWarning("Failed to find GStreamer webrtcdsp element. Echo cancellation was disabled");\n'
+              '            }\n\n'
+              '            if (options.aec && aecAvailable) {\n')
       - name: Commit source changes
         run: |
           git config user.name "github-actions[bot]"
