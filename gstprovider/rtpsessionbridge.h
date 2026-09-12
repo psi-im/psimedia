@@ -100,12 +100,17 @@ private:
     GstPad *recvRtcpSinkPad_ = nullptr;
     GstPad *sendRtcpSrcPad_  = nullptr;
 
-    QMutex                 payloadMutex_;
-    QHash<int, GstCaps *>  payloadCaps_;
-    NetworkPacketHandler   networkPacketHandler_;
-    MediaPacketHandler     mediaPacketHandler_;
-    std::atomic<quint64>   receivedRtcpPackets_ { 0 };
-    bool                   running_ = false;
+    QMutex                payloadMutex_;
+    // Keep the negotiated direction-specific caps intact. rtpsession's
+    // request-pt-map callback uses payloadCaps_, a normalized map containing
+    // only the codec identity/timing fields common to both directions.
+    QHash<int, GstCaps *> localPayloadCaps_;
+    QHash<int, GstCaps *> remotePayloadCaps_;
+    QHash<int, GstCaps *> payloadCaps_;
+    NetworkPacketHandler  networkPacketHandler_;
+    MediaPacketHandler    mediaPacketHandler_;
+    std::atomic<quint64>  receivedRtcpPackets_ { 0 };
+    bool                  running_ = false;
 };
 
 } // namespace PsiMedia
