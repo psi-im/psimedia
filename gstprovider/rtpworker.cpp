@@ -1438,16 +1438,14 @@ fail1:
 bool RtpWorker::addAudioChain()
 {
     // TODO: support other codecs. For now, only Opus is supported here.
-    QString codec    = "opus";
-    int     size     = 16;
-    int     channels = 2;
+    QString codec = "opus";
 #ifdef RTPWORKER_DEBUG
     qDebug("codec=%s", qPrintable(codec));
 #endif
 
     // RTP payload selection is independent of the raw input sample rate.
     // Opus always uses a 48 kHz RTP clock (RFC 7587); GStreamer negotiates
-    // the actual raw audio rate feeding opusenc.
+    // the actual raw audio format feeding opusenc.
     int pt = OpusPayloadType;
     for (int n = 0; n < remoteAudioPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
@@ -1458,7 +1456,7 @@ bool RtpWorker::addAudioChain()
     }
 
     // NOTE: we don't bother with a maxbitrate constraint on audio yet
-    GstElement *audioenc = bins_audioenc_create(codec, pt, -1, size, channels);
+    GstElement *audioenc = bins_audioenc_create(codec, pt);
     if (!audioenc)
         return false;
 
