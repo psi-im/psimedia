@@ -3,7 +3,7 @@ name: Apply packet kind API migration
 on:
   pull_request:
     branches:
-      - jingle/provider-capabilities
+      - master
   workflow_dispatch:
 
 permissions:
