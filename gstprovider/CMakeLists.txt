@@ -20,7 +20,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR ("${CMAKE_BUILD_TYPE}" STREQUAL "Re
     option(PSIMEDIA_PIPELINE_DEBUG "Add -DPIPELINE_DEBUG definition" OFF)
     option(PSIMEDIA_RTPWORKER_DEBUG "Add -DRTPWORKER_DEBUG definition" OFF)
     if(PSIMEDIA_PIPELINE_DEBUG)
-        add_definitions(-DPIPELINE_DEBUG)
+        add_definitions(-DPIPELINE_DEBUG definition)
     endif()
     if(PSIMEDIA_RTPWORKER_DEBUG)
         add_definitions(-DRTPWORKER_DEBUG)
@@ -147,11 +147,11 @@ target_link_libraries(${PROVIDERLIB} PUBLIC
                       ${GSTMODULES_LINK_LIBRARIES}
                       ${GLIBMODULES_LINK_LIBRARIES}
                       Qt${QT_DEFAULT_MAJOR_VERSION}::Core
+                      Qt${QT_DEFAULT_MAJOR_VERSION}::Gui
 )
 
 target_link_libraries(${PROVIDERLIB} PRIVATE
     ${PROJECT_LDFLAGS}
-    Qt${QT_DEFAULT_MAJOR_VERSION}::Gui
     Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets
 )
 
