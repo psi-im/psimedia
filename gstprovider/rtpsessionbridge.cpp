@@ -18,6 +18,8 @@
 namespace PsiMedia {
 namespace {
 
+using CapsMap = QHash<int, GstCaps *>;
+
 GstPad *requestPad(GstElement *element, const char *name)
 {
 #if GST_CHECK_VERSION(1, 20, 0)
@@ -64,6 +66,52 @@ void unrefElement(GstElement *element)
 {
     if (element)
         gst_object_unref(element);
+}
+
+void unrefCapsMap(CapsMap &capsMap)
+{
+    for (auto caps : std::as_const(capsMap))
+        gst_caps_unref(caps);
+    capsMap.clear();
+}
+
+GstCaps *capsForPayload(const PPayloadInfo &payload, const QString &media)
+{
+    GstStructure *structure = payloadInfoToStructure(payload, media);
+    if (!structure)
+        return nullptr;
+    GstCaps *caps = gst_caps_new_empty();
+    gst_caps_append_structure(caps, structure);
+    return caps;
+}
+
+bool payloadsCompatible(const PPayloadInfo &local, const PPayloadInfo &remote)
+{
+    if (!local.name.isEmpty() && !remote.name.isEmpty()
+        && local.name.compare(remote.name, Qt::CaseInsensitive) != 0)
+        return false;
+    if (local.clockrate >= 0 && remote.clockrate >= 0 && local.clockrate != remote.clockrate)
+        return false;
+    if (local.channels >= 0 && remote.channels >= 0 && local.channels != remote.channels)
+        return false;
+    return true;
+}
+
+PPayloadInfo commonPayload(const PPayloadInfo &primary, const PPayloadInfo *secondary)
+{
+    PPayloadInfo common = primary;
+    if (secondary) {
+        if (common.name.isEmpty())
+            common.name = secondary->name;
+        if (common.clockrate < 0)
+            common.clockrate = secondary->clockrate;
+        if (common.channels < 0)
+            common.channels = secondary->channels;
+    }
+    common.ptime = -1;
+    common.maxptime = -1;
+    common.parameters.clear();
+    return common;
 }
 
 } // namespace
@@ -223,51 +271,99 @@ void RtpSessionBridge::cleanup()
     sendRtcpOutput_ = nullptr;
 
     QMutexLocker locker(&payloadMutex_);
-    for (auto caps : std::as_const(payloadCaps_))
-        gst_caps_unref(caps);
-    payloadCaps_.clear();
+    unrefCapsMap(localPayloadCaps_);
+    unrefCapsMap(remotePayloadCaps_);
+    unrefCapsMap(payloadCaps_);
 }
 
 bool RtpSessionBridge::setPayloads(const QList<PPayloadInfo> &local, const QList<PPayloadInfo> &remote)
 {
-    QHash<int, GstCaps *> next;
-    auto add = [&](const PPayloadInfo &payload) {
+    CapsMap                    nextLocal;
+    CapsMap                    nextRemote;
+    CapsMap                    nextCommon;
+    QHash<int, PPayloadInfo>   localInfo;
+    QHash<int, PPayloadInfo>   remoteInfo;
+
+    const auto fail = [&]() {
+        unrefCapsMap(nextLocal);
+        unrefCapsMap(nextRemote);
+        unrefCapsMap(nextCommon);
+        return false;
+    };
+
+    const auto addDirectional = [&](const PPayloadInfo &payload, CapsMap &capsMap,
+                                    QHash<int, PPayloadInfo> &infoMap) {
         if (payload.id < 0 || payload.id > 127)
             return false;
-        GstStructure *structure = payloadInfoToStructure(payload, media_);
-        if (!structure)
+
+        GstCaps *caps = capsForPayload(payload, media_);
+        if (!caps)
             return false;
-        GstCaps *caps = gst_caps_new_empty();
-        gst_caps_append_structure(caps, structure);
-        auto existing = next.constFind(payload.id);
-        if (existing != next.cend()) {
+
+        const auto existing = capsMap.constFind(payload.id);
+        if (existing != capsMap.cend()) {
             const bool same = gst_caps_is_equal(*existing, caps);
             gst_caps_unref(caps);
             return same;
         }
-        next.insert(payload.id, caps);
+
+        capsMap.insert(payload.id, caps);
+        infoMap.insert(payload.id, payload);
         return true;
     };
 
     for (const auto &payload : local) {
-        if (!add(payload)) {
-            for (auto caps : std::as_const(next))
-                gst_caps_unref(caps);
-            return false;
-        }
+        if (!addDirectional(payload, nextLocal, localInfo))
+            return fail();
     }
     for (const auto &payload : remote) {
-        if (!add(payload)) {
-            for (auto caps : std::as_const(next))
-                gst_caps_unref(caps);
-            return false;
-        }
+        if (!addDirectional(payload, nextRemote, remoteInfo))
+            return fail();
     }
 
-    QMutexLocker locker(&payloadMutex_);
-    for (auto caps : std::as_const(payloadCaps_))
-        gst_caps_unref(caps);
-    payloadCaps_ = std::move(next);
+    const auto addCommon = [&](const PPayloadInfo &primary, const PPayloadInfo *secondary) {
+        if (secondary && !payloadsCompatible(primary, *secondary))
+            return false;
+        const PPayloadInfo common = commonPayload(primary, secondary);
+        GstCaps           *caps   = capsForPayload(common, media_);
+        if (!caps)
+            return false;
+        nextCommon.insert(common.id, caps);
+        return true;
+    };
+
+    for (auto it = localInfo.cbegin(); it != localInfo.cend(); ++it) {
+        const auto remoteIt = remoteInfo.constFind(it.key());
+        const auto *peer = remoteIt == remoteInfo.cend() ? nullptr : &remoteIt.value();
+        if (!addCommon(it.value(), peer))
+            return fail();
+    }
+    for (auto it = remoteInfo.cbegin(); it != remoteInfo.cend(); ++it) {
+        if (localInfo.contains(it.key()))
+            continue;
+        if (!addCommon(it.value(), nullptr))
+            return fail();
+    }
+
+    CapsMap oldLocal;
+    CapsMap oldRemote;
+    CapsMap oldCommon;
+    {
+        QMutexLocker locker(&payloadMutex_);
+        oldLocal.swap(localPayloadCaps_);
+        oldRemote.swap(remotePayloadCaps_);
+        oldCommon.swap(payloadCaps_);
+        localPayloadCaps_.swap(nextLocal);
+        remotePayloadCaps_.swap(nextRemote);
+        payloadCaps_.swap(nextCommon);
+    }
+
+    unrefCapsMap(oldLocal);
+    unrefCapsMap(oldRemote);
+    unrefCapsMap(oldCommon);
+
+    // clear-pt-map can synchronously invoke request-pt-map, which takes
+    // payloadMutex_. Never emit it while holding that mutex.
     if (session_)
         g_signal_emit_by_name(session_, "clear-pt-map");
     return true;
