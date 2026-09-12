@@ -147,7 +147,9 @@ public:
 
 class PRtpPacket {
 public:
-    enum class Type { Rtp, Rtcp };
+    // Preserve the historical Provider 1.6 int-sized 0/1 representation while
+    // keeping packet semantics independent of transport topology.
+    enum class Type : int { Rtp = 0, Rtcp = 1 };
 
     QByteArray rawValue;
     Type       type = Type::Rtp;
