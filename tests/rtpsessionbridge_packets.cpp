@@ -164,20 +164,27 @@ bool receiverReportWasProcessed(PsiMedia::RtpSessionBridge &bridge)
     GstStructure *stats = bridge.sessionStats();
     if (!stats)
         return false;
-    const GstStructure *source = findSourceStats(stats, LocalSsrc);
-    gboolean            internal = FALSE;
-    gboolean            haveRb   = FALSE;
+
+    // GStreamer 1.24 stores an incoming report block on the RTPSource that
+    // sent the RR. rb-ssrc identifies the local source that the block reports
+    // on. Checking both SSRCs and the non-zero fields proves that recv_rtcp_sink
+    // did more than merely observe an RTCP buffer.
+    const GstStructure *source = findSourceStats(stats, RemoteReportSsrc);
+    gboolean            internal     = TRUE;
+    gboolean            haveRb       = FALSE;
+    guint               reportedSsrc = 0;
     guint               fractionLost = 0;
     gint                packetsLost  = 0;
     guint               highestSeq   = 0;
     guint               jitter       = 0;
     const bool ok = source && gst_structure_get_boolean(source, "internal", &internal)
         && gst_structure_get_boolean(source, "have-rb", &haveRb)
+        && gst_structure_get_uint(source, "rb-ssrc", &reportedSsrc)
         && gst_structure_get_uint(source, "rb-fractionlost", &fractionLost)
         && gst_structure_get_int(source, "rb-packetslost", &packetsLost)
         && gst_structure_get_uint(source, "rb-exthighestseq", &highestSeq)
-        && gst_structure_get_uint(source, "rb-jitter", &jitter) && internal && haveRb && fractionLost == 7
-        && packetsLost == 3 && highestSeq == 1 && jitter == 123;
+        && gst_structure_get_uint(source, "rb-jitter", &jitter) && !internal && haveRb
+        && reportedSsrc == LocalSsrc && fractionLost == 7 && packetsLost == 3 && highestSeq == 1 && jitter == 123;
     gst_structure_free(stats);
     return ok;
 }
@@ -291,7 +298,7 @@ int main(int argc, char **argv)
         return 10;
     }
     if (!waitUntil([&] { return receiverReportWasProcessed(bridge); })) {
-        qCritical() << "incoming RR fields were not applied to the local RTP source statistics";
+        qCritical() << "incoming RR fields were not applied to the reporting RTP source statistics";
         return 11;
     }
 
