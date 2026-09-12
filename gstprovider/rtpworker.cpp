@@ -7,7 +7,7 @@
  * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
- * but WITHANY WARRANTY; without even the implied warranty of
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
@@ -757,6 +757,7 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
     }
     case GST_MESSAGE_SEGMENT_DONE: {
         // FIXME: we seem to get this event too often?
+        qDebug("Segment-done");
         /*gst_element_seek(sendPipeline, 1, GST_FORMAT_TIME,
                 (GstSeekFlags)(GST_SEEK_FLAG_SEGMENT),
                 GST_SEEK_TYPE_SET, 0, GST_SEEK_TYPE_END, 0);*/
@@ -1318,41 +1319,6 @@ bool RtpWorker::startRecv()
         GstElement *audioresample = gst_element_factory_make("audioresample", nullptr);
         if (pd_audiosink)
             asrc = audioresample;
-
-        gst_bin_add(GST_BIN(recvbin), audiortpsrc);
-        gst_bin_add(GST_BIN(recvbin), audiodec);
-        gst_bin_add(GST_BIN(recvbin), volumeout);
-        gst_bin_add(GST_BIN(recvbin), audioconvert);
-        gst_bin_add(GST_BIN(recvbin), audioresample);
-        if (!asrc)
-            gst_bin_add(GST_BIN(recvbin), audioout);
-
-        gst_element_link_many(audiortpsrc, audiodec, volumeout, audioconvert, audioresample, nullptr);
-        if (!asrc)
-            gst_element_link(audioresample, audioout);
-
-        actual_remoteAudioPayloadInfo = remoteAudioPayloadInfo;
-    }
-
-    if (videortpsrc) {
-        GstElement *videodec = bins_videodec_create(vcodec);
-        if (!videodec)
-            goto fail1;
-
-        GstElement *videoconvert = gst_element_factory_make("videoconvert", nullptr);
-        GstAppSink *appVideoSink = makeVideoPlayAppSink("netvideoplay");
-
-        GstAppSinkCallbacks sinkVideoCb;
-        sinkVideoCb.new_sample  = cb_show_frame_output;
-        sinkVideoCb.eos         = cb_packet_ready_eos_stub;     // TODO
-        sinkVideoCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
-#if GST_CHECK_VERSION(1, 22, 0)
-        sinkVideoCb.new_event = cb_packet_ready_event_stub; // TODO
-#endif
-#if GST_CHECK_VERSION(1, 24, 0)
-        sinkVideoCb.propose_allocation = cb_packet_ready_allocation_stub; // TODO
-#endif
-        gst_app_sink_set_callbacks(appVideoSink, &sinkVideoCb, this, nullptr);
 
         gst_bin_add(GST_BIN(recvbin), audiortpsrc);
         gst_bin_add(GST_BIN(recvbin), audiodec);
