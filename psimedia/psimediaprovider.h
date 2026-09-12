@@ -147,10 +147,10 @@ public:
 
 class PRtpPacket {
 public:
-    QByteArray rawValue;
-    int        portOffset;
+    enum class Type { Rtp, Rtcp };
 
-    inline PRtpPacket() : portOffset(0) { }
+    QByteArray rawValue;
+    Type       type = Type::Rtp;
 };
 
 class Provider : public QObjectInterface {
