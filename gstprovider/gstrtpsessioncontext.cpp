@@ -234,7 +234,7 @@ void GstRtpSessionContext::setVideoPreviewWidget(VideoWidgetContext *widget)
     // no change?
     if (!previewWidget && !widget)
         return;
-    if (outputWidget && outputWidget->context == widget)
+    if (previewWidget && previewWidget->context == widget)
         return;
 
     delete previewWidget;
