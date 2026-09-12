@@ -77,6 +77,45 @@ public:
     /** Feed encoded RTP from the sender pipeline, preserving timestamps. */
     GstFlowReturn sendRtp(GstBuffer *buffer);
 
+    /**
+     * Feed an RTP packet from a legacy byte-oriented sender edge.
+     *
+     * The bridge stamps the packet with its own pipeline running time before
+     * handing it to rtpsession. This keeps RTCP sender-report timing valid even
+     * when the legacy producer has already discarded the original GstBuffer.
+     */
+    GstFlowReturn sendRtp(const PRtpPacket &packet)
+    {
+        if (packet.type != PRtpPacket::Type::Rtp || packet.rawValue.isEmpty())
+            return GST_FLOW_ERROR;
+
+        GstBuffer *buffer = gst_buffer_new_allocate(nullptr, gsize(packet.rawValue.size()), nullptr);
+        if (!buffer)
+            return GST_FLOW_ERROR;
+        if (gst_buffer_fill(buffer, 0, packet.rawValue.constData(), gsize(packet.rawValue.size()))
+            != gsize(packet.rawValue.size())) {
+            gst_buffer_unref(buffer);
+            return GST_FLOW_ERROR;
+        }
+
+        if (pipeline_) {
+            GstClock *clock = gst_element_get_clock(pipeline_);
+            if (clock) {
+                const GstClockTime now  = gst_clock_get_time(clock);
+                const GstClockTime base = gst_element_get_base_time(pipeline_);
+                if (GST_CLOCK_TIME_IS_VALID(now) && GST_CLOCK_TIME_IS_VALID(base) && now >= base) {
+                    GST_BUFFER_PTS(buffer) = now - base;
+                    GST_BUFFER_DTS(buffer) = GST_BUFFER_PTS(buffer);
+                }
+                gst_object_unref(clock);
+            }
+        }
+
+        const auto flow = sendRtp(buffer);
+        gst_buffer_unref(buffer);
+        return flow;
+    }
+
     /** Feed authenticated RTP or RTCP received from the Jingle layer. */
     GstFlowReturn receivePacket(const PRtpPacket &packet);
 

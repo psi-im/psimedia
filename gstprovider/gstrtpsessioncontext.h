@@ -25,7 +25,10 @@
 
 #include "gstrecorder.h"
 #include "gstrtpchannel.h"
+#include "rtpsessionbridge.h"
 #include "rwcontrol.h"
+
+#include <atomic>
 
 namespace PsiMedia {
 
@@ -62,8 +65,17 @@ public:
     // keep these parentless, so they can switch threads
     GstRtpChannel audioRtp;
     GstRtpChannel videoRtp;
-    QMutex        write_mutex;
-    bool          allow_writes;
+
+    // One RFC 3550 session per media type. These live on the provider's Qt
+    // thread while the legacy encoder/decoder worker remains on the GLib
+    // thread. The bridge callbacks serialize packet delivery back here.
+    RtpSessionBridge audioBridge;
+    RtpSessionBridge videoBridge;
+    std::atomic<int> audioSendPayloadType { -1 };
+    std::atomic<int> videoSendPayloadType { -1 };
+
+    QMutex write_mutex;
+    bool   allow_writes;
 
     explicit GstRtpSessionContext(GstMainLoop *_gstLoop, DeviceMonitor *deviceMonitor, QObject *parent = nullptr);
 
@@ -140,6 +152,9 @@ private:
     static void cb_control_rtpAudioOut(const PRtpPacket &packet, void *app);
     static void cb_control_rtpVideoOut(const PRtpPacket &packet, void *app);
     static void cb_control_recordData(const QByteArray &packet, void *app);
+
+    bool configureRtpBridges();
+    void stopRtpBridges();
 
     // note: this is executed from a different thread
     void control_rtpAudioOut(const PRtpPacket &packet);

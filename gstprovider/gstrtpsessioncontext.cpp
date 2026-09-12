@@ -6,11 +6,97 @@
 #endif
 #include "devices.h"
 
+#include <climits>
+
 namespace PsiMedia {
+namespace {
+
+constexpr int OpusPayloadType = 111;
+constexpr int Vp8PayloadType  = 96;
+
+bool isSupportedRemotePayload(const PPayloadInfo &payload, const QString &media)
+{
+    if (payload.id < 0 || payload.id > 127)
+        return false;
+    if (media == QLatin1String("audio")) {
+        return payload.name.compare(QLatin1String("OPUS"), Qt::CaseInsensitive) == 0 && payload.clockrate == 48000
+            && (payload.channels <= 0 || payload.channels == 2);
+    }
+    if (media == QLatin1String("video")) {
+        return payload.name.compare(QLatin1String("VP8"), Qt::CaseInsensitive) == 0 && payload.clockrate == 90000;
+    }
+    return false;
+}
+
+QList<PPayloadInfo> supportedRemotePayloads(const QList<PPayloadInfo> &remote, const QString &media)
+{
+    for (const auto &payload : remote) {
+        if (isSupportedRemotePayload(payload, media))
+            return { payload };
+    }
+    return {};
+}
+
+QList<PPayloadInfo> negotiatedLocalPayloads(bool enabled, bool remoteConfigured, const QList<PPayloadInfo> &remote,
+                                            const QString &media)
+{
+    if (!enabled)
+        return {};
+
+    const auto supportedRemote = supportedRemotePayloads(remote, media);
+    if (remoteConfigured && supportedRemote.isEmpty())
+        return {};
+
+    PPayloadInfo payload;
+    if (media == QLatin1String("audio")) {
+        payload.id        = supportedRemote.isEmpty() ? OpusPayloadType : supportedRemote.constFirst().id;
+        payload.name      = QStringLiteral("OPUS");
+        payload.clockrate = 48000;
+        payload.channels  = 2;
+    } else if (media == QLatin1String("video")) {
+        payload.id        = supportedRemote.isEmpty() ? Vp8PayloadType : supportedRemote.constFirst().id;
+        payload.name      = QStringLiteral("VP8");
+        payload.clockrate = 90000;
+    } else {
+        return {};
+    }
+    return { payload };
+}
+
+bool rewritePayloadType(PRtpPacket &packet, int payloadType)
+{
+    if (packet.type != PRtpPacket::Type::Rtp || payloadType < 0 || payloadType > 127 || packet.rawValue.size() < 2)
+        return false;
+
+    auto *bytes = reinterpret_cast<uchar *>(packet.rawValue.data());
+    if ((bytes[0] >> 6) != 2)
+        return false;
+    bytes[1] = uchar((bytes[1] & 0x80) | payloadType);
+    return true;
+}
+
+PRtpPacket packetFromBuffer(GstBuffer *buffer)
+{
+    PRtpPacket packet;
+    packet.type = PRtpPacket::Type::Rtp;
+    if (!buffer)
+        return packet;
+
+    const gsize size = gst_buffer_get_size(buffer);
+    if (!size || size > gsize(INT_MAX))
+        return packet;
+    packet.rawValue.resize(int(size));
+    if (gst_buffer_extract(buffer, 0, packet.rawValue.data(), size) != size)
+        packet.rawValue.clear();
+    return packet;
+}
+
+} // namespace
 
 GstRtpSessionContext::GstRtpSessionContext(GstMainLoop *_gstLoop, DeviceMonitor *deviceMonitor, QObject *parent) :
     QObject(parent), gstLoop(_gstLoop), control(nullptr), hardwareDeviceMonitor(deviceMonitor), isStarted(false),
-    isStopping(false), pending_status(false), recorder(this), allow_writes(false)
+    isStopping(false), pending_status(false), recorder(this), audioBridge(QStringLiteral("audio")),
+    videoBridge(QStringLiteral("video")), allow_writes(false)
 {
 #ifdef QT_GUI_LIB
     outputWidget  = nullptr;
@@ -33,12 +119,29 @@ GstRtpSessionContext::~GstRtpSessionContext() { cleanup(); }
 
 QObject *GstRtpSessionContext::qobject() { return this; }
 
+void GstRtpSessionContext::stopRtpBridges()
+{
+    audioSendPayloadType.store(-1, std::memory_order_release);
+    videoSendPayloadType.store(-1, std::memory_order_release);
+
+    audioBridge.stop();
+    videoBridge.stop();
+    audioBridge.setNetworkPacketHandler({});
+    audioBridge.setMediaPacketHandler({});
+    videoBridge.setNetworkPacketHandler({});
+    videoBridge.setMediaPacketHandler({});
+}
+
 void GstRtpSessionContext::cleanup()
 {
+    stopRtpBridges();
+
+#ifdef QT_GUI_LIB
     if (outputWidget)
         outputWidget->show_frame(QImage());
     if (previewWidget)
         previewWidget->show_frame(QImage());
+#endif
 
     codecs = RwControlConfigCodecs();
 
@@ -107,6 +210,7 @@ void GstRtpSessionContext::setFileLoopEnabled(bool enabled)
         control->updateDevices(devices);
 }
 
+#ifdef QT_GUI_LIB
 void GstRtpSessionContext::setVideoOutputWidget(VideoWidgetContext *widget)
 {
     // no change?
@@ -144,6 +248,7 @@ void GstRtpSessionContext::setVideoPreviewWidget(VideoWidgetContext *widget)
     if (control)
         control->updateDevices(devices);
 }
+#endif
 
 void GstRtpSessionContext::setRecorder(QIODevice *recordDevice)
 {
@@ -305,19 +410,84 @@ void GstRtpSessionContext::dumpPipeline(std::function<void(const QStringList &)>
 
 void GstRtpSessionContext::push_packet_for_write(GstRtpChannel *from, const PRtpPacket &rtp)
 {
-    QMutexLocker locker(&write_mutex);
-    if (!allow_writes || !control)
-        return;
+    {
+        QMutexLocker locker(&write_mutex);
+        if (!allow_writes || !control)
+            return;
+    }
 
     if (from == &audioRtp)
-        control->rtpAudioIn(rtp);
+        audioBridge.receivePacket(rtp);
     else if (from == &videoRtp)
-        control->rtpVideoIn(rtp);
+        videoBridge.receivePacket(rtp);
+}
+
+bool GstRtpSessionContext::configureRtpBridges()
+{
+    const bool audioEnabled = codecs.useLocalAudioParams && !codecs.localAudioParams.isEmpty();
+    const bool videoEnabled = codecs.useLocalVideoParams && !codecs.localVideoParams.isEmpty();
+
+    const auto localAudio = negotiatedLocalPayloads(audioEnabled, codecs.useRemoteAudioPayloadInfo,
+                                                     codecs.remoteAudioPayloadInfo, QStringLiteral("audio"));
+    const auto localVideo = negotiatedLocalPayloads(videoEnabled, codecs.useRemoteVideoPayloadInfo,
+                                                     codecs.remoteVideoPayloadInfo, QStringLiteral("video"));
+    const auto remoteAudio = supportedRemotePayloads(codecs.remoteAudioPayloadInfo, QStringLiteral("audio"));
+    const auto remoteVideo = supportedRemotePayloads(codecs.remoteVideoPayloadInfo, QStringLiteral("video"));
+
+    lastStatus.localAudioPayloadInfo  = localAudio;
+    lastStatus.localVideoPayloadInfo  = localVideo;
+    lastStatus.remoteAudioPayloadInfo = remoteAudio;
+    lastStatus.remoteVideoPayloadInfo = remoteVideo;
+
+    const auto configure = [this](RtpSessionBridge &bridge, std::atomic<int> &sendPayloadType, GstRtpChannel &channel,
+                                  const QList<PPayloadInfo> &local, const QList<PPayloadInfo> &remote, bool audio) {
+        if (local.isEmpty()) {
+            sendPayloadType.store(-1, std::memory_order_release);
+            bridge.stop();
+            bridge.setNetworkPacketHandler({});
+            bridge.setMediaPacketHandler({});
+            return true;
+        }
+        if (!bridge.isValid() || !bridge.setPayloads(local, remote))
+            return false;
+
+        auto *channelPtr = &channel;
+        bridge.setNetworkPacketHandler(
+            [channelPtr](const PRtpPacket &packet) { channelPtr->push_packet_for_read(packet); });
+        bridge.setMediaPacketHandler([this, audio](GstBuffer *buffer) {
+            const auto packet = packetFromBuffer(buffer);
+            if (packet.rawValue.isEmpty())
+                return;
+
+            QMutexLocker locker(&write_mutex);
+            if (!allow_writes || !control)
+                return;
+            if (audio)
+                control->rtpAudioIn(packet);
+            else
+                control->rtpVideoIn(packet);
+        });
+        sendPayloadType.store(local.constFirst().id, std::memory_order_release);
+        return bridge.start();
+    };
+
+    return configure(audioBridge, audioSendPayloadType, audioRtp, localAudio, remoteAudio, true)
+        && configure(videoBridge, videoSendPayloadType, videoRtp, localVideo, remoteVideo, false);
 }
 
 void GstRtpSessionContext::control_statusReady(const RwControlStatus &status)
 {
     lastStatus = status;
+
+    if (!status.finished && !status.error && pending_status && !status.stopped && !isStopping) {
+        if (!configureRtpBridges()) {
+            lastStatus.error     = true;
+            lastStatus.errorCode = int(ErrorGeneric);
+            cleanup();
+            emit error();
+            return;
+        }
+    }
 
     if (status.finished) {
         // finished status just means the file is done
@@ -357,14 +527,22 @@ void GstRtpSessionContext::control_statusReady(const RwControlStatus &status)
 
 void GstRtpSessionContext::control_previewFrame(const QImage &img)
 {
+#ifdef QT_GUI_LIB
     if (previewWidget)
         previewWidget->show_frame(img);
+#else
+    Q_UNUSED(img)
+#endif
 }
 
 void GstRtpSessionContext::control_outputFrame(const QImage &img)
 {
+#ifdef QT_GUI_LIB
     if (outputWidget)
         outputWidget->show_frame(img);
+#else
+    Q_UNUSED(img)
+#endif
 }
 
 void GstRtpSessionContext::control_audioOutputIntensityChanged(int intensity)
@@ -394,9 +572,21 @@ void GstRtpSessionContext::cb_control_recordData(const QByteArray &packet, void 
     static_cast<GstRtpSessionContext *>(app)->control_recordData(packet);
 }
 
-void GstRtpSessionContext::control_rtpAudioOut(const PRtpPacket &packet) { audioRtp.push_packet_for_read(packet); }
+void GstRtpSessionContext::control_rtpAudioOut(const PRtpPacket &packet)
+{
+    PRtpPacket networkPacket = packet;
+    if (!rewritePayloadType(networkPacket, audioSendPayloadType.load(std::memory_order_acquire)))
+        return;
+    audioBridge.sendRtp(networkPacket);
+}
 
-void GstRtpSessionContext::control_rtpVideoOut(const PRtpPacket &packet) { videoRtp.push_packet_for_read(packet); }
+void GstRtpSessionContext::control_rtpVideoOut(const PRtpPacket &packet)
+{
+    PRtpPacket networkPacket = packet;
+    if (!rewritePayloadType(networkPacket, videoSendPayloadType.load(std::memory_order_acquire)))
+        return;
+    videoBridge.sendRtp(networkPacket);
+}
 
 void GstRtpSessionContext::control_recordData(const QByteArray &packet) { recorder.push_data_for_read(packet); }
 
