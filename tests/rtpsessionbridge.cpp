@@ -90,6 +90,15 @@ bool isRtcp(const QByteArray &packet)
     return (p[0] >> 6) == 2 && p[1] >= 192 && p[1] <= 223;
 }
 
+PsiMedia::PPayloadInfo withParameter(PsiMedia::PPayloadInfo payload, const QString &name, const QString &value)
+{
+    PsiMedia::PPayloadInfo::Parameter parameter;
+    parameter.name  = name;
+    parameter.value = value;
+    payload.parameters.append(parameter);
+    return payload;
+}
+
 int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
 {
     // Callback-owned state must outlive the bridge. Destruction is reverse
@@ -105,8 +114,11 @@ int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
         qCritical() << "failed to create rtpsession bridge";
         return 1;
     }
-    if (!bridge.setPayloads({ opus }, { opus })) {
-        qCritical() << "failed to configure PT map";
+
+    const auto local = withParameter(opus, QStringLiteral("minptime"), QStringLiteral("10"));
+    auto       remote = withParameter(opus, QStringLiteral("useinbandfec"), QStringLiteral("1"));
+    if (!bridge.setPayloads({ local }, { remote })) {
+        qCritical() << "failed to configure direction-specific PT maps";
         return 2;
     }
 
@@ -131,6 +143,16 @@ int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
         qCritical() << "failed to start rtpsession bridge";
         return 3;
     }
+
+    // Direction-specific fmtp is allowed to change while the RTP session is
+    // running. The PT cache must be cleared without re-entering payloadMutex_.
+    remote.parameters.clear();
+    remote = withParameter(remote, QStringLiteral("useinbandfec"), QStringLiteral("0"));
+    if (!bridge.setPayloads({ local }, { remote })) {
+        qCritical() << "failed to update direction-specific PT maps while running";
+        return 12;
+    }
+
     if (earlyExit == EarlyExit::AfterStart)
         return 0;
 
@@ -240,6 +262,22 @@ int main(int argc, char **argv)
     opus.name      = QStringLiteral("OPUS");
     opus.clockrate = 48000;
     opus.channels  = 2;
+
+    {
+        PsiMedia::RtpSessionBridge bridge(QStringLiteral("audio"));
+        if (!bridge.isValid()) {
+            qCritical() << "failed to create compatibility-test bridge";
+            return 30;
+        }
+        auto incompatible = opus;
+        incompatible.name      = QStringLiteral("PCMU");
+        incompatible.clockrate = 8000;
+        incompatible.channels  = 1;
+        if (bridge.setPayloads({ opus }, { incompatible })) {
+            qCritical() << "incompatible codecs sharing one PT were accepted";
+            return 31;
+        }
+    }
 
     // First verify the complete data path, then deliberately leave every
     // post-start stage through an early return. Those probes exercise the same
