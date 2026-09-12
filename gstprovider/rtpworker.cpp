@@ -37,6 +37,14 @@
 #define RTPWORKER_DEBUG
 
 namespace PsiMedia {
+namespace {
+
+constexpr int OpusPayloadType  = 111;
+constexpr int OpusRtpClockRate = 48000;
+constexpr int Vp8PayloadType   = 96;
+constexpr int Vp8RtpClockRate  = 90000;
+
+} // namespace
 
 static GstStaticPadTemplate raw_audio_src_template
     = GST_STATIC_PAD_TEMPLATE("src", GST_PAD_SRC, GST_PAD_ALWAYS, GST_STATIC_CAPS("audio/x-raw"));
@@ -749,7 +757,6 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
     }
     case GST_MESSAGE_SEGMENT_DONE: {
         // FIXME: we seem to get this event too often?
-        qDebug("Segment-done");
         /*gst_element_seek(sendPipeline, 1, GST_FORMAT_TIME,
                 (GstSeekFlags)(GST_SEEK_FLAG_SEGMENT),
                 GST_SEEK_TYPE_SET, 0, GST_SEEK_TYPE_END, 0);*/
@@ -950,9 +957,7 @@ bool RtpWorker::setupSendRecv()
     return true;
 }
 
-bool RtpWorker::startSend() { return startSend(16000); }
-
-bool RtpWorker::startSend(int rate)
+bool RtpWorker::startSend()
 {
     // file source
     if (!infile.isEmpty() || !indata.isEmpty()) {
@@ -1034,7 +1039,7 @@ bool RtpWorker::startSend(int rate)
     send_in_use = true;
 
     if (audiosrc) {
-        if (!addAudioChain(rate)) {
+        if (!addAudioChain()) {
             delete pd_audiosrc;
             pd_audiosrc = nullptr;
             delete pd_videosrc;
@@ -1168,8 +1173,9 @@ bool RtpWorker::startRecv()
     int opus_at = -1;
     for (int n = 0; n < remoteAudioPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
-        if (ri.name.toUpper() == "OPUS") {
+        if (ri.name.compare(QLatin1String("OPUS"), Qt::CaseInsensitive) == 0 && ri.clockrate == OpusRtpClockRate) {
             opus_at = n;
+            break;
         }
     }
 
@@ -1177,7 +1183,7 @@ bool RtpWorker::startRecv()
     int vp8_at = -1;
     for (int n = 0; n < remoteVideoPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteVideoPayloadInfo[n];
-        if (ri.name.toUpper() == "VP8" && ri.clockrate == 90000) {
+        if (ri.name.toUpper() == "VP8" && ri.clockrate == Vp8RtpClockRate) {
             vp8_at = n;
             break;
         }
@@ -1348,6 +1354,41 @@ bool RtpWorker::startRecv()
 #endif
         gst_app_sink_set_callbacks(appVideoSink, &sinkVideoCb, this, nullptr);
 
+        gst_bin_add(GST_BIN(recvbin), audiortpsrc);
+        gst_bin_add(GST_BIN(recvbin), audiodec);
+        gst_bin_add(GST_BIN(recvbin), volumeout);
+        gst_bin_add(GST_BIN(recvbin), audioconvert);
+        gst_bin_add(GST_BIN(recvbin), audioresample);
+        if (!asrc)
+            gst_bin_add(GST_BIN(recvbin), audioout);
+
+        gst_element_link_many(audiortpsrc, audiodec, volumeout, audioconvert, audioresample, nullptr);
+        if (!asrc)
+            gst_element_link(audioresample, audioout);
+
+        actual_remoteAudioPayloadInfo = remoteAudioPayloadInfo;
+    }
+
+    if (videortpsrc) {
+        GstElement *videodec = bins_videodec_create(vcodec);
+        if (!videodec)
+            goto fail1;
+
+        GstElement *videoconvert = gst_element_factory_make("videoconvert", nullptr);
+        GstAppSink *appVideoSink = makeVideoPlayAppSink("netvideoplay");
+
+        GstAppSinkCallbacks sinkVideoCb;
+        sinkVideoCb.new_sample  = cb_show_frame_output;
+        sinkVideoCb.eos         = cb_packet_ready_eos_stub;     // TODO
+        sinkVideoCb.new_preroll = cb_packet_ready_preroll_stub; // TODO
+#if GST_CHECK_VERSION(1, 22, 0)
+        sinkVideoCb.new_event = cb_packet_ready_event_stub; // TODO
+#endif
+#if GST_CHECK_VERSION(1, 24, 0)
+        sinkVideoCb.propose_allocation = cb_packet_ready_allocation_stub; // TODO
+#endif
+        gst_app_sink_set_callbacks(appVideoSink, &sinkVideoCb, this, nullptr);
+
         gst_bin_add(GST_BIN(recvbin), videortpsrc);
         gst_bin_add(GST_BIN(recvbin), videodec);
         gst_bin_add(GST_BIN(recvbin), videoconvert);
@@ -1428,35 +1469,30 @@ fail1:
     return false;
 }
 
-bool RtpWorker::addAudioChain() { return addAudioChain(16000); }
-
-bool RtpWorker::addAudioChain(int rate)
+bool RtpWorker::addAudioChain()
 {
-    // TODO: support other codecs.  for now, we only support opus 16khz
+    // TODO: support other codecs. For now, only Opus is supported here.
     QString codec    = "opus";
     int     size     = 16;
     int     channels = 2;
-    // QString codec = localAudioParams[0].codec;
-    // int rate = localAudioParams[0].sampleRate;
-    // int size = localAudioParams[0].sampleSize;
-    // int channels = localAudioParams[0].channels;
 #ifdef RTPWORKER_DEBUG
     qDebug("codec=%s", qPrintable(codec));
 #endif
 
-    // see if we need to match a pt id
-    int pt = -1;
+    // RTP payload selection is independent of the raw input sample rate.
+    // Opus always uses a 48 kHz RTP clock (RFC 7587); GStreamer negotiates
+    // the actual raw audio rate feeding opusenc.
+    int pt = OpusPayloadType;
     for (int n = 0; n < remoteAudioPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteAudioPayloadInfo[n];
-        if (ri.name.toUpper() == "OPUS" && ri.clockrate == rate) {
+        if (ri.name.compare(QLatin1String("OPUS"), Qt::CaseInsensitive) == 0 && ri.clockrate == OpusRtpClockRate) {
             pt = ri.id;
             break;
         }
     }
 
     // NOTE: we don't bother with a maxbitrate constraint on audio yet
-
-    GstElement *audioenc = bins_audioenc_create(codec, pt, rate, size, channels);
+    GstElement *audioenc = bins_audioenc_create(codec, pt, -1, size, channels);
     if (!audioenc)
         return false;
 
@@ -1535,10 +1571,10 @@ bool RtpWorker::addVideoChain()
 #endif
 
     // see if we need to match a pt id
-    int pt = -1;
+    int pt = Vp8PayloadType;
     for (int n = 0; n < remoteVideoPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteVideoPayloadInfo[n];
-        if (ri.name.toUpper() == "VP8" && ri.clockrate == 90000) {
+        if (ri.name.toUpper() == "VP8" && ri.clockrate == Vp8RtpClockRate) {
             pt = ri.id;
             break;
         }
@@ -1734,7 +1770,7 @@ bool RtpWorker::updateVp8Config()
     int vp8_at = -1;
     for (int n = 0; n < actual_remoteVideoPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = actual_remoteVideoPayloadInfo[n];
-        if (ri.name.toUpper() == "VP8" && ri.clockrate == 90000) {
+        if (ri.name.toUpper() == "VP8" && ri.clockrate == Vp8RtpClockRate) {
             vp8_at = n;
             break;
         }
@@ -1745,7 +1781,8 @@ bool RtpWorker::updateVp8Config()
     // if so, update the videortpsrc caps
     for (int n = 0; n < remoteVideoPayloadInfo.count(); ++n) {
         const PPayloadInfo &ri = remoteVideoPayloadInfo[n];
-        if (ri.name.toUpper() == "VP8" && ri.clockrate == 90000 && ri.id == actual_remoteVideoPayloadInfo[vp8_at].id) {
+        if (ri.name.toUpper() == "VP8" && ri.clockrate == Vp8RtpClockRate
+            && ri.id == actual_remoteVideoPayloadInfo[vp8_at].id) {
             GstStructure *cs = payloadInfoToStructure(remoteVideoPayloadInfo[n], "video");
             if (!cs) {
 #ifdef RTPWORKER_DEBUG
