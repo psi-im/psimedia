@@ -11,11 +11,13 @@
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QEventLoop>
+#include <QPointer>
+#include <QThread>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
-#include <condition_variable>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -34,6 +36,28 @@ enum class EarlyExit {
     AfterRtcpRequest,
     AfterRtcpOutputWait,
 };
+
+template<typename Predicate> bool waitUntil(Predicate predicate, std::chrono::milliseconds timeout = 2s)
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    do {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        if (predicate())
+            return true;
+        std::this_thread::sleep_for(1ms);
+    } while (std::chrono::steady_clock::now() < deadline);
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+    return predicate();
+}
+
+void pumpFor(std::chrono::milliseconds duration)
+{
+    const auto deadline = std::chrono::steady_clock::now() + duration;
+    while (std::chrono::steady_clock::now() < deadline) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        std::this_thread::sleep_for(1ms);
+    }
+}
 
 QByteArray makeRtp(quint16 sequence, quint32 timestamp, quint32 ssrc)
 {
@@ -99,15 +123,26 @@ PsiMedia::PPayloadInfo withParameter(PsiMedia::PPayloadInfo payload, const QStri
     return payload;
 }
 
+bool feedOutgoing(PsiMedia::RtpSessionBridge &bridge, quint16 sequence)
+{
+    const QByteArray outgoing = makeRtp(sequence, quint32(sequence) * 960, 0x10203040);
+    GstBuffer       *out      = bufferFor(outgoing, quint64(sequence) * 20 * GST_MSECOND);
+    if (!out)
+        return false;
+    const auto result = bridge.sendRtp(out);
+    gst_buffer_unref(out);
+    return result == GST_FLOW_OK;
+}
+
 int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
 {
-    // Callback-owned state must outlive the bridge. Destruction is reverse
-    // declaration order, so every early return first tears down the GStreamer
-    // pipeline/callbacks and only then releases these captures.
-    std::mutex                         mutex;
-    std::condition_variable            changed;
+    // Callback-owned state is declared before the bridge so every return path
+    // destroys the callback source first. All user callbacks must execute on
+    // this Qt owner thread, never on a GStreamer streaming thread.
     std::vector<PsiMedia::PRtpPacket> networkPackets;
-    int                                receivedMediaPackets = 0;
+    int                               receivedMediaPackets = 0;
+    bool                              wrongCallbackThread  = false;
+    QThread                          *ownerThread          = QThread::currentThread();
 
     PsiMedia::RtpSessionBridge bridge(QStringLiteral("audio"));
     if (!bridge.isValid()) {
@@ -115,7 +150,7 @@ int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
         return 1;
     }
 
-    const auto local = withParameter(opus, QStringLiteral("minptime"), QStringLiteral("10"));
+    const auto local  = withParameter(opus, QStringLiteral("minptime"), QStringLiteral("10"));
     auto       remote = withParameter(opus, QStringLiteral("useinbandfec"), QStringLiteral("1"));
     if (!bridge.setPayloads({ local }, { remote })) {
         qCritical() << "failed to configure direction-specific PT maps";
@@ -123,20 +158,13 @@ int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
     }
 
     bridge.setNetworkPacketHandler([&](const PsiMedia::PRtpPacket &packet) {
-        {
-            const std::lock_guard lock(mutex);
-            networkPackets.push_back(packet);
-        }
-        changed.notify_all();
+        wrongCallbackThread |= QThread::currentThread() != ownerThread;
+        networkPackets.push_back(packet);
     });
     bridge.setMediaPacketHandler([&](GstBuffer *buffer) {
-        if (buffer && gst_buffer_get_size(buffer) >= 12) {
-            {
-                const std::lock_guard lock(mutex);
-                ++receivedMediaPackets;
-            }
-            changed.notify_all();
-        }
+        wrongCallbackThread |= QThread::currentThread() != ownerThread;
+        if (buffer && gst_buffer_get_size(buffer) >= 12)
+            ++receivedMediaPackets;
     });
     bridge.setRtcpMinimumInterval(10 * GST_MSECOND);
     if (!bridge.start()) {
@@ -156,28 +184,20 @@ int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
     if (earlyExit == EarlyExit::AfterStart)
         return 0;
 
-    const QByteArray outgoing = makeRtp(1, 960, 0x10203040);
-    GstBuffer       *out      = bufferFor(outgoing, 20 * GST_MSECOND);
-    if (!out || bridge.sendRtp(out) != GST_FLOW_OK) {
-        if (out)
-            gst_buffer_unref(out);
+    if (!feedOutgoing(bridge, 1)) {
         qCritical() << "failed to feed outgoing RTP";
         return 4;
     }
-    gst_buffer_unref(out);
     if (earlyExit == EarlyExit::AfterOutgoingFeed)
         return 0;
 
-    {
-        std::unique_lock lock(mutex);
-        if (!changed.wait_for(lock, 2s, [&] {
-                return std::any_of(networkPackets.cbegin(), networkPackets.cend(), [](const auto &packet) {
-                    return packet.type == PsiMedia::PRtpPacket::Type::Rtp;
-                });
-            })) {
-            qCritical() << "outgoing RTP was not emitted";
-            return 5;
-        }
+    if (!waitUntil([&] {
+            return std::any_of(networkPackets.cbegin(), networkPackets.cend(), [](const auto &packet) {
+                return packet.type == PsiMedia::PRtpPacket::Type::Rtp;
+            });
+        })) {
+        qCritical() << "outgoing RTP was not emitted";
+        return 5;
     }
     if (earlyExit == EarlyExit::AfterOutgoingWait)
         return 0;
@@ -195,12 +215,9 @@ int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
     if (earlyExit == EarlyExit::AfterIncomingFeed)
         return 0;
 
-    {
-        std::unique_lock lock(mutex);
-        if (!changed.wait_for(lock, 2s, [&] { return receivedMediaPackets > 0; })) {
-            qCritical() << "incoming RTP did not reach the media side";
-            return 7;
-        }
+    if (!waitUntil([&] { return receivedMediaPackets > 0; })) {
+        qCritical() << "incoming RTP did not reach the media side";
+        return 7;
     }
     if (earlyExit == EarlyExit::AfterIncomingWait)
         return 0;
@@ -215,10 +232,7 @@ int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
     if (earlyExit == EarlyExit::AfterRtcpFeed)
         return 0;
 
-    const auto deadline = std::chrono::steady_clock::now() + 2s;
-    while (bridge.receivedRtcpPackets() == 0 && std::chrono::steady_clock::now() < deadline)
-        std::this_thread::sleep_for(10ms);
-    if (bridge.receivedRtcpPackets() == 0) {
+    if (!waitUntil([&] { return bridge.receivedRtcpPackets() > 0; })) {
         qCritical() << "incoming RTCP was not observed by rtpsession";
         return 9;
     }
@@ -232,21 +246,152 @@ int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
     if (earlyExit == EarlyExit::AfterRtcpRequest)
         return 0;
 
-    {
-        std::unique_lock lock(mutex);
-        if (!changed.wait_for(lock, 2s, [&] {
-                return std::any_of(networkPackets.cbegin(), networkPackets.cend(), [](const auto &packet) {
-                    return packet.type == PsiMedia::PRtpPacket::Type::Rtcp && isRtcp(packet.rawValue);
-                });
-            })) {
-            qCritical() << "outgoing RTCP was not emitted";
-            return 11;
-        }
+    if (!waitUntil([&] {
+            return std::any_of(networkPackets.cbegin(), networkPackets.cend(), [](const auto &packet) {
+                return packet.type == PsiMedia::PRtpPacket::Type::Rtcp && isRtcp(packet.rawValue);
+            });
+        })) {
+        qCritical() << "outgoing RTCP was not emitted";
+        return 11;
     }
     if (earlyExit == EarlyExit::AfterRtcpOutputWait)
         return 0;
 
+    if (wrongCallbackThread) {
+        qCritical() << "RTP bridge invoked a user handler outside its owner thread";
+        return 13;
+    }
+
     bridge.stop();
+    return 0;
+}
+
+int runStopFromCallback(const PsiMedia::PPayloadInfo &opus)
+{
+    int      rtpDeliveries       = 0;
+    bool     stoppedFromCallback = false;
+    bool     wrongCallbackThread = false;
+    QThread *ownerThread         = QThread::currentThread();
+
+    PsiMedia::RtpSessionBridge bridge(QStringLiteral("audio"));
+    if (!bridge.isValid() || !bridge.setPayloads({ opus }, { opus }))
+        return 40;
+
+    bridge.setNetworkPacketHandler([&](const PsiMedia::PRtpPacket &packet) {
+        wrongCallbackThread |= QThread::currentThread() != ownerThread;
+        if (packet.type != PsiMedia::PRtpPacket::Type::Rtp)
+            return;
+        ++rtpDeliveries;
+        if (!stoppedFromCallback) {
+            stoppedFromCallback = true;
+            bridge.stop();
+        }
+    });
+    if (!bridge.start())
+        return 41;
+
+    // Queue several packets before pumping the owner event loop. The first
+    // delivery stops the bridge; generation invalidation must discard the rest.
+    for (quint16 sequence = 1; sequence <= 4; ++sequence) {
+        if (!feedOutgoing(bridge, sequence))
+            return 42;
+    }
+    if (!waitUntil([&] { return stoppedFromCallback; }))
+        return 43;
+    pumpFor(50ms);
+    if (wrongCallbackThread || rtpDeliveries != 1)
+        return 44;
+
+    GstBuffer *afterStop = bufferFor(makeRtp(20, 19200, 0x10203040), 400 * GST_MSECOND);
+    if (!afterStop)
+        return 45;
+    const auto stoppedResult = bridge.sendRtp(afterStop);
+    gst_buffer_unref(afterStop);
+    if (stoppedResult != GST_FLOW_FLUSHING)
+        return 46;
+
+    // A new start gets a new generation. A stale drain event from the previous
+    // generation must not suppress or deliver data in the restarted session.
+    if (!bridge.start())
+        return 47;
+    if (!feedOutgoing(bridge, 21))
+        return 48;
+    if (!waitUntil([&] { return rtpDeliveries == 2; }))
+        return 49;
+    bridge.stop();
+    return 0;
+}
+
+int runConcurrentStop(const PsiMedia::PPayloadInfo &opus)
+{
+    int deliveries = 0;
+    PsiMedia::RtpSessionBridge bridge(QStringLiteral("audio"));
+    if (!bridge.isValid() || !bridge.setPayloads({ opus }, { opus }))
+        return 50;
+    bridge.setNetworkPacketHandler([&](const PsiMedia::PRtpPacket &packet) {
+        if (packet.type == PsiMedia::PRtpPacket::Type::Rtp)
+            ++deliveries;
+    });
+    if (!bridge.start())
+        return 51;
+
+    std::atomic<bool> send { true };
+    std::thread sender([&] {
+        quint16 sequence = 100;
+        while (send.load(std::memory_order_acquire)) {
+            feedOutgoing(bridge, sequence++);
+            std::this_thread::sleep_for(1ms);
+        }
+    });
+
+    pumpFor(30ms);
+    bridge.stop();
+    send.store(false, std::memory_order_release);
+    sender.join();
+
+    const int stoppedAt = deliveries;
+    pumpFor(50ms);
+    if (deliveries != stoppedAt)
+        return 52;
+    return 0;
+}
+
+int runDeleteFromCallback(const PsiMedia::PPayloadInfo &opus)
+{
+    int      deliveries          = 0;
+    bool     wrongCallbackThread = false;
+    QThread *ownerThread         = QThread::currentThread();
+
+    auto *bridge = new PsiMedia::RtpSessionBridge(QStringLiteral("audio"));
+    QPointer<PsiMedia::RtpSessionBridge> guard(bridge);
+    if (!bridge->isValid() || !bridge->setPayloads({ opus }, { opus })) {
+        delete bridge;
+        return 60;
+    }
+
+    bridge->setNetworkPacketHandler([bridge, &deliveries, &wrongCallbackThread, ownerThread](const auto &packet) {
+        wrongCallbackThread |= QThread::currentThread() != ownerThread;
+        if (packet.type != PsiMedia::PRtpPacket::Type::Rtp)
+            return;
+        ++deliveries;
+        delete bridge;
+    });
+    if (!bridge->start()) {
+        delete bridge;
+        return 61;
+    }
+    if (!feedOutgoing(*bridge, 200)) {
+        delete bridge;
+        return 62;
+    }
+
+    if (!waitUntil([&] { return guard.isNull(); })) {
+        delete bridge;
+        return 63;
+    }
+    if (wrongCallbackThread || deliveries != 1)
+        return 64;
+    pumpFor(30ms);
     return 0;
 }
 
@@ -279,9 +424,6 @@ int main(int argc, char **argv)
         }
     }
 
-    // First verify the complete data path, then deliberately leave every
-    // post-start stage through an early return. Those probes exercise the same
-    // RAII teardown that real assertion/error paths use.
     if (const int result = runScenario(opus, EarlyExit::None))
         return result;
 
@@ -301,6 +443,19 @@ int main(int argc, char **argv)
             qCritical() << "early-exit teardown regression failed at point" << int(point) << "with" << result;
             return 20 + result;
         }
+    }
+
+    if (const int result = runStopFromCallback(opus)) {
+        qCritical() << "stop-from-callback regression failed with" << result;
+        return result;
+    }
+    if (const int result = runConcurrentStop(opus)) {
+        qCritical() << "concurrent-stop regression failed with" << result;
+        return result;
+    }
+    if (const int result = runDeleteFromCallback(opus)) {
+        qCritical() << "callback-destruction regression failed with" << result;
+        return result;
     }
 
     qInfo() << "RTP/RTCP session bridge regression passed";
