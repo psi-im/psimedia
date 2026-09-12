@@ -63,16 +63,15 @@ QList<PPayloadInfo> negotiatedLocalPayloads(bool enabled, bool remoteConfigured,
     return { payload };
 }
 
-bool rewritePayloadType(PRtpPacket &packet, int payloadType)
+bool hasPayloadType(const PRtpPacket &packet, int payloadType)
 {
     if (packet.type != PRtpPacket::Type::Rtp || payloadType < 0 || payloadType > 127 || packet.rawValue.size() < 2)
         return false;
 
-    auto *bytes = reinterpret_cast<uchar *>(packet.rawValue.data());
+    const auto *bytes = reinterpret_cast<const uchar *>(packet.rawValue.constData());
     if ((bytes[0] >> 6) != 2)
         return false;
-    bytes[1] = uchar((bytes[1] & 0x80) | payloadType);
-    return true;
+    return (bytes[1] & 0x7f) == payloadType;
 }
 
 PRtpPacket packetFromBuffer(GstBuffer *buffer)
@@ -235,7 +234,7 @@ void GstRtpSessionContext::setVideoPreviewWidget(VideoWidgetContext *widget)
     // no change?
     if (!previewWidget && !widget)
         return;
-    if (previewWidget && previewWidget->context == widget)
+    if (outputWidget && outputWidget->context == widget)
         return;
 
     delete previewWidget;
@@ -574,18 +573,16 @@ void GstRtpSessionContext::cb_control_recordData(const QByteArray &packet, void 
 
 void GstRtpSessionContext::control_rtpAudioOut(const PRtpPacket &packet)
 {
-    PRtpPacket networkPacket = packet;
-    if (!rewritePayloadType(networkPacket, audioSendPayloadType.load(std::memory_order_acquire)))
+    if (!hasPayloadType(packet, audioSendPayloadType.load(std::memory_order_acquire)))
         return;
-    audioBridge.sendRtp(networkPacket);
+    audioBridge.sendRtp(packet);
 }
 
 void GstRtpSessionContext::control_rtpVideoOut(const PRtpPacket &packet)
 {
-    PRtpPacket networkPacket = packet;
-    if (!rewritePayloadType(networkPacket, videoSendPayloadType.load(std::memory_order_acquire)))
+    if (!hasPayloadType(packet, videoSendPayloadType.load(std::memory_order_acquire)))
         return;
-    videoBridge.sendRtp(networkPacket);
+    videoBridge.sendRtp(packet);
 }
 
 void GstRtpSessionContext::control_recordData(const QByteArray &packet) { recorder.push_data_for_read(packet); }
