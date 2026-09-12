@@ -20,7 +20,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR ("${CMAKE_BUILD_TYPE}" STREQUAL "Re
     option(PSIMEDIA_PIPELINE_DEBUG "Add -DPIPELINE_DEBUG definition" OFF)
     option(PSIMEDIA_RTPWORKER_DEBUG "Add -DRTPWORKER_DEBUG definition" OFF)
     if(PSIMEDIA_PIPELINE_DEBUG)
-        add_definitions(-DPIPELINE_DEBUG definition)
+        add_definitions(-DPIPELINE_DEBUG)
     endif()
     if(PSIMEDIA_RTPWORKER_DEBUG)
         add_definitions(-DRTPWORKER_DEBUG)
