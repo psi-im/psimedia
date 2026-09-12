@@ -162,6 +162,12 @@ endif()
 
 if(PSIMEDIA_BUILD_TESTS)
     enable_testing()
+
+    add_executable(psimedia_opusrtppay_test ${ABS_GST_PARENT_DIR}/tests/opusrtppay.cpp)
+    target_link_libraries(psimedia_opusrtppay_test PRIVATE ${PROVIDERLIB})
+    add_test(NAME psimedia_opusrtppay COMMAND psimedia_opusrtppay_test)
+    set_tests_properties(psimedia_opusrtppay PROPERTIES TIMEOUT 15)
+
     add_executable(psimedia_rtpsessionbridge_test ${ABS_GST_PARENT_DIR}/tests/rtpsessionbridge.cpp)
     target_link_libraries(psimedia_rtpsessionbridge_test PRIVATE ${PROVIDERLIB})
     add_test(NAME psimedia_rtpsessionbridge COMMAND psimedia_rtpsessionbridge_test)
