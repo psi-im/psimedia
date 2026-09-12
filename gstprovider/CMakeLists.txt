@@ -23,7 +23,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR ("${CMAKE_BUILD_TYPE}" STREQUAL "Re
         add_definitions(-DPIPELINE_DEBUG)
     endif()
     if(PSIMEDIA_RTPWORKER_DEBUG)
-        add_definitions(-DPIPELINE_DEBUG)
+        add_definitions(-DRTPWORKER_DEBUG)
     endif()
 endif()
 
