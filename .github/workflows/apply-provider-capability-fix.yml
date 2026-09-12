@@ -1,0 +1,136 @@
+name: Apply provider capability fix
+
+on:
+  push:
+    branches:
+      - jingle/provider-capabilities
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: jingle/provider-capabilities
+          fetch-depth: 0
+      - name: Apply focused psimedia fixes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, got {count}")
+              p.write_text(text.replace(old, new))
+
+          replace(
+              "gstprovider/gstthread.cpp",
+              '''#ifndef Q_OS_WIN
+                  reqelem << "webrtcechoprobe";
+          #endif
+          ''',
+              '''// Echo cancellation is optional.  The audio pipeline enables it when both
+                  // the echo probe and DSP elements are available, but their absence must not
+                  // make the whole media provider unusable.
+          ''')
+
+          replace(
+              "gstprovider/devices.cpp",
+              '''    ~Private()
+              {
+                  delete _platform;
+                  gst_device_monitor_stop(_monitor);
+                  g_object_unref(_monitor);
+              }
+          ''',
+              '''    ~Private()
+              {
+                  delete _platform;
+                  if (_monitor) {
+                      gst_device_monitor_stop(_monitor);
+                      g_object_unref(_monitor);
+                  }
+              }
+          ''')
+
+          replace(
+              "gstprovider/rtpworker.cpp",
+              '''            if (pd_audiosrc) {
+                              PipelineDeviceOptions opts = pd_audiosrc->options();
+                              opts.aec                   = true;
+                              opts.echoProberName        = pd_audiosink->options().echoProberName;
+                              pd_audiosrc->setOptions(opts);
+                          }
+          ''',
+              '''            if (pd_audiosrc) {
+                              PipelineDeviceOptions opts = pd_audiosrc->options();
+                              opts.echoProberName        = pd_audiosink->options().echoProberName;
+                              opts.aec                   = !opts.echoProberName.isEmpty();
+                              pd_audiosrc->setOptions(opts);
+                          }
+          ''')
+
+          replace(
+              "gstprovider/pipeline.cpp",
+              '''            if (options.aec) {
+          
+                              GstElement *audioconvert  = gst_element_factory_make("audioconvert", nullptr);
+                              GstElement *audioresample = gst_element_factory_make("audioresample", nullptr);
+                              GstElement *capsfilter    = make_webrtcdsp_filter();
+                              GstElement *webrtcdsp     = gst_element_factory_make("webrtcdsp", nullptr);
+                              g_object_set(webrtcdsp, "probe", options.echoProberName.toLatin1().constData(), nullptr);
+          
+                              gst_bin_add(GST_BIN(bin), audioconvert);
+                              gst_bin_add(GST_BIN(bin), audioresample);
+                              gst_bin_add(GST_BIN(bin), capsfilter);
+                              gst_bin_add(GST_BIN(bin), webrtcdsp);
+          
+                              gst_element_link_many(deviceElement, audioconvert, audioresample, capsfilter, webrtcdsp, nullptr);
+                              pad = gst_element_get_static_pad(webrtcdsp, "src");
+          
+                              webrtcdspInitialized = true;
+                          } else {
+                              pad = gst_element_get_static_pad(deviceElement, "src");
+                          }
+          ''',
+              '''            GstElement *webrtcdsp = nullptr;
+                          if (options.aec)
+                              webrtcdsp = gst_element_factory_make("webrtcdsp", nullptr);
+          
+                          if (webrtcdsp) {
+                              GstElement *audioconvert  = gst_element_factory_make("audioconvert", nullptr);
+                              GstElement *audioresample = gst_element_factory_make("audioresample", nullptr);
+                              GstElement *capsfilter    = make_webrtcdsp_filter();
+                              g_object_set(webrtcdsp, "probe", options.echoProberName.toLatin1().constData(), nullptr);
+          
+                              gst_bin_add(GST_BIN(bin), audioconvert);
+                              gst_bin_add(GST_BIN(bin), audioresample);
+                              gst_bin_add(GST_BIN(bin), capsfilter);
+                              gst_bin_add(GST_BIN(bin), webrtcdsp);
+          
+                              gst_element_link_many(deviceElement, audioconvert, audioresample, capsfilter, webrtcdsp, nullptr);
+                              pad = gst_element_get_static_pad(webrtcdsp, "src");
+          
+                              webrtcdspInitialized = true;
+                          } else {
+                              if (options.aec)
+                                  qWarning("Failed to create GStreamer webrtcdsp element instance. Echo cancellation was disabled");
+                              pad = gst_element_get_static_pad(deviceElement, "src");
+                          }
+          ''')
+      - name: Commit source changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gstprovider/gstthread.cpp gstprovider/devices.cpp gstprovider/rtpworker.cpp gstprovider/pipeline.cpp
+          git diff --cached --check
+          git commit -m "Make echo cancellation an optional media capability"
+          git push origin HEAD:jingle/provider-capabilities
