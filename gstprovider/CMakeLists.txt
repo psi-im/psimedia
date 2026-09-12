@@ -14,6 +14,8 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 get_filename_component(ABS_GST_PARENT_DIR "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
+option(PSIMEDIA_BUILD_TESTS "Build psimedia provider regression tests" OFF)
+
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR ("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo"))
     option(PSIMEDIA_PIPELINE_DEBUG "Add -DPIPELINE_DEBUG definition" OFF)
     option(PSIMEDIA_RTPWORKER_DEBUG "Add -DRTPWORKER_DEBUG definition" OFF)
@@ -21,7 +23,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR ("${CMAKE_BUILD_TYPE}" STREQUAL "Re
         add_definitions(-DPIPELINE_DEBUG)
     endif()
     if(PSIMEDIA_RTPWORKER_DEBUG)
-        add_definitions(-DRTPWORKER_DEBUG)
+        add_definitions(-DPIPELINE_DEBUG)
     endif()
 endif()
 
@@ -46,6 +48,8 @@ set(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/payloadinfo.cpp
     ${CMAKE_CURRENT_LIST_DIR}/pipeline.cpp
     ${CMAKE_CURRENT_LIST_DIR}/bins.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/rtpsessionbridge.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/rtpsessionbridge.h
     ${CMAKE_CURRENT_LIST_DIR}/rtpworker.cpp
     ${CMAKE_CURRENT_LIST_DIR}/gstthread.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rwcontrol.cpp
@@ -156,3 +160,11 @@ target_link_libraries(${PROVIDERLIB} PRIVATE
     Qt${QT_DEFAULT_MAJOR_VERSION}::Gui
     Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets
 )
+
+if(PSIMEDIA_BUILD_TESTS)
+    enable_testing()
+    add_executable(psimedia_rtpsessionbridge_test ${ABS_GST_PARENT_DIR}/tests/rtpsessionbridge.cpp)
+    target_link_libraries(psimedia_rtpsessionbridge_test PRIVATE ${PROVIDERLIB})
+    add_test(NAME psimedia_rtpsessionbridge COMMAND psimedia_rtpsessionbridge_test)
+    set_tests_properties(psimedia_rtpsessionbridge PROPERTIES TIMEOUT 15)
+endif()
