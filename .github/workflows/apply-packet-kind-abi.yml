@@ -1,0 +1,41 @@
+name: Apply packet kind ABI annotation
+
+on:
+  push:
+    branches:
+      - jingle/packet-kind
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: jingle/packet-kind
+          fetch-depth: 0
+      - name: Make packet kind ABI explicit
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('psimedia/psimediaprovider.h')
+          text = p.read_text()
+          old = '    enum class Type { Rtp, Rtcp };\n'
+          new = ('    // Preserve the historical Provider 1.6 int-sized 0/1 representation while\n'
+                 '    // keeping packet semantics independent of transport topology.\n'
+                 '    enum class Type : int { Rtp = 0, Rtcp = 1 };\n')
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one provider packet Type declaration, got {text.count(old)}')
+          p.write_text(text.replace(old, new))
+      - name: Commit focused ABI annotation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add psimedia/psimediaprovider.h
+          git diff --cached --check
+          test "$(git diff --cached --name-only | wc -l)" -eq 1
+          git commit -m "Preserve RTP packet provider ABI layout"
+          git push origin HEAD:jingle/packet-kind
