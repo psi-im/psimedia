@@ -193,7 +193,7 @@ public:
                                 "filesrc",      "decodebin",     "jpegdec",         "oggmux",     "oggdemux",
                                 "audioconvert", "audioresample", "volume",          "level",      "videoconvert",
                                 "videorate",    "videoscale",    "rtpjitterbuffer", "audiomixer", "appsink" };
-// Echo cancellation is optional. The audio pipeline enables it when the
+        // Echo cancellation is optional. The audio pipeline enables it when the
         // echo probe/DSP elements are available, but their absence must not make
         // the whole media provider unusable.
 
