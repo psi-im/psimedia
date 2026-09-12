@@ -19,6 +19,7 @@
 #include <QString>
 
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <utility>
 #include <gst/app/gstappsink.h>
@@ -46,6 +47,17 @@ public:
     // The buffer is borrowed for the duration of the callback. A consumer that
     // queues it or passes ownership to appsrc must take its own reference.
     using MediaPacketHandler = std::function<void(GstBuffer *)>;
+
+    struct DeliveryQueueStats {
+        int     networkPackets     = 0;
+        int     mediaPackets       = 0;
+        quint64 networkBytes       = 0;
+        quint64 mediaBytes         = 0;
+        quint64 networkByteDrops   = 0;
+        quint64 mediaByteDrops     = 0;
+        quint64 networkExpiredDrops = 0;
+        quint64 mediaExpiredDrops   = 0;
+    };
 
     explicit RtpSessionBridge(QString media);
     ~RtpSessionBridge() override;
@@ -91,21 +103,132 @@ public:
         return stats;
     }
 
+    /** Snapshot bounded-delivery diagnostics. Safe from any thread. */
+    DeliveryQueueStats deliveryQueueStats() const
+    {
+        QMutexLocker locker(&deliveryMutex_);
+        return { networkQueue_.rawSize(), mediaQueue_.rawSize(), networkQueue_.bytes(), mediaQueue_.bytes(),
+                 networkQueue_.byteDrops(), mediaQueue_.byteDrops(), networkQueue_.expiredDrops(),
+                 mediaQueue_.expiredDrops() };
+    }
+
+    static constexpr int     maxQueuedNetworkPackets() { return MaxQueuedNetworkPackets; }
+    static constexpr int     maxQueuedMediaPackets() { return MaxQueuedMediaPackets; }
+    static constexpr quint64 maxQueuedNetworkBytes() { return MaxQueuedNetworkBytes; }
+    static constexpr quint64 maxQueuedMediaBytes() { return MaxQueuedMediaBytes; }
+    static constexpr qint64  maxQueuedPacketAgeMs() { return MaxQueuedPacketAgeMs; }
+
     /** Test/diagnostic tuning; owner thread only. */
     void setRtcpMinimumInterval(guint64 interval);
 
 private:
     struct QueuedNetworkPacket {
-        quint64    generation = 0;
+        quint64 generation = 0;
         PRtpPacket packet;
+        std::chrono::steady_clock::time_point enqueuedAt = std::chrono::steady_clock::now();
+
+        quint64 byteSize() const { return quint64(packet.rawValue.size()); }
+        void    release() { }
     };
     struct QueuedMediaPacket {
         quint64    generation = 0;
         GstBuffer *buffer     = nullptr;
+        std::chrono::steady_clock::time_point enqueuedAt = std::chrono::steady_clock::now();
+
+        quint64 byteSize() const { return buffer ? quint64(gst_buffer_get_size(buffer)) : 0; }
+        void release()
+        {
+            if (buffer) {
+                gst_buffer_unref(buffer);
+                buffer = nullptr;
+            }
+        }
     };
 
-    static constexpr int MaxQueuedNetworkPackets = 256;
-    static constexpr int MaxQueuedMediaPackets   = 128;
+    static constexpr int     MaxQueuedNetworkPackets = 256;
+    static constexpr int     MaxQueuedMediaPackets   = 128;
+    static constexpr quint64 MaxQueuedNetworkBytes   = 512 * 1024;
+    static constexpr quint64 MaxQueuedMediaBytes     = 512 * 1024;
+    static constexpr qint64  MaxQueuedPacketAgeMs    = 1000;
+
+    template<typename Item, int MaxPackets, quint64 MaxBytes, qint64 MaxAgeMs> class DeliveryQueue {
+    public:
+        ~DeliveryQueue() { clear(); }
+
+        int size()
+        {
+            purgeExpired();
+            return queue_.size();
+        }
+
+        bool isEmpty()
+        {
+            purgeExpired();
+            return queue_.isEmpty();
+        }
+
+        void enqueue(Item item)
+        {
+            purgeExpired();
+            const quint64 size = item.byteSize();
+            if (size > MaxBytes) {
+                ++byteDrops_;
+                item.release();
+                return;
+            }
+            while (!queue_.isEmpty() && (queue_.size() >= MaxPackets || bytes_ + size > MaxBytes)) {
+                if (bytes_ + size > MaxBytes)
+                    ++byteDrops_;
+                dropFront(false);
+            }
+            queue_.enqueue(std::move(item));
+            bytes_ += size;
+        }
+
+        Item dequeue()
+        {
+            Item item = queue_.dequeue();
+            const quint64 size = item.byteSize();
+            bytes_             = size > bytes_ ? 0 : bytes_ - size;
+            return item;
+        }
+
+        void clear()
+        {
+            while (!queue_.isEmpty())
+                dropFront(false);
+            bytes_ = 0;
+        }
+
+        int     rawSize() const { return queue_.size(); }
+        quint64 bytes() const { return bytes_; }
+        quint64 byteDrops() const { return byteDrops_; }
+        quint64 expiredDrops() const { return expiredDrops_; }
+
+    private:
+        void purgeExpired()
+        {
+            const auto now = std::chrono::steady_clock::now();
+            const auto maxAge = std::chrono::milliseconds(MaxAgeMs);
+            while (!queue_.isEmpty() && now - queue_.head().enqueuedAt > maxAge)
+                dropFront(true);
+        }
+
+        void dropFront(bool expired)
+        {
+            Item item = queue_.dequeue();
+            const quint64 size = item.byteSize();
+            bytes_             = size > bytes_ ? 0 : bytes_ - size;
+            if (expired)
+                ++expiredDrops_;
+            item.release();
+        }
+
+        QQueue<Item> queue_;
+        quint64      bytes_        = 0;
+        quint64      byteDrops_    = 0;
+        quint64      expiredDrops_ = 0;
+    };
 
     static GstCaps       *requestPtMap(GstElement *session, guint pt, gpointer data);
     static GstFlowReturn  sendRtpReady(GstAppSink *sink, gpointer data);
@@ -154,12 +277,13 @@ private:
     QHash<int, GstCaps *> remotePayloadCaps_;
     QHash<int, GstCaps *> payloadCaps_;
 
-    mutable QMutex              deliveryMutex_;
-    QQueue<QueuedNetworkPacket> networkQueue_;
-    QQueue<QueuedMediaPacket>   mediaQueue_;
-    quint64                      generation_                   = 0;
-    quint64                      scheduledDeliveryGeneration_ = 0;
-    bool                         deliveriesEnabled_            = false;
+    mutable QMutex deliveryMutex_;
+    DeliveryQueue<QueuedNetworkPacket, MaxQueuedNetworkPackets, MaxQueuedNetworkBytes, MaxQueuedPacketAgeMs>
+        networkQueue_;
+    DeliveryQueue<QueuedMediaPacket, MaxQueuedMediaPackets, MaxQueuedMediaBytes, MaxQueuedPacketAgeMs> mediaQueue_;
+    quint64 scheduledDeliveryGeneration_ = 0;
+    quint64 generation_                   = 0;
+    bool    deliveriesEnabled_            = false;
 
     NetworkPacketHandler networkPacketHandler_;
     MediaPacketHandler   mediaPacketHandler_;
