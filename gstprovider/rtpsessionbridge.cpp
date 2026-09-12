@@ -11,7 +11,11 @@
 
 #include "payloadinfo.h"
 
+#include <QDebug>
 #include <QMutexLocker>
+#include <QPointer>
+#include <QThread>
+#include <QTimer>
 
 #include <cstring>
 
@@ -116,9 +120,21 @@ PPayloadInfo commonPayload(const PPayloadInfo &primary, const PPayloadInfo *seco
 
 } // namespace
 
-RtpSessionBridge::RtpSessionBridge(QString media) : media_(std::move(media)) { build(); }
+RtpSessionBridge::RtpSessionBridge(QString media) : QObject(nullptr), media_(std::move(media)) { build(); }
 
-RtpSessionBridge::~RtpSessionBridge() { cleanup(); }
+RtpSessionBridge::~RtpSessionBridge()
+{
+    ownerThread("destruction");
+    cleanup();
+}
+
+bool RtpSessionBridge::ownerThread(const char *operation) const
+{
+    if (QThread::currentThread() == thread())
+        return true;
+    qWarning() << "RtpSessionBridge" << operation << "must run on its owner thread";
+    return false;
+}
 
 bool RtpSessionBridge::build()
 {
@@ -133,8 +149,6 @@ bool RtpSessionBridge::build()
 
     if (!pipeline || !session || !sendRtpInput || !recvRtpInput || !recvRtcpInput || !sendRtpOutput
         || !recvRtpOutput || !sendRtcpOutput) {
-        // None of these elements has been parented yet. Release every floating
-        // object explicitly, including rtpsession itself and the pipeline.
         unrefElement(sendRtpInput);
         unrefElement(recvRtpInput);
         unrefElement(recvRtcpInput);
@@ -153,9 +167,6 @@ bool RtpSessionBridge::build()
     configureAppSink(GST_APP_SINK(recvRtpOutput));
     configureAppSink(GST_APP_SINK(sendRtcpOutput));
 
-    // gst_bin_add_many() sinks the elements' floating references. From here on
-    // the pipeline owns all children; member element pointers are borrowed and
-    // cleanup() releases the pipeline after releasing our request-pad refs.
     gst_bin_add_many(GST_BIN(pipeline), session, sendRtpInput, recvRtpInput, recvRtcpInput, sendRtpOutput,
                      recvRtpOutput, sendRtcpOutput, nullptr);
 
@@ -173,8 +184,6 @@ bool RtpSessionBridge::build()
         return false;
     };
 
-    // Feedback packets such as NACK/PLI belong to the media session. Encryption,
-    // RTCP mux and BUNDLE are deliberately outside this bridge.
     gst_util_set_object_arg(G_OBJECT(session_), "rtp-profile", "avpf");
 
     sendRtpSinkPad_  = requestPad(session_, "send_rtp_sink");
@@ -235,9 +244,31 @@ bool RtpSessionBridge::build()
 
 void RtpSessionBridge::cleanup()
 {
-    running_ = false;
-    if (pipeline_)
+    running_.store(false, std::memory_order_release);
+    disableDeliveries();
+
+    GstAppSinkCallbacks noCallbacks {};
+    if (sendRtpOutput_)
+        gst_app_sink_set_callbacks(sendRtpOutput_, &noCallbacks, nullptr, nullptr);
+    if (recvRtpOutput_)
+        gst_app_sink_set_callbacks(recvRtpOutput_, &noCallbacks, nullptr, nullptr);
+    if (sendRtcpOutput_)
+        gst_app_sink_set_callbacks(sendRtcpOutput_, &noCallbacks, nullptr, nullptr);
+
+    if (session_) {
+        g_signal_handlers_disconnect_by_data(session_, this);
+        GObject *internalSession = nullptr;
+        g_object_get(session_, "internal-session", &internalSession, nullptr);
+        if (internalSession) {
+            g_signal_handlers_disconnect_by_data(internalSession, this);
+            g_object_unref(internalSession);
+        }
+    }
+
+    if (pipeline_) {
         gst_element_set_state(pipeline_, GST_STATE_NULL);
+        gst_element_get_state(pipeline_, nullptr, nullptr, GST_CLOCK_TIME_NONE);
+    }
 
     if (session_) {
         if (sendRtpSinkPad_) {
@@ -278,11 +309,14 @@ void RtpSessionBridge::cleanup()
 
 bool RtpSessionBridge::setPayloads(const QList<PPayloadInfo> &local, const QList<PPayloadInfo> &remote)
 {
-    CapsMap                    nextLocal;
-    CapsMap                    nextRemote;
-    CapsMap                    nextCommon;
-    QHash<int, PPayloadInfo>   localInfo;
-    QHash<int, PPayloadInfo>   remoteInfo;
+    if (!ownerThread("setPayloads"))
+        return false;
+
+    CapsMap                  nextLocal;
+    CapsMap                  nextRemote;
+    CapsMap                  nextCommon;
+    QHash<int, PPayloadInfo> localInfo;
+    QHash<int, PPayloadInfo> remoteInfo;
 
     const auto fail = [&]() {
         unrefCapsMap(nextLocal);
@@ -295,18 +329,15 @@ bool RtpSessionBridge::setPayloads(const QList<PPayloadInfo> &local, const QList
                                     QHash<int, PPayloadInfo> &infoMap) {
         if (payload.id < 0 || payload.id > 127)
             return false;
-
         GstCaps *caps = capsForPayload(payload, media_);
         if (!caps)
             return false;
-
         const auto existing = capsMap.constFind(payload.id);
         if (existing != capsMap.cend()) {
             const bool same = gst_caps_is_equal(*existing, caps);
             gst_caps_unref(caps);
             return same;
         }
-
         capsMap.insert(payload.id, caps);
         infoMap.insert(payload.id, payload);
         return true;
@@ -333,8 +364,8 @@ bool RtpSessionBridge::setPayloads(const QList<PPayloadInfo> &local, const QList
     };
 
     for (auto it = localInfo.cbegin(); it != localInfo.cend(); ++it) {
-        const auto remoteIt = remoteInfo.constFind(it.key());
-        const auto *peer = remoteIt == remoteInfo.cend() ? nullptr : &remoteIt.value();
+        const auto  remoteIt = remoteInfo.constFind(it.key());
+        const auto *peer     = remoteIt == remoteInfo.cend() ? nullptr : &remoteIt.value();
         if (!addCommon(it.value(), peer))
             return fail();
     }
@@ -362,8 +393,6 @@ bool RtpSessionBridge::setPayloads(const QList<PPayloadInfo> &local, const QList
     unrefCapsMap(oldRemote);
     unrefCapsMap(oldCommon);
 
-    // clear-pt-map can synchronously invoke request-pt-map, which takes
-    // payloadMutex_. Never emit it while holding that mutex.
     if (session_)
         g_signal_emit_by_name(session_, "clear-pt-map");
     return true;
@@ -371,42 +400,66 @@ bool RtpSessionBridge::setPayloads(const QList<PPayloadInfo> &local, const QList
 
 bool RtpSessionBridge::start()
 {
-    if (!pipeline_)
+    if (!ownerThread("start") || !pipeline_)
         return false;
-    if (running_)
+    if (running_.load(std::memory_order_acquire))
         return true;
-    if (gst_element_set_state(pipeline_, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
+
+    enableDeliveries();
+    running_.store(true, std::memory_order_release);
+    if (gst_element_set_state(pipeline_, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
+        running_.store(false, std::memory_order_release);
+        disableDeliveries();
+        gst_element_set_state(pipeline_, GST_STATE_NULL);
         return false;
-    running_ = true;
+    }
     return true;
 }
 
 void RtpSessionBridge::stop()
 {
-    if (!pipeline_ || !running_)
+    if (!ownerThread("stop"))
         return;
-    running_ = false;
+    const bool wasRunning = running_.exchange(false, std::memory_order_acq_rel);
+    disableDeliveries();
+    if (!pipeline_ || !wasRunning)
+        return;
     gst_element_set_state(pipeline_, GST_STATE_NULL);
+    gst_element_get_state(pipeline_, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 }
 
 GstFlowReturn RtpSessionBridge::sendRtp(GstBuffer *buffer)
 {
-    if (!running_ || !sendRtpInput_ || !buffer)
+    if (!running_.load(std::memory_order_acquire) || !sendRtpInput_ || !buffer)
         return GST_FLOW_FLUSHING;
     return gst_app_src_push_buffer(sendRtpInput_, gst_buffer_ref(buffer));
 }
 
 GstFlowReturn RtpSessionBridge::receivePacket(const PRtpPacket &packet)
 {
-    if (!running_)
+    if (!running_.load(std::memory_order_acquire))
         return GST_FLOW_FLUSHING;
     return packet.type == PRtpPacket::Type::Rtp ? pushRaw(recvRtpInput_, packet.rawValue)
                                                 : pushRaw(recvRtcpInput_, packet.rawValue);
 }
 
+void RtpSessionBridge::setNetworkPacketHandler(NetworkPacketHandler handler)
+{
+    if (!ownerThread("setNetworkPacketHandler"))
+        return;
+    networkPacketHandler_ = std::move(handler);
+}
+
+void RtpSessionBridge::setMediaPacketHandler(MediaPacketHandler handler)
+{
+    if (!ownerThread("setMediaPacketHandler"))
+        return;
+    mediaPacketHandler_ = std::move(handler);
+}
+
 bool RtpSessionBridge::requestRtcp(guint64 maxDelay)
 {
-    if (!running_ || !session_)
+    if (!ownerThread("requestRtcp") || !running_.load(std::memory_order_acquire) || !session_)
         return false;
 
     GObject *internalSession = nullptr;
@@ -422,6 +475,8 @@ bool RtpSessionBridge::requestRtcp(guint64 maxDelay)
 
 void RtpSessionBridge::setRtcpMinimumInterval(guint64 interval)
 {
+    if (!ownerThread("setRtcpMinimumInterval"))
+        return;
     if (session_)
         g_object_set(session_, "rtcp-min-interval", interval, nullptr);
 }
@@ -448,7 +503,9 @@ GstFlowReturn RtpSessionBridge::sendRtcpReady(GstAppSink *sink, gpointer data)
 
 void RtpSessionBridge::receivingRtcp(GObject *, GstBuffer *, gpointer data)
 {
-    static_cast<RtpSessionBridge *>(data)->receivedRtcpPackets_.fetch_add(1);
+    auto *bridge = static_cast<RtpSessionBridge *>(data);
+    if (bridge->running_.load(std::memory_order_acquire))
+        bridge->receivedRtcpPackets_.fetch_add(1);
 }
 
 GstCaps *RtpSessionBridge::payloadCaps(guint pt)
@@ -458,15 +515,155 @@ GstCaps *RtpSessionBridge::payloadCaps(guint pt)
     return it == payloadCaps_.cend() ? nullptr : gst_caps_ref(*it);
 }
 
+quint64 RtpSessionBridge::deliveryGeneration() const
+{
+    QMutexLocker locker(&deliveryMutex_);
+    return deliveriesEnabled_ ? generation_ : 0;
+}
+
+void RtpSessionBridge::enableDeliveries()
+{
+    QMutexLocker locker(&deliveryMutex_);
+    clearDeliveryQueuesLocked();
+    ++generation_;
+    if (generation_ == 0)
+        ++generation_;
+    scheduledDeliveryGeneration_ = 0;
+    deliveriesEnabled_           = true;
+}
+
+void RtpSessionBridge::disableDeliveries()
+{
+    QMutexLocker locker(&deliveryMutex_);
+    deliveriesEnabled_ = false;
+    ++generation_;
+    if (generation_ == 0)
+        ++generation_;
+    scheduledDeliveryGeneration_ = 0;
+    clearDeliveryQueuesLocked();
+}
+
+void RtpSessionBridge::clearDeliveryQueuesLocked()
+{
+    networkQueue_.clear();
+    while (!mediaQueue_.isEmpty()) {
+        const auto item = mediaQueue_.dequeue();
+        if (item.buffer)
+            gst_buffer_unref(item.buffer);
+    }
+}
+
+void RtpSessionBridge::enqueueNetworkPacket(quint64 generation, PRtpPacket packet)
+{
+    if (!generation)
+        return;
+    QMutexLocker locker(&deliveryMutex_);
+    if (!deliveriesEnabled_ || generation != generation_)
+        return;
+    if (networkQueue_.size() >= MaxQueuedNetworkPackets)
+        networkQueue_.dequeue();
+    networkQueue_.enqueue({ generation, std::move(packet) });
+    scheduleDeliveryLocked(generation);
+}
+
+void RtpSessionBridge::enqueueMediaPacket(quint64 generation, GstBuffer *buffer)
+{
+    if (!generation || !buffer)
+        return;
+    QMutexLocker locker(&deliveryMutex_);
+    if (!deliveriesEnabled_ || generation != generation_)
+        return;
+    if (mediaQueue_.size() >= MaxQueuedMediaPackets) {
+        const auto dropped = mediaQueue_.dequeue();
+        if (dropped.buffer)
+            gst_buffer_unref(dropped.buffer);
+    }
+    mediaQueue_.enqueue({ generation, gst_buffer_ref(buffer) });
+    scheduleDeliveryLocked(generation);
+}
+
+void RtpSessionBridge::scheduleDeliveryLocked(quint64 generation)
+{
+    if (scheduledDeliveryGeneration_ == generation)
+        return;
+    scheduledDeliveryGeneration_ = generation;
+    QTimer::singleShot(0, this, [this, generation]() { drainDeliveries(generation); });
+}
+
+void RtpSessionBridge::drainDeliveries(quint64 generation)
+{
+    if (!ownerThread("packet delivery"))
+        return;
+
+    bool preferNetwork = true;
+    for (;;) {
+        QueuedNetworkPacket network;
+        QueuedMediaPacket   media;
+        bool                haveNetwork = false;
+        bool                haveMedia   = false;
+
+        {
+            QMutexLocker locker(&deliveryMutex_);
+            if (!deliveriesEnabled_ || generation != generation_) {
+                if (scheduledDeliveryGeneration_ == generation)
+                    scheduledDeliveryGeneration_ = 0;
+                return;
+            }
+
+            if (!networkQueue_.isEmpty() && (preferNetwork || mediaQueue_.isEmpty())) {
+                network       = networkQueue_.dequeue();
+                haveNetwork   = true;
+                preferNetwork = false;
+            } else if (!mediaQueue_.isEmpty()) {
+                media         = mediaQueue_.dequeue();
+                haveMedia     = true;
+                preferNetwork = true;
+            } else if (!networkQueue_.isEmpty()) {
+                network       = networkQueue_.dequeue();
+                haveNetwork   = true;
+                preferNetwork = false;
+            } else {
+                if (scheduledDeliveryGeneration_ == generation)
+                    scheduledDeliveryGeneration_ = 0;
+                return;
+            }
+        }
+
+        if (haveNetwork) {
+            const auto handler = networkPacketHandler_;
+            if (handler) {
+                QPointer<RtpSessionBridge> guard(this);
+                handler(network.packet);
+                if (!guard)
+                    return;
+            }
+        } else if (haveMedia) {
+            const auto                 handler = mediaPacketHandler_;
+            QPointer<RtpSessionBridge> guard(this);
+            if (handler)
+                handler(media.buffer);
+            if (media.buffer)
+                gst_buffer_unref(media.buffer);
+            if (!guard)
+                return;
+        }
+    }
+}
+
 GstFlowReturn RtpSessionBridge::pullNetworkPacket(GstAppSink *sink, PRtpPacket::Type type)
 {
-    GstSample *sample = gst_app_sink_pull_sample(sink);
+    const quint64 generation = deliveryGeneration();
+    GstSample    *sample     = gst_app_sink_pull_sample(sink);
     if (!sample)
         return GST_FLOW_ERROR;
     GstBuffer *buffer = gst_sample_get_buffer(sample);
     if (!buffer) {
         gst_sample_unref(sample);
         return GST_FLOW_ERROR;
+    }
+    if (!generation) {
+        gst_sample_unref(sample);
+        return GST_FLOW_OK;
     }
 
     const auto size = gst_buffer_get_size(buffer);
@@ -478,15 +675,14 @@ GstFlowReturn RtpSessionBridge::pullNetworkPacket(GstAppSink *sink, PRtpPacket::
         return GST_FLOW_ERROR;
     }
     gst_sample_unref(sample);
-
-    if (networkPacketHandler_)
-        networkPacketHandler_(packet);
+    enqueueNetworkPacket(generation, std::move(packet));
     return GST_FLOW_OK;
 }
 
 GstFlowReturn RtpSessionBridge::pullMediaPacket(GstAppSink *sink)
 {
-    GstSample *sample = gst_app_sink_pull_sample(sink);
+    const quint64 generation = deliveryGeneration();
+    GstSample    *sample     = gst_app_sink_pull_sample(sink);
     if (!sample)
         return GST_FLOW_ERROR;
     GstBuffer *buffer = gst_sample_get_buffer(sample);
@@ -494,8 +690,8 @@ GstFlowReturn RtpSessionBridge::pullMediaPacket(GstAppSink *sink)
         gst_sample_unref(sample);
         return GST_FLOW_ERROR;
     }
-    if (mediaPacketHandler_)
-        mediaPacketHandler_(buffer);
+    if (generation)
+        enqueueMediaPacket(generation, buffer);
     gst_sample_unref(sample);
     return GST_FLOW_OK;
 }
