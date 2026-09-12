@@ -23,7 +23,7 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR ("${CMAKE_BUILD_TYPE}" STREQUAL "Re
         add_definitions(-DPIPELINE_DEBUG)
     endif()
     if(PSIMEDIA_RTPWORKER_DEBUG)
-        add_definitions(-DRTPWORKER_DEBUG)
+        add_definitions(-DPSIMEDIA_RTPWORKER_DEBUG)
     endif()
 endif()
 
@@ -146,28 +146,24 @@ target_include_directories(${PROVIDERLIB}
 target_link_libraries(${PROVIDERLIB} PUBLIC
                       ${GSTMODULES_LINK_LIBRARIES}
                       ${GLIBMODULES_LINK_LIBRARIES}
+                      Qt${QT_DEFAULT_MAJOR_VERSION}::Core
 )
 
-target_link_libraries(${PROVIDERLIB} PRIVATE ${PROJECT_LDFLAGS})
+target_link_libraries(${PROVIDERLIB} PRIVATE
+    ${PROJECT_LDFLAGS}
+    Qt${QT_DEFAULT_MAJOR_VERSION}::Gui
+    Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets
+)
 
 if(APPLE)
     target_link_libraries(${PROVIDERLIB} PRIVATE "-framework CoreAudio")
     set_property(TARGET ${PROVIDERLIB}  PROPERTY SUFFIX ".dylib")
 endif()
 
-target_link_libraries(${PROVIDERLIB} PRIVATE
-    Qt${QT_DEFAULT_MAJOR_VERSION}::Core
-    Qt${QT_DEFAULT_MAJOR_VERSION}::Gui
-    Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets
-)
-
 if(PSIMEDIA_BUILD_TESTS)
     enable_testing()
     add_executable(psimedia_rtpsessionbridge_test ${ABS_GST_PARENT_DIR}/tests/rtpsessionbridge.cpp)
-    target_link_libraries(psimedia_rtpsessionbridge_test PRIVATE
-        ${PROVIDERLIB}
-        Qt${QT_DEFAULT_MAJOR_VERSION}::Core
-    )
+    target_link_libraries(psimedia_rtpsessionbridge_test PRIVATE ${PROVIDERLIB})
     add_test(NAME psimedia_rtpsessionbridge COMMAND psimedia_rtpsessionbridge_test)
     set_tests_properties(psimedia_rtpsessionbridge PROPERTIES TIMEOUT 15)
 endif()
