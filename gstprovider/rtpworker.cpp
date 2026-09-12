@@ -1292,8 +1292,8 @@ bool RtpWorker::startRecv()
             }
             if (pd_audiosrc) {
                 PipelineDeviceOptions opts = pd_audiosrc->options();
-                opts.aec                   = true;
                 opts.echoProberName        = pd_audiosink->options().echoProberName;
+                opts.aec                   = !opts.echoProberName.isEmpty();
                 pd_audiosrc->setOptions(opts);
             }
 
