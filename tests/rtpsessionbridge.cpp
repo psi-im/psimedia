@@ -239,7 +239,7 @@ int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
     if (earlyExit == EarlyExit::AfterRtcpWait)
         return 0;
 
-    if (!bridge.requestRtcp(0)) {
+    if (!bridge.requestRtcp(100 * GST_MSECOND)) {
         qCritical() << "rtpsession refused to schedule RTCP";
         return 10;
     }
