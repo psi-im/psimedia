@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <functional>
+#include <utility>
 #include <gst/app/gstappsink.h>
 #include <gst/app/gstappsrc.h>
 #include <gst/gst.h>
@@ -70,11 +71,11 @@ public:
     void setRtcpMinimumInterval(guint64 interval);
 
 private:
-    static GstCaps      *requestPtMap(GstElement *session, guint pt, gpointer data);
-    static GstFlowReturn sendRtpReady(GstAppSink *sink, gpointer data);
-    static GstFlowReturn recvRtpReady(GstAppSink *sink, gpointer data);
-    static GstFlowReturn sendRtcpReady(GstAppSink *sink, gpointer data);
-    static void          receivingRtcp(GObject *session, GstBuffer *buffer, gpointer data);
+    static GstCaps       *requestPtMap(GstElement *session, guint pt, gpointer data);
+    static GstFlowReturn  sendRtpReady(GstAppSink *sink, gpointer data);
+    static GstFlowReturn  recvRtpReady(GstAppSink *sink, gpointer data);
+    static GstFlowReturn  sendRtcpReady(GstAppSink *sink, gpointer data);
+    static void           receivingRtcp(GObject *session, GstBuffer *buffer, gpointer data);
 
     bool          build();
     void          cleanup();
@@ -85,26 +86,26 @@ private:
 
     QString media_;
 
-    GstElement *pipeline_        = nullptr;
-    GstElement *session_         = nullptr;
-    GstAppSrc  *sendRtpInput_    = nullptr;
-    GstAppSrc  *recvRtpInput_    = nullptr;
-    GstAppSrc  *recvRtcpInput_   = nullptr;
-    GstAppSink *sendRtpOutput_   = nullptr;
-    GstAppSink *recvRtpOutput_   = nullptr;
-    GstAppSink *sendRtcpOutput_  = nullptr;
+    GstElement *pipeline_       = nullptr;
+    GstElement *session_        = nullptr;
+    GstAppSrc  *sendRtpInput_   = nullptr;
+    GstAppSrc  *recvRtpInput_   = nullptr;
+    GstAppSrc  *recvRtcpInput_  = nullptr;
+    GstAppSink *sendRtpOutput_  = nullptr;
+    GstAppSink *recvRtpOutput_  = nullptr;
+    GstAppSink *sendRtcpOutput_ = nullptr;
 
     GstPad *sendRtpSinkPad_  = nullptr;
     GstPad *recvRtpSinkPad_  = nullptr;
     GstPad *recvRtcpSinkPad_ = nullptr;
     GstPad *sendRtcpSrcPad_  = nullptr;
 
-    QMutex                payloadMutex_;
-    QHash<int, GstCaps *> payloadCaps_;
-    NetworkPacketHandler  networkPacketHandler_;
-    MediaPacketHandler    mediaPacketHandler_;
-    std::atomic<quint64>  receivedRtcpPackets_ { 0 };
-    bool                  running_ = false;
+    QMutex                 payloadMutex_;
+    QHash<int, GstCaps *>  payloadCaps_;
+    NetworkPacketHandler   networkPacketHandler_;
+    MediaPacketHandler     mediaPacketHandler_;
+    std::atomic<quint64>   receivedRtcpPackets_ { 0 };
+    bool                   running_ = false;
 };
 
 } // namespace PsiMedia
