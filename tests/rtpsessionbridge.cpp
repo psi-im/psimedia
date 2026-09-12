@@ -239,8 +239,11 @@ int runScenario(const PsiMedia::PPayloadInfo &opus, EarlyExit earlyExit)
     if (earlyExit == EarlyExit::AfterRtcpWait)
         return 0;
 
-    if (!bridge.requestRtcp(100 * GST_MSECOND)) {
-        qCritical() << "rtpsession refused to schedule RTCP";
+    // send-rtcp-full legitimately returns false until the rtpsession task has
+    // initialized next_rtcp_check_time. Keep pumping the owner event loop until
+    // the scheduler is ready, then still require an actual RTCP packet below.
+    if (!waitUntil([&] { return bridge.requestRtcp(100 * GST_MSECOND); })) {
+        qCritical() << "rtpsession scheduler did not become ready for RTCP";
         return 10;
     }
     if (earlyExit == EarlyExit::AfterRtcpRequest)
