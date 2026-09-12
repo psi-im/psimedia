@@ -164,7 +164,10 @@ target_link_libraries(${PROVIDERLIB} PRIVATE
 if(PSIMEDIA_BUILD_TESTS)
     enable_testing()
     add_executable(psimedia_rtpsessionbridge_test ${ABS_GST_PARENT_DIR}/tests/rtpsessionbridge.cpp)
-    target_link_libraries(psimedia_rtpsessionbridge_test PRIVATE ${PROVIDERLIB})
+    target_link_libraries(psimedia_rtpsessionbridge_test PRIVATE
+        ${PROVIDERLIB}
+        Qt${QT_DEFAULT_MAJOR_VERSION}::Core
+    )
     add_test(NAME psimedia_rtpsessionbridge COMMAND psimedia_rtpsessionbridge_test)
     set_tests_properties(psimedia_rtpsessionbridge PROPERTIES TIMEOUT 15)
 endif()
