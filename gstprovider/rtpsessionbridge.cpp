@@ -60,6 +60,12 @@ void configureAppSink(GstAppSink *sink)
     g_object_set(G_OBJECT(sink), "sync", FALSE, "async", FALSE, nullptr);
 }
 
+void unrefElement(GstElement *element)
+{
+    if (element)
+        gst_object_unref(element);
+}
+
 } // namespace
 
 RtpSessionBridge::RtpSessionBridge(QString media) : media_(std::move(media)) { build(); }
@@ -68,33 +74,45 @@ RtpSessionBridge::~RtpSessionBridge() { cleanup(); }
 
 bool RtpSessionBridge::build()
 {
-    pipeline_ = gst_pipeline_new(nullptr);
-    session_  = gst_element_factory_make("rtpsession", nullptr);
-    auto sendRtpInput   = gst_element_factory_make("appsrc", nullptr);
-    auto recvRtpInput   = gst_element_factory_make("appsrc", nullptr);
-    auto recvRtcpInput  = gst_element_factory_make("appsrc", nullptr);
-    auto sendRtpOutput  = gst_element_factory_make("appsink", nullptr);
-    auto recvRtpOutput  = gst_element_factory_make("appsink", nullptr);
-    auto sendRtcpOutput = gst_element_factory_make("appsink", nullptr);
+    GstElement *pipeline       = gst_pipeline_new(nullptr);
+    GstElement *session        = gst_element_factory_make("rtpsession", nullptr);
+    GstElement *sendRtpInput   = gst_element_factory_make("appsrc", nullptr);
+    GstElement *recvRtpInput   = gst_element_factory_make("appsrc", nullptr);
+    GstElement *recvRtcpInput  = gst_element_factory_make("appsrc", nullptr);
+    GstElement *sendRtpOutput  = gst_element_factory_make("appsink", nullptr);
+    GstElement *recvRtpOutput  = gst_element_factory_make("appsink", nullptr);
+    GstElement *sendRtcpOutput = gst_element_factory_make("appsink", nullptr);
 
-    if (!pipeline_ || !session_ || !sendRtpInput || !recvRtpInput || !recvRtcpInput || !sendRtpOutput
+    if (!pipeline || !session || !sendRtpInput || !recvRtpInput || !recvRtcpInput || !sendRtpOutput
         || !recvRtpOutput || !sendRtcpOutput) {
-        if (sendRtpInput)
-            gst_object_unref(sendRtpInput);
-        if (recvRtpInput)
-            gst_object_unref(recvRtpInput);
-        if (recvRtcpInput)
-            gst_object_unref(recvRtcpInput);
-        if (sendRtpOutput)
-            gst_object_unref(sendRtpOutput);
-        if (recvRtpOutput)
-            gst_object_unref(recvRtpOutput);
-        if (sendRtcpOutput)
-            gst_object_unref(sendRtcpOutput);
-        cleanup();
+        // None of these elements has been parented yet. Release every floating
+        // object explicitly, including rtpsession itself and the pipeline.
+        unrefElement(sendRtpInput);
+        unrefElement(recvRtpInput);
+        unrefElement(recvRtcpInput);
+        unrefElement(sendRtpOutput);
+        unrefElement(recvRtpOutput);
+        unrefElement(sendRtcpOutput);
+        unrefElement(session);
+        unrefElement(pipeline);
         return false;
     }
 
+    configureAppSrc(GST_APP_SRC(sendRtpInput), "application/x-rtp", false);
+    configureAppSrc(GST_APP_SRC(recvRtpInput), "application/x-rtp", true);
+    configureAppSrc(GST_APP_SRC(recvRtcpInput), "application/x-rtcp", true);
+    configureAppSink(GST_APP_SINK(sendRtpOutput));
+    configureAppSink(GST_APP_SINK(recvRtpOutput));
+    configureAppSink(GST_APP_SINK(sendRtcpOutput));
+
+    // gst_bin_add_many() sinks the elements' floating references. From here on
+    // the pipeline owns all children; member element pointers are borrowed and
+    // cleanup() releases the pipeline after releasing our request-pad refs.
+    gst_bin_add_many(GST_BIN(pipeline), session, sendRtpInput, recvRtpInput, recvRtcpInput, sendRtpOutput,
+                     recvRtpOutput, sendRtcpOutput, nullptr);
+
+    pipeline_       = pipeline;
+    session_        = session;
     sendRtpInput_   = GST_APP_SRC(sendRtpInput);
     recvRtpInput_   = GST_APP_SRC(recvRtpInput);
     recvRtcpInput_  = GST_APP_SRC(recvRtcpInput);
@@ -102,15 +120,10 @@ bool RtpSessionBridge::build()
     recvRtpOutput_  = GST_APP_SINK(recvRtpOutput);
     sendRtcpOutput_ = GST_APP_SINK(sendRtcpOutput);
 
-    configureAppSrc(sendRtpInput_, "application/x-rtp", false);
-    configureAppSrc(recvRtpInput_, "application/x-rtp", true);
-    configureAppSrc(recvRtcpInput_, "application/x-rtcp", true);
-    configureAppSink(sendRtpOutput_);
-    configureAppSink(recvRtpOutput_);
-    configureAppSink(sendRtcpOutput_);
-
-    gst_bin_add_many(GST_BIN(pipeline_), session_, sendRtpInput, recvRtpInput, recvRtcpInput, sendRtpOutput,
-                     recvRtpOutput, sendRtcpOutput, nullptr);
+    const auto fail = [this]() {
+        cleanup();
+        return false;
+    };
 
     // Feedback packets such as NACK/PLI belong to the media session. Encryption,
     // RTCP mux and BUNDLE are deliberately outside this bridge.
@@ -121,32 +134,32 @@ bool RtpSessionBridge::build()
     recvRtcpSinkPad_ = requestPad(session_, "recv_rtcp_sink");
     sendRtcpSrcPad_  = requestPad(session_, "send_rtcp_src");
     if (!sendRtpSinkPad_ || !recvRtpSinkPad_ || !recvRtcpSinkPad_ || !sendRtcpSrcPad_)
-        goto fail;
+        return fail();
 
     if (!linkSourceToPad(sendRtpInput, sendRtpSinkPad_) || !linkSourceToPad(recvRtpInput, recvRtpSinkPad_)
         || !linkSourceToPad(recvRtcpInput, recvRtcpSinkPad_))
-        goto fail;
+        return fail();
 
     {
         GstPad *pad = gst_element_get_static_pad(session_, "send_rtp_src");
-        if (!pad || !linkPadToSink(pad, sendRtpOutput)) {
-            if (pad)
-                gst_object_unref(pad);
-            goto fail;
-        }
+        if (!pad)
+            return fail();
+        const bool linked = linkPadToSink(pad, sendRtpOutput);
         gst_object_unref(pad);
+        if (!linked)
+            return fail();
     }
     {
         GstPad *pad = gst_element_get_static_pad(session_, "recv_rtp_src");
-        if (!pad || !linkPadToSink(pad, recvRtpOutput)) {
-            if (pad)
-                gst_object_unref(pad);
-            goto fail;
-        }
+        if (!pad)
+            return fail();
+        const bool linked = linkPadToSink(pad, recvRtpOutput);
         gst_object_unref(pad);
+        if (!linked)
+            return fail();
     }
     if (!linkPadToSink(sendRtcpSrcPad_, sendRtcpOutput))
-        goto fail;
+        return fail();
 
     g_signal_connect(session_, "request-pt-map", G_CALLBACK(requestPtMap), this);
 
@@ -162,20 +175,14 @@ bool RtpSessionBridge::build()
     sendRtcpCallbacks.new_sample = sendRtcpReady;
     gst_app_sink_set_callbacks(sendRtcpOutput_, &sendRtcpCallbacks, this, nullptr);
 
-    {
-        GObject *internalSession = nullptr;
-        g_object_get(session_, "internal-session", &internalSession, nullptr);
-        if (!internalSession)
-            goto fail;
-        g_signal_connect(internalSession, "on-receiving-rtcp", G_CALLBACK(receivingRtcp), this);
-        g_object_unref(internalSession);
-    }
+    GObject *internalSession = nullptr;
+    g_object_get(session_, "internal-session", &internalSession, nullptr);
+    if (!internalSession)
+        return fail();
+    g_signal_connect(internalSession, "on-receiving-rtcp", G_CALLBACK(receivingRtcp), this);
+    g_object_unref(internalSession);
 
     return true;
-
-fail:
-    cleanup();
-    return false;
 }
 
 void RtpSessionBridge::cleanup()
