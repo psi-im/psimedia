@@ -186,10 +186,8 @@ private:
 
     bool        setupSendRecv();
     bool        startSend();
-    bool        startSend(int rate);
     bool        startRecv();
     bool        addAudioChain();
-    bool        addAudioChain(int rate);
     bool        addVideoChain();
     bool        getCaps();
     bool        updateVp8Config();
