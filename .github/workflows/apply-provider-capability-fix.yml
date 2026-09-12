@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - jingle/provider-capabilities
+  pull_request:
+    branches:
+      - master
   workflow_dispatch:
 
 permissions:
@@ -37,9 +40,9 @@ jobs:
                   reqelem << "webrtcechoprobe";
           #endif
           ''',
-              '''// Echo cancellation is optional.  The audio pipeline enables it when both
-                  // the echo probe and DSP elements are available, but their absence must not
-                  // make the whole media provider unusable.
+              '''// Echo cancellation is optional. The audio pipeline enables it when the
+                  // echo probe/DSP elements are available, but their absence must not make
+                  // the whole media provider unusable.
           ''')
 
           replace(
