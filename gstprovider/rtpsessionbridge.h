@@ -77,6 +77,20 @@ public:
 
     quint64 receivedRtcpPackets() const { return receivedRtcpPackets_.load(); }
 
+    /**
+     * Return a caller-owned copy of rtpsession's diagnostic statistics.
+     * The caller must release a non-null result with gst_structure_free().
+     * Owner thread only.
+     */
+    GstStructure *sessionStats() const
+    {
+        if (!ownerThread("sessionStats") || !session_)
+            return nullptr;
+        GstStructure *stats = nullptr;
+        g_object_get(session_, "stats", &stats, nullptr);
+        return stats;
+    }
+
     /** Test/diagnostic tuning; owner thread only. */
     void setRtcpMinimumInterval(guint64 interval);
 
@@ -86,8 +100,8 @@ private:
         PRtpPacket packet;
     };
     struct QueuedMediaPacket {
-        quint64   generation = 0;
-        GstBuffer *buffer    = nullptr;
+        quint64    generation = 0;
+        GstBuffer *buffer     = nullptr;
     };
 
     static constexpr int MaxQueuedNetworkPackets = 256;
@@ -132,7 +146,7 @@ private:
     GstPad *recvRtcpSinkPad_ = nullptr;
     GstPad *sendRtcpSrcPad_  = nullptr;
 
-    QMutex                payloadMutex_;
+    QMutex payloadMutex_;
     // Keep the negotiated direction-specific caps intact. rtpsession's
     // request-pt-map callback uses payloadCaps_, a normalized map containing
     // only the codec identity/timing fields common to both directions.
@@ -140,12 +154,12 @@ private:
     QHash<int, GstCaps *> remotePayloadCaps_;
     QHash<int, GstCaps *> payloadCaps_;
 
-    mutable QMutex             deliveryMutex_;
+    mutable QMutex              deliveryMutex_;
     QQueue<QueuedNetworkPacket> networkQueue_;
     QQueue<QueuedMediaPacket>   mediaQueue_;
-    quint64                     generation_                  = 0;
-    quint64                     scheduledDeliveryGeneration_ = 0;
-    bool                        deliveriesEnabled_           = false;
+    quint64                      generation_                   = 0;
+    quint64                      scheduledDeliveryGeneration_ = 0;
+    bool                         deliveriesEnabled_            = false;
 
     NetworkPacketHandler networkPacketHandler_;
     MediaPacketHandler   mediaPacketHandler_;
