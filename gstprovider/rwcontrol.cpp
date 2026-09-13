@@ -7,7 +7,7 @@
  * version 2.1 of the License, or (at your option) any later version.
  *
  * This library is distributed in the hope that it will be useful,
- * but WITHANY WARRANTY; without even the implied warranty of
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
@@ -117,12 +117,9 @@ static RwControlStatusMessage *statusFromWorker(RtpWorker *worker)
 
 static void applyDevicesToWorker(RtpWorker *worker, const RwControlConfigDevices &devices)
 {
-    worker->aout     = devices.audioOutId;
-    worker->ain      = devices.audioInId;
-    worker->vin      = devices.videoInId;
-    worker->infile   = devices.fileNameIn;
-    worker->indata   = devices.fileDataIn;
-    worker->loopFile = devices.loopFile;
+    worker->aout = devices.audioOutId;
+    worker->setInputDevices(devices.audioInId, devices.videoInId, devices.fileNameIn, devices.fileDataIn,
+                            devices.loopFile);
     worker->setOutputVolume(devices.audioOutVolume);
     worker->setInputVolume(devices.audioInVolume);
 }

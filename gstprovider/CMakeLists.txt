@@ -51,6 +51,7 @@ set(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/rtpsessionbridge.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rtpsessionbridge.h
     ${CMAKE_CURRENT_LIST_DIR}/rtpworker.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/rtpworker_devices.cpp
     ${CMAKE_CURRENT_LIST_DIR}/gstthread.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rwcontrol.cpp
     ${CMAKE_CURRENT_LIST_DIR}/gstprovider.cpp

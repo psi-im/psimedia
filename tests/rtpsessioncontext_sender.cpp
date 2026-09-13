@@ -14,9 +14,11 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QEventLoop>
+#include <QMetaObject>
 #include <QTimer>
 
 #include <memory>
+#include <optional>
 
 namespace {
 
@@ -33,6 +35,62 @@ bool isExpectedRtpPacket(const PsiMedia::PRtpPacket &packet)
 
     const auto *bytes = reinterpret_cast<const uchar *>(packet.rawValue.constData());
     return (bytes[0] >> 6) == 2 && (bytes[1] & 0x7f) == NegotiatedPayloadType;
+}
+
+std::optional<PsiMedia::PRtpPacket> waitForRtp(PsiMedia::GstRtpChannel *audioChannel,
+                                               PsiMedia::GstRtpSessionContext *session, int timeoutMs = 10000)
+{
+    std::optional<PsiMedia::PRtpPacket> result;
+    QEventLoop                          loop;
+    QTimer                              timer;
+    timer.setSingleShot(true);
+
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    QObject::connect(session, &PsiMedia::GstRtpSessionContext::error, &loop, &QEventLoop::quit);
+    QObject::connect(audioChannel, &PsiMedia::GstRtpChannel::readyRead, &loop, [&]() {
+        while (audioChannel->packetsAvailable() > 0) {
+            const auto packet = audioChannel->read();
+            if (isExpectedRtpPacket(packet)) {
+                result = packet;
+                loop.quit();
+                return;
+            }
+        }
+    });
+
+    timer.start(timeoutMs);
+    loop.exec();
+    return result;
+}
+
+bool waitForControlBarrier(PsiMedia::RtpSessionContext *session, int timeoutMs = 5000)
+{
+    bool       done = false;
+    QEventLoop loop;
+    QTimer     timer;
+    timer.setSingleShot(true);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+
+    session->dumpPipeline([&](const QStringList &) {
+        QMetaObject::invokeMethod(
+            &loop,
+            [&]() {
+                done = true;
+                loop.quit();
+            },
+            Qt::QueuedConnection);
+    });
+
+    timer.start(timeoutMs);
+    loop.exec();
+    return done;
+}
+
+void drainPackets(PsiMedia::GstRtpChannel *channel)
+{
+    QCoreApplication::processEvents(QEventLoop::AllEvents);
+    while (channel->packetsAvailable() > 0)
+        channel->read();
 }
 
 } // namespace
@@ -69,12 +127,11 @@ int main(int argc, char **argv)
     remoteOpus.channels  = OpusRtpChannels;
     session->setRemoteAudioPreferences({ remoteOpus });
 
-    // Device IDs are GStreamer launch descriptions in the production provider.
-    // This exercises the real AudioIn pipeline without requiring physical hardware.
-    session->setAudioInputDevice(QStringLiteral("audiotestsrc is-live=true wave=sine"));
+    // Negotiation must not require capture. The live source is attached only
+    // after the session has started, matching Psi's consent/no-microphone path.
     audioChannel->setEnabled(true);
 
-    bool       startFailed = false;
+    bool       startFailed   = false;
     bool       startTimedOut = false;
     QEventLoop startLoop;
     QTimer     startTimer;
@@ -95,13 +152,14 @@ int main(int argc, char **argv)
     startTimer.stop();
 
     if (startFailed || startTimedOut) {
-        qCritical() << (startFailed ? "Production RTP session failed to start" : "Timed out starting production RTP session");
+        qCritical() << (startFailed ? "Production RTP session failed to start"
+                                   : "Timed out starting production RTP session");
         return 3;
     }
 
     const auto localPayloads = session->localAudioPayloadInfo();
-    if (!session->canTransmitAudio() || localPayloads.size() != 1) {
-        qCritical() << "Production RTP session did not expose one transmittable Opus payload";
+    if (localPayloads.size() != 1) {
+        qCritical() << "Device-independent negotiation did not expose one Opus payload";
         return 4;
     }
 
@@ -114,40 +172,44 @@ int main(int argc, char **argv)
         return 5;
     }
 
-    bool                  packetTimedOut = false;
-    bool                  sessionFailed  = false;
-    PsiMedia::PRtpPacket  packet;
-    QEventLoop            packetLoop;
-    QTimer                packetTimer;
-    packetTimer.setSingleShot(true);
-    QObject::connect(&packetTimer, &QTimer::timeout, &packetLoop, [&]() {
-        packetTimedOut = true;
-        packetLoop.quit();
-    });
-    QObject::connect(gstSession, &PsiMedia::GstRtpSessionContext::error, &packetLoop, [&]() {
-        sessionFailed = true;
-        packetLoop.quit();
-    });
-    QObject::connect(audioChannel, &PsiMedia::GstRtpChannel::readyRead, &packetLoop, [&]() {
-        while (audioChannel->packetsAvailable() > 0) {
-            const auto candidate = audioChannel->read();
-            if (isExpectedRtpPacket(candidate)) {
-                packet = candidate;
-                packetLoop.quit();
-                return;
-            }
-        }
-    });
-
-    packetTimer.start(10000);
-    session->transmitAudio();
-    packetLoop.exec();
-    packetTimer.stop();
-
-    if (sessionFailed || packetTimedOut || packet.rawValue.isEmpty()) {
-        qCritical() << (sessionFailed ? "Production RTP sender failed"
-                                     : "Timed out waiting for negotiated RTP from production sender");
+    // A finite first source makes a stale send pipeline observable: once it has
+    // reached EOS it cannot produce packets after the second source is selected.
+    session->setAudioInputDevice(QStringLiteral("audiotestsrc is-live=true wave=sine num-buffers=32"));
+    if (!waitForControlBarrier(session.get())) {
+        qCritical() << "Timed out attaching the first synthetic audio input";
         return 6;
+    }
+    session->transmitAudio();
+    if (!waitForRtp(audioChannel, gstSession)) {
+        qCritical() << "Timed out waiting for RTP after late audio-input attach";
+        return 7;
+    }
+
+    // Let the finite source reach EOS, then detach it exactly as the native
+    // call path does when capture consent/device availability disappears.
+    QEventLoop drainLoop;
+    QTimer::singleShot(1000, &drainLoop, &QEventLoop::quit);
+    drainLoop.exec();
+    session->pauseAudio();
+    session->setAudioInputDevice(QString());
+    if (!waitForControlBarrier(session.get())) {
+        qCritical() << "Timed out detaching the synthetic audio input";
+        return 8;
+    }
+    drainPackets(audioChannel);
+
+    // Reattach a different live source without recreating RtpSessionContext or
+    // RtpSessionBridge. Before the fix RtpWorker kept the exhausted old sendbin
+    // and this phase timed out.
+    session->setAudioInputDevice(QStringLiteral("audiotestsrc is-live=true wave=white-noise"));
+    if (!waitForControlBarrier(session.get())) {
+        qCritical() << "Timed out reattaching the synthetic audio input";
+        return 9;
+    }
+    session->transmitAudio();
+    if (!waitForRtp(audioChannel, gstSession)) {
+        qCritical() << "RTP did not resume after audio-input hotplug";
+        return 10;
     }
 
     session->pauseAudio();
@@ -169,11 +231,10 @@ int main(int argc, char **argv)
 
     if (stopTimedOut) {
         qCritical() << "Timed out stopping production RTP session";
-        return 7;
+        return 11;
     }
 
-    qInfo() << "Production sender emitted Opus RTP PT" << NegotiatedPayloadType << "from synthetic raw audio"
-            << RawSampleRate << "Hz /" << RawChannels << "channel with RTP description" << OpusRtpClockRate << "Hz /"
-            << OpusRtpChannels << "channels";
+    qInfo() << "Production RTP sender negotiated without capture and resumed Opus RTP PT" << NegotiatedPayloadType
+            << "after audio-input hotplug";
     return 0;
 }
