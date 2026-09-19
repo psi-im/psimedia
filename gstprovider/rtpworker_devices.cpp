@@ -12,16 +12,60 @@
 #include <QMutexLocker>
 
 namespace PsiMedia {
+namespace {
+
+enum class InputSourceMode {
+    None,
+    Live,
+    File,
+    Data,
+};
+
+struct InputSourceIdentity {
+    InputSourceMode mode = InputSourceMode::None;
+    QString         audioInput;
+    QString         videoInput;
+    QString         fileName;
+    QByteArray      fileData;
+
+    bool operator!=(const InputSourceIdentity &other) const
+    {
+        return mode != other.mode || audioInput != other.audioInput || videoInput != other.videoInput
+            || fileName != other.fileName || fileData != other.fileData;
+    }
+};
+
+InputSourceIdentity inputSourceIdentity(const QString &audioInput, const QString &videoInput, const QString &fileName,
+                                        const QByteArray &fileData)
+{
+    InputSourceIdentity result;
+    result.audioInput = audioInput;
+    result.videoInput = videoInput;
+    result.fileName   = fileName;
+    result.fileData   = fileData;
+
+    if (!fileData.isEmpty())
+        result.mode = InputSourceMode::Data;
+    else if (!fileName.isEmpty())
+        result.mode = InputSourceMode::File;
+    else if (!audioInput.isEmpty() || !videoInput.isEmpty())
+        result.mode = InputSourceMode::Live;
+    return result;
+}
+
+} // namespace
 
 void RtpWorker::setInputDevices(const QString &audioInput, const QString &videoInput, const QString &fileName,
                                 const QByteArray &fileData, bool loop)
 {
-    const bool liveCaptureChanged = infile.isEmpty() && indata.isEmpty() && fileName.isEmpty() && fileData.isEmpty()
-        && (ain != audioInput || vin != videoInput);
+    const auto oldSource     = inputSourceIdentity(ain, vin, infile, indata);
+    const auto newSource     = inputSourceIdentity(audioInput, videoInput, fileName, fileData);
+    const bool sourceChanged = oldSource != newSource;
+    const bool rebuildSender = sourceChanged && sendbin;
 
     bool audioWasTransmitting = false;
     bool videoWasTransmitting = false;
-    if (liveCaptureChanged && sendbin) {
+    if (rebuildSender) {
         {
             QMutexLocker locker(&rtpaudioout_mutex);
             audioWasTransmitting = rtpaudioout;
@@ -31,10 +75,10 @@ void RtpWorker::setInputDevices(const QString &audioInput, const QString &videoI
             videoWasTransmitting = rtpvideoout;
         }
 
-        // RtpWorker's legacy pipeline cannot replace a running capture source
-        // in place. Rebuild its media pipelines while keeping the surrounding
-        // GstRtpSessionContext/RtpSessionBridge alive; Jingle and RFC 3550
-        // session state therefore remain outside this reset.
+        // Capture identity is part of the running sender, not merely mutable
+        // configuration. Revoke the old source before committing the new one.
+        // cleanup() is intentionally conservative here and currently rebuilds
+        // receive state too; narrowing that reset is the separate A4 task.
         cleanup();
         localAudioPayloadInfo.clear();
         localVideoPayloadInfo.clear();
@@ -50,14 +94,15 @@ void RtpWorker::setInputDevices(const QString &audioInput, const QString &videoI
     indata   = fileData;
     loopFile = loop;
 
-    const bool fileCapture = !fileName.isEmpty() || !fileData.isEmpty();
-    if (liveCaptureChanged) {
+    if (rebuildSender) {
+        const bool fileLikeSource = newSource.mode == InputSourceMode::File || newSource.mode == InputSourceMode::Data;
+
         QMutexLocker audioLocker(&rtpaudioout_mutex);
-        rtpaudioout = audioWasTransmitting && (!audioInput.isEmpty() || fileCapture);
+        rtpaudioout = audioWasTransmitting && (fileLikeSource || !audioInput.isEmpty());
         audioLocker.unlock();
 
         QMutexLocker videoLocker(&rtpvideoout_mutex);
-        rtpvideoout = videoWasTransmitting && (!videoInput.isEmpty() || fileCapture);
+        rtpvideoout = videoWasTransmitting && (fileLikeSource || !videoInput.isEmpty());
     }
 }
 
