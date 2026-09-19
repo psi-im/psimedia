@@ -99,7 +99,7 @@ quint64 remoteRtpPacketsProcessed(PsiMedia::RtpSessionBridge &bridge, quint32 ss
     if (!stats)
         return 0;
 
-    quint64 packets = 0;
+    guint64 packets = 0;
     const GValue *sourcesValue = gst_structure_get_value(stats, "source-stats");
     if (sourcesValue) {
         auto *sources = static_cast<GValueArray *>(g_value_get_boxed(sourcesValue));
