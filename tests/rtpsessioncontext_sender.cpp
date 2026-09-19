@@ -193,6 +193,15 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
 
+    // GStreamer reads GST_DEBUG_DUMP_DOT_DIR during initialization on older
+    // 1.24.x builds. Set it before GstProvider triggers gst_init().
+    QTemporaryDir tempDir;
+    if (!tempDir.isValid()) {
+        qCritical() << "Could not create temporary test directory";
+        return 1;
+    }
+    qputenv("GST_DEBUG_DUMP_DOT_DIR", QFile::encodeName(tempDir.path()));
+
     PsiMedia::GstProvider provider;
     if (!provider.isInitialized()) {
         qCritical() << "GStreamer provider failed to initialize";
@@ -266,13 +275,7 @@ int main(int argc, char **argv)
         return 5;
     }
 
-    QTemporaryDir tempDir;
     const QString filePath = tempDir.filePath(QStringLiteral("switch.ogg"));
-    if (!tempDir.isValid()) {
-        qCritical() << "Could not create temporary test directory";
-        return 6;
-    }
-    qputenv("GST_DEBUG_DUMP_DOT_DIR", QFile::encodeName(tempDir.path()));
     if (!createFiniteOpusFile(filePath)) {
         qCritical() << "Could not create finite Ogg/Opus test input";
         return 6;
