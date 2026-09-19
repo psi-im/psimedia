@@ -1197,8 +1197,11 @@ bool RtpWorker::startRecv()
         if (!recvbin)
             recvbin = gst_bin_new("recvbin");
 
+        static quint64 audioRecvSourceSerial = 0;
+        const QByteArray audioRecvSourceName
+            = QByteArrayLiteral("psimedia_audio_rtp_recv_") + QByteArray::number(++audioRecvSourceSerial);
         audiortpsrc_mutex.lock();
-        audiortpsrc = gst_element_factory_make("appsrc", nullptr);
+        audiortpsrc = gst_element_factory_make("appsrc", audioRecvSourceName.constData());
         audiortpsrc_mutex.unlock();
 
         GstCaps *caps = gst_caps_new_empty();
@@ -1234,8 +1237,11 @@ bool RtpWorker::startRecv()
         if (!recvbin)
             recvbin = gst_bin_new("recvbin");
 
+        static quint64 videoRecvSourceSerial = 0;
+        const QByteArray videoRecvSourceName
+            = QByteArrayLiteral("psimedia_video_rtp_recv_") + QByteArray::number(++videoRecvSourceSerial);
         videortpsrc_mutex.lock();
-        videortpsrc = gst_element_factory_make("appsrc", nullptr);
+        videortpsrc = gst_element_factory_make("appsrc", videoRecvSourceName.constData());
         videortpsrc_mutex.unlock();
 
         GstCaps *caps = gst_caps_new_empty();
