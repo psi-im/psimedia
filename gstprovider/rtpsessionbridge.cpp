@@ -12,6 +12,7 @@
 #include "payloadinfo.h"
 
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QMutexLocker>
 #include <QPointer>
 #include <QThread>
@@ -23,6 +24,9 @@ namespace PsiMedia {
 namespace {
 
 using CapsMap = QHash<int, GstCaps *>;
+
+constexpr int    MaxDeliveriesPerSlice = 32;
+constexpr qint64 MaxDeliverySliceMs     = 4;
 
 GstPad *requestPad(GstElement *element, const char *name)
 {
@@ -709,7 +713,11 @@ void RtpSessionBridge::drainDeliveries(quint64 generation)
     if (!ownerThread("packet delivery"))
         return;
 
+    QElapsedTimer slice;
+    slice.start();
     bool preferNetwork = true;
+    int  delivered     = 0;
+
     for (;;) {
         QueuedNetworkPacket network;
         QueuedMediaPacket   media;
@@ -761,6 +769,29 @@ void RtpSessionBridge::drainDeliveries(quint64 generation)
             if (!guard)
                 return;
         }
+
+        ++delivered;
+        if (delivered < MaxDeliveriesPerSlice && slice.elapsed() < MaxDeliverySliceMs)
+            continue;
+
+        // A continuously replenished queue must not monopolize the QObject
+        // owner thread. Keep this generation scheduled, but yield so stop(),
+        // timers and GstBus error polling get a turn before the next slice.
+        QMutexLocker locker(&deliveryMutex_);
+        if (!deliveriesEnabled_ || generation != generation_) {
+            if (scheduledDeliveryGeneration_ == generation)
+                scheduledDeliveryGeneration_ = 0;
+            return;
+        }
+        if (networkQueue_.isEmpty() && mediaQueue_.isEmpty()) {
+            if (scheduledDeliveryGeneration_ == generation)
+                scheduledDeliveryGeneration_ = 0;
+            return;
+        }
+        if (scheduledDeliveryGeneration_ == generation)
+            scheduledDeliveryGeneration_ = 0;
+        scheduleDeliveryLocked(generation);
+        return;
     }
 }
 

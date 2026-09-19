@@ -11,7 +11,9 @@
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QEventLoop>
+#include <QTimer>
 
 #include <chrono>
 #include <thread>
@@ -223,41 +225,95 @@ int runAgeLimit(const PsiMedia::PPayloadInfo &opus)
     return 0;
 }
 
+int runOwnerFairness(const PsiMedia::PPayloadInfo &opus)
+{
+    int deliveries = 0;
+    PsiMedia::RtpSessionBridge bridge(QStringLiteral("audio"));
+    if (!bridge.isValid() || !bridge.setPayloads({ opus }, { opus }))
+        return 40;
+
+    bridge.setNetworkPacketHandler([&](const auto &packet) {
+        if (packet.type != PsiMedia::PRtpPacket::Type::Rtp)
+            return;
+        ++deliveries;
+        std::this_thread::sleep_for(2ms);
+    });
+    if (!bridge.start())
+        return 41;
+
+    // Fill the queue without servicing Qt events. A single unbounded drain
+    // would then spend hundreds of milliseconds in user callbacks before an
+    // already-due owner timer gets a chance to run.
+    for (quint16 sequence = 1500; sequence < 2100; ++sequence) {
+        if (!sendOutgoing(bridge, sequence))
+            return 42;
+    }
+    if (!waitWithoutOwnerEvents([&] {
+            return bridge.deliveryQueueStats().networkPackets == bridge.maxQueuedNetworkPackets();
+        })) {
+        qCritical() << "fairness queue never reached its packet cap";
+        return 43;
+    }
+
+    QElapsedTimer elapsed;
+    elapsed.start();
+    qint64 timerLatencyMs = -1;
+    QTimer ownerTimer;
+    ownerTimer.setSingleShot(true);
+    QObject::connect(&ownerTimer, &QTimer::timeout, [&]() { timerLatencyMs = elapsed.elapsed(); });
+    ownerTimer.start(20);
+
+    const auto deadline = std::chrono::steady_clock::now() + 500ms;
+    while (timerLatencyMs < 0 && std::chrono::steady_clock::now() < deadline) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        std::this_thread::sleep_for(1ms);
+    }
+
+    if (timerLatencyMs < 0 || timerLatencyMs > 150) {
+        qCritical() << "delivery drain starved owner timer" << timerLatencyMs << "ms after" << deliveries
+                    << "callbacks";
+        return 44;
+    }
+
+    bridge.stop();
+    return 0;
+}
+
 int runMediaPacketLimit(const PsiMedia::PPayloadInfo &opus)
 {
     int mediaDeliveries = 0;
     PsiMedia::RtpSessionBridge bridge(QStringLiteral("audio"));
     if (!bridge.isValid() || !bridge.setPayloads({ opus }, { opus }))
-        return 40;
+        return 50;
     bridge.setMediaPacketHandler([&](GstBuffer *) { ++mediaDeliveries; });
     if (!bridge.start())
-        return 41;
+        return 51;
 
     for (quint16 sequence = 1000; sequence < 1400; ++sequence) {
         PsiMedia::PRtpPacket packet;
         packet.type     = PsiMedia::PRtpPacket::Type::Rtp;
         packet.rawValue = makeRtp(sequence, RemoteSsrc);
         if (bridge.receivePacket(packet) != GST_FLOW_OK)
-            return 42;
+            return 52;
     }
 
     if (!waitWithoutOwnerEvents([&] {
             return bridge.deliveryQueueStats().mediaPackets == bridge.maxQueuedMediaPackets();
         })) {
         qCritical() << "media queue never reached its packet cap";
-        return 43;
+        return 53;
     }
     std::this_thread::sleep_for(100ms);
     const auto stats = bridge.deliveryQueueStats();
     if (stats.mediaPackets > bridge.maxQueuedMediaPackets() || stats.mediaBytes > bridge.maxQueuedMediaBytes())
-        return 44;
+        return 54;
 
     bridge.stop();
     pumpFor(30ms);
     // stop() invalidates the queued generation before the pending delivery
     // event can run; no stale media callback may escape afterwards.
     if (mediaDeliveries != 0)
-        return 45;
+        return 55;
     return 0;
 }
 }
@@ -278,6 +334,8 @@ int main(int argc, char **argv)
     if (const int result = runByteLimit(opus))
         return result;
     if (const int result = runAgeLimit(opus))
+        return result;
+    if (const int result = runOwnerFairness(opus))
         return result;
     if (const int result = runMediaPacketLimit(opus))
         return result;
