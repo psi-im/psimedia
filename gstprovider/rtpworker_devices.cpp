@@ -76,10 +76,9 @@ void RtpWorker::setInputDevices(const QString &audioInput, const QString &videoI
         }
 
         // Capture identity is part of the running sender, not merely mutable
-        // configuration. Revoke the old source before committing the new one.
-        // cleanup() is intentionally conservative here and currently rebuilds
-        // receive state too; narrowing that reset is the separate A4 task.
-        cleanup();
+        // configuration. Revoke the old source before committing the new one,
+        // but preserve the independent receive graph and playback state.
+        cleanupSend();
         localAudioPayloadInfo.clear();
         localVideoPayloadInfo.clear();
         actual_localAudioPayloadInfo.clear();
