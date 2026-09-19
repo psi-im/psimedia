@@ -155,6 +155,7 @@ private:
     Stats *videoStats = nullptr;
 
     void cleanup();
+    void cleanupSend();
 
     static gboolean      cb_doStart(gpointer data);
     static gboolean      cb_doUpdate(gpointer data);
