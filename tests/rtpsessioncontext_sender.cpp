@@ -56,6 +56,7 @@ constexpr int RawSampleRate         = 44100;
 constexpr int RawChannels           = 1;
 constexpr int OpusRtpClockRate      = 48000;
 constexpr int OpusRtpChannels       = 2;
+constexpr quint32 DecodeRemoteSsrc  = 0x13572468;
 
 bool isExpectedRtpPacket(const PsiMedia::PRtpPacket &packet)
 {
@@ -93,6 +94,32 @@ QList<PsiMedia::PRtpPacket> waitForRtpPackets(PsiMedia::GstRtpChannel *audioChan
     return result;
 }
 
+quint64 remoteRtpPacketsProcessed(PsiMedia::RtpSessionBridge &bridge, quint32 ssrc)
+{
+    GstStructure *stats = bridge.sessionStats();
+    if (!stats)
+        return 0;
+
+    quint64 packets = 0;
+    const GValue *sourcesValue = gst_structure_get_value(stats, "source-stats");
+    if (sourcesValue) {
+        auto *sources = static_cast<GValueArray *>(g_value_get_boxed(sourcesValue));
+        if (sources) {
+            for (guint i = 0; i < sources->n_values; ++i) {
+                const auto *source
+                    = static_cast<const GstStructure *>(g_value_get_boxed(&sources->values[i]));
+                guint sourceSsrc = 0;
+                if (source && gst_structure_get_uint(source, "ssrc", &sourceSsrc) && sourceSsrc == ssrc) {
+                    gst_structure_get_uint64(source, "packets-received", &packets);
+                    break;
+                }
+            }
+        }
+    }
+    gst_structure_free(stats);
+    return packets;
+}
+
 void makeRemoteRtp(PsiMedia::PRtpPacket &packet, quint16 sequence, quint32 timestamp)
 {
     if (packet.rawValue.size() < 12)
@@ -106,17 +133,18 @@ void makeRemoteRtp(PsiMedia::PRtpPacket &packet, quint16 sequence, quint32 times
     bytes[6]    = uchar(timestamp >> 8);
     bytes[7]    = uchar(timestamp);
 
-    constexpr quint32 RemoteSsrc = 0x13572468;
-    bytes[8]                    = uchar(RemoteSsrc >> 24);
-    bytes[9]                    = uchar(RemoteSsrc >> 16);
-    bytes[10]                   = uchar(RemoteSsrc >> 8);
-    bytes[11]                   = uchar(RemoteSsrc);
+    bytes[8]  = uchar(DecodeRemoteSsrc >> 24);
+    bytes[9]  = uchar(DecodeRemoteSsrc >> 16);
+    bytes[10] = uchar(DecodeRemoteSsrc >> 8);
+    bytes[11] = uchar(DecodeRemoteSsrc);
 }
 
-bool waitForDecodedOutput(PsiMedia::GstRtpChannel *audioChannel, const QList<PsiMedia::PRtpPacket> &packets,
-                          const QString &outputPath, quint16 &sequence, quint32 &timestamp, int timeoutMs = 5000)
+bool waitForDecodedOutput(PsiMedia::GstRtpChannel *audioChannel, PsiMedia::RtpSessionBridge &bridge,
+                          const QList<PsiMedia::PRtpPacket> &packets, const QString &outputPath,
+                          quint16 &sequence, quint32 &timestamp, int timeoutMs = 5000)
 {
     const qint64 initialSize = QFileInfo(outputPath).exists() ? QFileInfo(outputPath).size() : 0;
+    const quint64 initialProcessed = remoteRtpPacketsProcessed(bridge, DecodeRemoteSsrc);
     int          written     = 0;
     for (auto packet : packets) {
         if (packet.rawValue.size() < 12)
@@ -128,6 +156,21 @@ bool waitForDecodedOutput(PsiMedia::GstRtpChannel *audioChannel, const QList<Psi
     }
     if (!written)
         return false;
+
+    QElapsedTimer bridgeTimer;
+    bridgeTimer.start();
+    while (bridgeTimer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        if (remoteRtpPacketsProcessed(bridge, DecodeRemoteSsrc) > initialProcessed)
+            break;
+        QThread::msleep(5);
+    }
+    const quint64 processed = remoteRtpPacketsProcessed(bridge, DecodeRemoteSsrc);
+    if (processed <= initialProcessed) {
+        qCritical() << "RTP bridge did not validate reflected remote packets"
+                    << initialProcessed << processed << written;
+        return false;
+    }
 
     QElapsedTimer timer;
     timer.start();
@@ -421,7 +464,7 @@ int main(int argc, char **argv)
 
     quint16 remoteSequence  = 1;
     quint32 remoteTimestamp = 48000;
-    if (!waitForDecodedOutput(audioChannel, livePackets, decodedOutputPath, remoteSequence, remoteTimestamp)) {
+    if (!waitForDecodedOutput(audioChannel, gstSession->audioBridge, livePackets, decodedOutputPath, remoteSequence, remoteTimestamp)) {
         qCritical() << "Production receive path did not decode live-source RTP";
         return 8;
     }
@@ -445,7 +488,7 @@ int main(int argc, char **argv)
         qCritical() << "File input did not produce RTP after replacing live capture";
         return 10;
     }
-    if (!waitForDecodedOutput(audioChannel, filePackets, decodedOutputPath, remoteSequence, remoteTimestamp)) {
+    if (!waitForDecodedOutput(audioChannel, gstSession->audioBridge, filePackets, decodedOutputPath, remoteSequence, remoteTimestamp)) {
         qCritical() << "Receive decode/output stopped after live-to-file capture switch";
         return 10;
     }
@@ -478,7 +521,7 @@ int main(int argc, char **argv)
         qCritical() << "RTP did not resume after file-to-live switch";
         return 13;
     }
-    if (!waitForDecodedOutput(audioChannel, resumedLivePackets, decodedOutputPath, remoteSequence, remoteTimestamp)) {
+    if (!waitForDecodedOutput(audioChannel, gstSession->audioBridge, resumedLivePackets, decodedOutputPath, remoteSequence, remoteTimestamp)) {
         qCritical() << "Receive decode/output stopped after file-to-live capture switch";
         return 13;
     }
