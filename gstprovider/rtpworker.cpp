@@ -960,8 +960,20 @@ bool RtpWorker::setupSendRecv()
 
 bool RtpWorker::startSend()
 {
+    // QByteArray-backed input has never had a real GStreamer source in this
+    // provider. Fail closed instead of silently constructing filesrc with an
+    // empty location and, after a live-source switch, leaving old capture
+    // semantics ambiguous.
+    if (!indata.isEmpty()) {
+#ifdef RTPWORKER_DEBUG
+        qDebug("In-memory file input is not supported by the GStreamer provider");
+#endif
+        error = RtpSessionContext::ErrorGeneric;
+        return false;
+    }
+
     // file source
-    if (!infile.isEmpty() || !indata.isEmpty()) {
+    if (!infile.isEmpty()) {
         if (send_in_use)
             return false;
 
