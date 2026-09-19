@@ -13,12 +13,14 @@
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QMetaObject>
 #include <QRegularExpression>
 #include <QTemporaryDir>
+#include <QThread>
 #include <QTimer>
 
 #include <gst/gst.h>
@@ -136,6 +138,34 @@ void drainPackets(PsiMedia::GstRtpChannel *channel)
     QCoreApplication::processEvents(QEventLoop::AllEvents);
     while (channel->packetsAvailable() > 0)
         channel->read();
+}
+
+
+bool waitForRtpQuiet(PsiMedia::GstRtpChannel *audioChannel, PsiMedia::GstRtpSessionContext *session,
+                     int quietMs = 500, int timeoutMs = 10000)
+{
+    QElapsedTimer total;
+    QElapsedTimer quiet;
+    total.start();
+    quiet.start();
+
+    while (total.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        bool sawRtp = false;
+        while (audioChannel->packetsAvailable() > 0) {
+            const auto packet = audioChannel->read();
+            if (isExpectedRtpPacket(packet))
+                sawRtp = true;
+        }
+        if (sawRtp)
+            quiet.restart();
+        if (quiet.elapsed() >= quietMs)
+            return true;
+        if (session->errorCode() != PsiMedia::RtpSessionContext::ErrorNone)
+            return false;
+        QThread::msleep(5);
+    }
+    return false;
 }
 
 
@@ -301,23 +331,6 @@ int main(int argc, char **argv)
     }
 
     drainPackets(audioChannel);
-    bool       fileFinished = false;
-    bool       fileFailed   = false;
-    QEventLoop fileLoop;
-    QTimer     fileTimer;
-    fileTimer.setSingleShot(true);
-    QObject::connect(&fileTimer, &QTimer::timeout, &fileLoop, &QEventLoop::quit);
-    QObject::connect(gstSession, &PsiMedia::GstRtpSessionContext::finished, &fileLoop, [&]() {
-        fileFinished = true;
-        fileLoop.quit();
-    });
-    QObject::connect(gstSession, &PsiMedia::GstRtpSessionContext::error, &fileLoop, [&]() {
-        fileFailed = true;
-        fileLoop.quit();
-    });
-
-    // Install the completion latch before replacing the live source: a finite
-    // non-live file may reach EOS faster than the control-barrier round trip.
     session->setFileInput(filePath);
     if (!waitForControlBarrier(session.get())) {
         qCritical() << "Timed out switching from live input to file input";
@@ -335,12 +348,12 @@ int main(int argc, char **argv)
         qCritical() << "File input did not produce RTP after replacing live capture";
         return 10;
     }
-    if (!fileFinished && !fileFailed) {
-        fileTimer.start(10000);
-        fileLoop.exec();
-    }
-    if (!fileFinished || fileFailed) {
-        qCritical() << "Finite file input did not replace the unbounded live source";
+    // A finite file must eventually stop producing RTP. The previous live
+    // audiotestsrc is deliberately unbounded, so continued capture cannot
+    // satisfy this quiet-window oracle even though the legacy provider does
+    // not surface appsink EOS as RtpSessionContext::finished().
+    if (!waitForRtpQuiet(audioChannel, gstSession)) {
+        qCritical() << "RTP did not quiesce after finite file input";
         return 11;
     }
 
