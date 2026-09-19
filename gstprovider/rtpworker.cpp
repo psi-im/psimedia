@@ -265,8 +265,18 @@ void RtpWorker::cleanupSend()
     if (pd_videosrc) {
         delete pd_videosrc;
         pd_videosrc = nullptr;
-        videosrc    = nullptr;
     }
+
+    // All of these are borrowed from the sender graph. File playback stores
+    // decoder elements in audiosrc/videosrc, while live capture stores device
+    // elements there. Once sendbin/device contexts are gone none of the
+    // pointers may survive into the next source generation.
+    fileDemux   = nullptr;
+    audiosrc    = nullptr;
+    videosrc    = nullptr;
+    audiortppay = nullptr;
+    videortppay = nullptr;
+    send_in_use = false;
 }
 
 void RtpWorker::cleanup()
