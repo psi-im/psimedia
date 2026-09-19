@@ -305,7 +305,6 @@ void RtpWorker::cleanupSend()
     videosrc    = nullptr;
     audiortppay = nullptr;
     videortppay = nullptr;
-    send_in_use = false;
 }
 
 void RtpWorker::cleanup()

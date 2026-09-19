@@ -52,4 +52,4 @@ jobs:
       - name: Test provider regressions
         env:
           GST_DEBUG_NO_COLOR: '1'
-        run: ctest --test-dir build --output-on-failure -j1
+        run: ctest --test-dir build --output-on-failure --no-tests=error -j1

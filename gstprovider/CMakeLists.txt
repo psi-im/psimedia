@@ -164,6 +164,11 @@ endif()
 if(PSIMEDIA_BUILD_TESTS)
     enable_testing()
 
+    add_executable(psimedia_rtpworkerownership_test ${ABS_GST_PARENT_DIR}/tests/rtpworkerownership.cpp)
+    target_link_libraries(psimedia_rtpworkerownership_test PRIVATE ${PROVIDERLIB})
+    add_test(NAME psimedia_rtpworkerownership COMMAND psimedia_rtpworkerownership_test)
+    set_tests_properties(psimedia_rtpworkerownership PROPERTIES TIMEOUT 20)
+
     add_executable(psimedia_opusrtppay_test ${ABS_GST_PARENT_DIR}/tests/opusrtppay.cpp)
     target_link_libraries(psimedia_opusrtppay_test PRIVATE ${PROVIDERLIB})
     add_test(NAME psimedia_opusrtppay COMMAND psimedia_opusrtppay_test)
