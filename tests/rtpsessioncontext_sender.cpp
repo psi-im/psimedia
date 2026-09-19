@@ -127,7 +127,7 @@ QString receiveAppSrcName(PsiMedia::RtpSessionContext *session, int timeoutMs = 
     if (!file.open(QIODevice::ReadOnly))
         return {};
     const QString dot = QString::fromUtf8(file.readAll());
-    const auto match = QRegularExpression(QStringLiteral("appsrc\\d+")).match(dot);
+    const auto match = QRegularExpression(QStringLiteral("psimedia_audio_rtp_recv_\\d+")).match(dot);
     return match.hasMatch() ? match.captured(0) : QString();
 }
 
