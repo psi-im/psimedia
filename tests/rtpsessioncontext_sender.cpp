@@ -66,30 +66,78 @@ bool isExpectedRtpPacket(const PsiMedia::PRtpPacket &packet)
     return (bytes[0] >> 6) == 2 && (bytes[1] & 0x7f) == NegotiatedPayloadType;
 }
 
-std::optional<PsiMedia::PRtpPacket> waitForRtp(PsiMedia::GstRtpChannel *audioChannel,
-                                               PsiMedia::GstRtpSessionContext *session, int timeoutMs = 10000)
+QList<PsiMedia::PRtpPacket> waitForRtpPackets(PsiMedia::GstRtpChannel *audioChannel,
+                                                    PsiMedia::GstRtpSessionContext *session, int count = 6,
+                                                    int timeoutMs = 10000)
 {
-    std::optional<PsiMedia::PRtpPacket> result;
-    QEventLoop                          loop;
-    QTimer                              timer;
-    timer.setSingleShot(true);
-
-    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    QObject::connect(session, &PsiMedia::GstRtpSessionContext::error, &loop, &QEventLoop::quit);
-    QObject::connect(audioChannel, &PsiMedia::GstRtpChannel::readyRead, &loop, [&]() {
-        while (audioChannel->packetsAvailable() > 0) {
-            const auto packet = audioChannel->read();
-            if (isExpectedRtpPacket(packet)) {
-                result = packet;
-                loop.quit();
-                return;
-            }
-        }
+    QList<PsiMedia::PRtpPacket> result;
+    bool                        failed = false;
+    const auto errorConnection = QObject::connect(session, &PsiMedia::GstRtpSessionContext::error, [&]() {
+        failed = true;
     });
 
-    timer.start(timeoutMs);
-    loop.exec();
+    QElapsedTimer timer;
+    timer.start();
+    while (!failed && result.size() < count && timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        while (audioChannel->packetsAvailable() > 0 && result.size() < count) {
+            const auto packet = audioChannel->read();
+            if (isExpectedRtpPacket(packet))
+                result.append(packet);
+        }
+        if (result.size() < count)
+            QThread::msleep(5);
+    }
+
+    QObject::disconnect(errorConnection);
     return result;
+}
+
+void makeRemoteRtp(PsiMedia::PRtpPacket &packet, quint16 sequence, quint32 timestamp)
+{
+    if (packet.rawValue.size() < 12)
+        return;
+
+    auto *bytes = reinterpret_cast<uchar *>(packet.rawValue.data());
+    bytes[2]    = uchar(sequence >> 8);
+    bytes[3]    = uchar(sequence);
+    bytes[4]    = uchar(timestamp >> 24);
+    bytes[5]    = uchar(timestamp >> 16);
+    bytes[6]    = uchar(timestamp >> 8);
+    bytes[7]    = uchar(timestamp);
+
+    constexpr quint32 RemoteSsrc = 0x13572468;
+    bytes[8]                    = uchar(RemoteSsrc >> 24);
+    bytes[9]                    = uchar(RemoteSsrc >> 16);
+    bytes[10]                   = uchar(RemoteSsrc >> 8);
+    bytes[11]                   = uchar(RemoteSsrc);
+}
+
+bool waitForDecodedOutput(PsiMedia::GstRtpChannel *audioChannel, const QList<PsiMedia::PRtpPacket> &packets,
+                          const QString &outputPath, quint16 &sequence, quint32 &timestamp, int timeoutMs = 5000)
+{
+    const qint64 initialSize = QFileInfo(outputPath).exists() ? QFileInfo(outputPath).size() : 0;
+    int          written     = 0;
+    for (auto packet : packets) {
+        if (packet.rawValue.size() < 12)
+            continue;
+        makeRemoteRtp(packet, sequence++, timestamp);
+        timestamp += 960; // 20 ms at the negotiated 48 kHz Opus RTP clock.
+        audioChannel->write(packet);
+        ++written;
+    }
+    if (!written)
+        return false;
+
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        if (QFileInfo(outputPath).exists() && QFileInfo(outputPath).size() > initialSize)
+            return true;
+        QThread::msleep(5);
+    }
+    return false;
 }
 
 bool waitForControlBarrier(PsiMedia::RtpSessionContext *session, int timeoutMs = 5000)
@@ -293,6 +341,13 @@ int main(int argc, char **argv)
     remoteOpus.channels  = OpusRtpChannels;
     session->setRemoteAudioPreferences({ remoteOpus });
 
+    // Use the normal AudioOut device path but write decoded PCM to a file so
+    // the regression can prove receive depay/decode/output processing without
+    // requiring a physical audio device.
+    const QString decodedOutputPath = tempDir.filePath(QStringLiteral("decoded.raw"));
+    session->setAudioOutputDevice(
+        QStringLiteral("filesink location=\"%1\" sync=false async=false").arg(decodedOutputPath));
+
     // Negotiation must not require capture. The live source is attached only
     // after the session has started, matching Psi's consent/no-microphone path.
     audioChannel->setEnabled(true);
@@ -358,8 +413,16 @@ int main(int argc, char **argv)
         return 7;
     }
     session->transmitAudio();
-    if (!waitForRtp(audioChannel, gstSession)) {
+    const auto livePackets = waitForRtpPackets(audioChannel, gstSession);
+    if (livePackets.size() < 6) {
         qCritical() << "Timed out waiting for RTP from the live input";
+        return 8;
+    }
+
+    quint16 remoteSequence  = 1;
+    quint32 remoteTimestamp = 48000;
+    if (!waitForDecodedOutput(audioChannel, livePackets, decodedOutputPath, remoteSequence, remoteTimestamp)) {
+        qCritical() << "Production receive path did not decode live-source RTP";
         return 8;
     }
 
@@ -377,8 +440,13 @@ int main(int argc, char **argv)
     }
     // Preserve the previous transmit intent across the source replacement.
     session->transmitAudio();
-    if (!waitForRtp(audioChannel, gstSession)) {
+    const auto filePackets = waitForRtpPackets(audioChannel, gstSession);
+    if (filePackets.size() < 6) {
         qCritical() << "File input did not produce RTP after replacing live capture";
+        return 10;
+    }
+    if (!waitForDecodedOutput(audioChannel, filePackets, decodedOutputPath, remoteSequence, remoteTimestamp)) {
+        qCritical() << "Receive decode/output stopped after live-to-file capture switch";
         return 10;
     }
     // A finite file must eventually stop producing RTP. The previous live
@@ -405,8 +473,13 @@ int main(int argc, char **argv)
         return 13;
     }
     session->transmitAudio();
-    if (!waitForRtp(audioChannel, gstSession)) {
+    const auto resumedLivePackets = waitForRtpPackets(audioChannel, gstSession);
+    if (resumedLivePackets.size() < 6) {
         qCritical() << "RTP did not resume after file-to-live switch";
+        return 13;
+    }
+    if (!waitForDecodedOutput(audioChannel, resumedLivePackets, decodedOutputPath, remoteSequence, remoteTimestamp)) {
+        qCritical() << "Receive decode/output stopped after file-to-live capture switch";
         return 13;
     }
 
