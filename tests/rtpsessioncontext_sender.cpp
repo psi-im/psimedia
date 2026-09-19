@@ -144,6 +144,11 @@ void drainPackets(PsiMedia::GstRtpChannel *channel)
 bool waitForRtpQuiet(PsiMedia::GstRtpChannel *audioChannel, PsiMedia::GstRtpSessionContext *session,
                      int quietMs = 500, int timeoutMs = 10000)
 {
+    bool failed = false;
+    const auto errorConnection = QObject::connect(session, &PsiMedia::GstRtpSessionContext::error, [&]() {
+        failed = true;
+    });
+
     QElapsedTimer total;
     QElapsedTimer quiet;
     total.start();
@@ -151,6 +156,11 @@ bool waitForRtpQuiet(PsiMedia::GstRtpChannel *audioChannel, PsiMedia::GstRtpSess
 
     while (total.elapsed() < timeoutMs) {
         QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        if (failed) {
+            QObject::disconnect(errorConnection);
+            return false;
+        }
+
         bool sawRtp = false;
         while (audioChannel->packetsAvailable() > 0) {
             const auto packet = audioChannel->read();
@@ -159,12 +169,14 @@ bool waitForRtpQuiet(PsiMedia::GstRtpChannel *audioChannel, PsiMedia::GstRtpSess
         }
         if (sawRtp)
             quiet.restart();
-        if (quiet.elapsed() >= quietMs)
+        if (quiet.elapsed() >= quietMs) {
+            QObject::disconnect(errorConnection);
             return true;
-        if (session->errorCode() != PsiMedia::RtpSessionContext::ErrorNone)
-            return false;
+        }
         QThread::msleep(5);
     }
+
+    QObject::disconnect(errorConnection);
     return false;
 }
 
