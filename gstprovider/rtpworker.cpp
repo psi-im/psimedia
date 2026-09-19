@@ -159,6 +159,35 @@ static GstClock *shared_clock         = nullptr;
 static bool      send_clock_is_shared = false;
 // static bool recv_clock_is_shared = false;
 
+static GstClockTime samplePresentationAge(GstSample *sample, GstElement *pipeline)
+{
+    if (!sample || !pipeline)
+        return GST_CLOCK_TIME_NONE;
+
+    GstBuffer *buffer = gst_sample_get_buffer(sample);
+    if (!buffer || !GST_CLOCK_TIME_IS_VALID(GST_BUFFER_PTS(buffer)))
+        return GST_CLOCK_TIME_NONE;
+
+    GstClockTime sampleRunningTime = GST_BUFFER_PTS(buffer);
+    const GstSegment *segment = gst_sample_get_segment(sample);
+    if (segment && segment->format == GST_FORMAT_TIME)
+        sampleRunningTime = gst_segment_to_running_time(segment, GST_FORMAT_TIME, GST_BUFFER_PTS(buffer));
+    if (!GST_CLOCK_TIME_IS_VALID(sampleRunningTime))
+        return GST_CLOCK_TIME_NONE;
+
+    GstClock *clock = gst_element_get_clock(pipeline);
+    if (!clock)
+        return GST_CLOCK_TIME_NONE;
+    const GstClockTime now  = gst_clock_get_time(clock);
+    const GstClockTime base = gst_element_get_base_time(pipeline);
+    gst_object_unref(clock);
+    if (!GST_CLOCK_TIME_IS_VALID(now) || !GST_CLOCK_TIME_IS_VALID(base) || now < base)
+        return GST_CLOCK_TIME_NONE;
+
+    const GstClockTime currentRunningTime = now - base;
+    return currentRunningTime >= sampleRunningTime ? currentRunningTime - sampleRunningTime : 0;
+}
+
 RtpWorker::RtpWorker(GMainContext *mainContext, DeviceMonitor *hardwareDeviceMonitor) :
     mainContext_(mainContext), hardwareDeviceMonitor_(hardwareDeviceMonitor), audioStats(new Stats("audio")),
     videoStats(new Stats("video"))
@@ -805,50 +834,60 @@ GstFlowReturn RtpWorker::show_frame_output(GstAppSink *appsink)
 GstFlowReturn RtpWorker::packet_ready_rtp_audio(GstAppSink *appsink)
 {
     GstSample *sample = gst_app_sink_pull_sample(appsink);
-    GstBuffer *buffer = gst_sample_get_buffer(sample);
-    int        sz     = int(gst_buffer_get_size(buffer));
-    QByteArray ba;
-    ba.resize(sz);
-    gst_buffer_extract(buffer, 0, ba.data(), gsize(sz));
-    gst_sample_unref(sample);
+    if (!sample)
+        return GST_FLOW_EOS;
 
-    PRtpPacket packet;
-    packet.rawValue = ba;
-    packet.type     = PRtpPacket::Type::Rtp;
+    GstBuffer *buffer = gst_sample_get_buffer(sample);
+    if (!buffer) {
+        gst_sample_unref(sample);
+        return GST_FLOW_ERROR;
+    }
+
+    EncodedRtpPacket packet;
+    packet.buffer          = buffer;
+    packet.presentationAge = samplePresentationAge(sample, spipeline);
 
 #ifdef RTPWORKER_DEBUG
-    audioStats->print_stats(packet.rawValue.size());
+    audioStats->print_stats(int(gst_buffer_get_size(buffer)));
 #endif
 
-    QMutexLocker locker(&rtpaudioout_mutex);
-    if (cb_rtpAudioOut && rtpaudioout)
-        cb_rtpAudioOut(packet, app);
+    {
+        QMutexLocker locker(&rtpaudioout_mutex);
+        if (cb_rtpAudioOut && rtpaudioout)
+            cb_rtpAudioOut(packet, app);
+    }
 
+    gst_sample_unref(sample);
     return GST_FLOW_OK;
 }
 
 GstFlowReturn RtpWorker::packet_ready_rtp_video(GstAppSink *appsink)
 {
     GstSample *sample = gst_app_sink_pull_sample(appsink);
-    GstBuffer *buffer = gst_sample_get_buffer(sample);
-    int        sz     = int(gst_buffer_get_size(buffer));
-    QByteArray ba;
-    ba.resize(sz);
-    gst_buffer_extract(buffer, 0, ba.data(), gsize(sz));
-    gst_sample_unref(sample);
+    if (!sample)
+        return GST_FLOW_EOS;
 
-    PRtpPacket packet;
-    packet.rawValue = ba;
-    packet.type     = PRtpPacket::Type::Rtp;
+    GstBuffer *buffer = gst_sample_get_buffer(sample);
+    if (!buffer) {
+        gst_sample_unref(sample);
+        return GST_FLOW_ERROR;
+    }
+
+    EncodedRtpPacket packet;
+    packet.buffer          = buffer;
+    packet.presentationAge = samplePresentationAge(sample, spipeline);
 
 #ifdef RTPWORKER_DEBUG
-    videoStats->print_stats(packet.rawValue.size());
+    videoStats->print_stats(int(gst_buffer_get_size(buffer)));
 #endif
 
-    QMutexLocker locker(&rtpvideoout_mutex);
-    if (cb_rtpVideoOut && rtpvideoout)
-        cb_rtpVideoOut(packet, app);
+    {
+        QMutexLocker locker(&rtpvideoout_mutex);
+        if (cb_rtpVideoOut && rtpvideoout)
+            cb_rtpVideoOut(packet, app);
+    }
 
+    gst_sample_unref(sample);
     return GST_FLOW_OK;
 }
 

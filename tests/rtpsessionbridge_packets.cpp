@@ -189,7 +189,7 @@ bool receiverReportWasProcessed(PsiMedia::RtpSessionBridge &bridge)
     return ok;
 }
 
-bool hasSenderReport(const QByteArray &compound, quint32 expectedSsrc)
+bool senderReport(const QByteArray &compound, quint32 expectedSsrc, quint32 *rtpTimestamp = nullptr)
 {
     const auto *bytes = reinterpret_cast<const uchar *>(compound.constData());
     int         offset = 0;
@@ -204,7 +204,11 @@ bool hasSenderReport(const QByteArray &compound, quint32 expectedSsrc)
         if (packet[1] == 200 && packetBytes >= 28 && read32(packet + 4) == expectedSsrc) {
             const quint32 packetCount = read32(packet + 20);
             const quint32 octetCount  = read32(packet + 24);
-            return packetCount > 0 && octetCount > 0;
+            if (!packetCount || !octetCount)
+                return false;
+            if (rtpTimestamp)
+                *rtpTimestamp = read32(packet + 16);
+            return true;
         }
         offset += packetBytes;
     }
@@ -310,7 +314,7 @@ int main(int argc, char **argv)
     }
     if (!waitUntil([&] {
             return std::any_of(networkPackets.cbegin(), networkPackets.cend(), [](const auto &packet) {
-                return packet.type == PsiMedia::PRtpPacket::Type::Rtcp && hasSenderReport(packet.rawValue, LocalSsrc);
+                return packet.type == PsiMedia::PRtpPacket::Type::Rtcp && senderReport(packet.rawValue, LocalSsrc);
             });
         })) {
         qCritical() << "generated RTCP did not contain a sender report for the RTP sender SSRC";
@@ -318,6 +322,72 @@ int main(int argc, char **argv)
     }
 
     bridge.stop();
-    qInfo() << "RTP/RTCP packet semantics regression passed";
+
+    // A sender pipeline can queue encoded RTP before handing it to the bridge.
+    // Preserve that producer age when mapping RTP to RTCP SR time instead of
+    // pretending the packet was produced at callback arrival.
+    constexpr quint32 TimingSsrc         = 0x1234abcd;
+    constexpr quint32 TimingRtpTimestamp = 48000;
+    std::vector<PsiMedia::PRtpPacket> timingPackets;
+
+    PsiMedia::RtpSessionBridge timingBridge(QStringLiteral("audio"));
+    if (!timingBridge.isValid() || !timingBridge.setPayloads({ opus }, { opus })) {
+        qCritical() << "failed to configure timing bridge";
+        return 14;
+    }
+    timingBridge.setNetworkPacketHandler(
+        [&](const PsiMedia::PRtpPacket &packet) { timingPackets.push_back(packet); });
+    timingBridge.setRtcpMinimumInterval(10 * GST_MSECOND);
+    if (!timingBridge.start()) {
+        qCritical() << "failed to start timing bridge";
+        return 15;
+    }
+
+    std::this_thread::sleep_for(600ms);
+    const QByteArray timingRtp = makeRtp(77, TimingRtpTimestamp, TimingSsrc);
+    GstBuffer *timingBuffer = bufferFor(timingRtp, 100 * GST_MSECOND);
+    if (!timingBuffer) {
+        qCritical() << "failed to allocate timing RTP buffer";
+        return 16;
+    }
+    const auto timingSend = timingBridge.sendRtp(timingBuffer, 500 * GST_MSECOND);
+    gst_buffer_unref(timingBuffer);
+    if (timingSend != GST_FLOW_OK) {
+        qCritical() << "failed to feed aged RTP buffer";
+        return 17;
+    }
+    if (!waitUntil([&] {
+            return std::any_of(timingPackets.cbegin(), timingPackets.cend(), [&](const auto &packet) {
+                return packet.type == PsiMedia::PRtpPacket::Type::Rtp && packet.rawValue == timingRtp;
+            });
+        })) {
+        qCritical() << "aged RTP bytes were not preserved";
+        return 18;
+    }
+
+    if (!waitUntil([&] { return timingBridge.requestRtcp(100 * GST_MSECOND); })) {
+        qCritical() << "timing RTCP scheduler never became ready";
+        return 19;
+    }
+
+    quint32 srRtpTimestamp = 0;
+    if (!waitUntil([&] {
+            return std::any_of(timingPackets.cbegin(), timingPackets.cend(), [&](const auto &packet) {
+                return packet.type == PsiMedia::PRtpPacket::Type::Rtcp
+                    && senderReport(packet.rawValue, TimingSsrc, &srRtpTimestamp);
+            });
+        })) {
+        qCritical() << "timing bridge did not emit a sender report";
+        return 20;
+    }
+
+    const quint32 srAdvance = srRtpTimestamp - TimingRtpTimestamp;
+    if (srAdvance < 12000 || srAdvance > 72000) {
+        qCritical() << "sender report ignored producer RTP age" << srAdvance << srRtpTimestamp;
+        return 21;
+    }
+
+    timingBridge.stop();
+    qInfo() << "RTP/RTCP packet semantics and producer-age timing regressions passed";
     return 0;
 }

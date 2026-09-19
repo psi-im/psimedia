@@ -47,6 +47,14 @@ public:
         static Frame pullFromSink(GstAppSink *appsink);
     };
 
+    // Borrowed encoded RTP buffer plus its age in the sender pipeline's
+    // running-time domain. The callback is synchronous; consumers that retain
+    // the buffer must take their own reference.
+    struct EncodedRtpPacket {
+        GstBuffer   *buffer          = nullptr;
+        GstClockTime presentationAge = GST_CLOCK_TIME_NONE;
+    };
+
     void *app = nullptr; // for callbacks
 
     QString             aout;
@@ -110,10 +118,10 @@ public:
     // callbacks - from alternate thread, be safe!
     //   also, it is not safe to assign callbacks except before starting
 
-    void (*cb_previewFrame)(const Frame &frame, void *app)      = nullptr;
-    void (*cb_outputFrame)(const Frame &frame, void *app)       = nullptr;
-    void (*cb_rtpAudioOut)(const PRtpPacket &packet, void *app) = nullptr;
-    void (*cb_rtpVideoOut)(const PRtpPacket &packet, void *app) = nullptr;
+    void (*cb_previewFrame)(const Frame &frame, void *app)                        = nullptr;
+    void (*cb_outputFrame)(const Frame &frame, void *app)                         = nullptr;
+    void (*cb_rtpAudioOut)(const EncodedRtpPacket &packet, void *app)             = nullptr;
+    void (*cb_rtpVideoOut)(const EncodedRtpPacket &packet, void *app)             = nullptr;
 
     // empty record packet = EOF/error
     void (*cb_recordData)(const QByteArray &packet, void *app) = nullptr;

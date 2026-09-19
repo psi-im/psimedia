@@ -416,12 +416,12 @@ void RwControlRemote::cb_worker_outputFrame(const RtpWorker::Frame &frame, void 
     static_cast<RwControlRemote *>(app)->worker_outputFrame(frame);
 }
 
-void RwControlRemote::cb_worker_rtpAudioOut(const PRtpPacket &packet, void *app)
+void RwControlRemote::cb_worker_rtpAudioOut(const RtpWorker::EncodedRtpPacket &packet, void *app)
 {
     static_cast<RwControlRemote *>(app)->worker_rtpAudioOut(packet);
 }
 
-void RwControlRemote::cb_worker_rtpVideoOut(const PRtpPacket &packet, void *app)
+void RwControlRemote::cb_worker_rtpVideoOut(const RtpWorker::EncodedRtpPacket &packet, void *app)
 {
     static_cast<RwControlRemote *>(app)->worker_rtpVideoOut(packet);
 }
@@ -616,13 +616,13 @@ void RwControlRemote::worker_outputFrame(const RtpWorker::Frame &frame)
     local_->postMessage(msg);
 }
 
-void RwControlRemote::worker_rtpAudioOut(const PRtpPacket &packet)
+void RwControlRemote::worker_rtpAudioOut(const RtpWorker::EncodedRtpPacket &packet)
 {
     if (local_->cb_rtpAudioOut)
         local_->cb_rtpAudioOut(packet, local_->app);
 }
 
-void RwControlRemote::worker_rtpVideoOut(const PRtpPacket &packet)
+void RwControlRemote::worker_rtpVideoOut(const RtpWorker::EncodedRtpPacket &packet)
 {
     if (local_->cb_rtpVideoOut)
         local_->cb_rtpVideoOut(packet, local_->app);

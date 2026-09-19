@@ -428,11 +428,51 @@ void RtpSessionBridge::stop()
     gst_element_get_state(pipeline_, nullptr, nullptr, GST_CLOCK_TIME_NONE);
 }
 
+GstClockTime RtpSessionBridge::runningTime() const
+{
+    if (!pipeline_)
+        return GST_CLOCK_TIME_NONE;
+
+    GstClock *clock = gst_element_get_clock(pipeline_);
+    if (!clock)
+        return GST_CLOCK_TIME_NONE;
+
+    const GstClockTime now  = gst_clock_get_time(clock);
+    const GstClockTime base = gst_element_get_base_time(pipeline_);
+    gst_object_unref(clock);
+    if (!GST_CLOCK_TIME_IS_VALID(now) || !GST_CLOCK_TIME_IS_VALID(base) || now < base)
+        return GST_CLOCK_TIME_NONE;
+    return now - base;
+}
+
 GstFlowReturn RtpSessionBridge::sendRtp(GstBuffer *buffer)
 {
     if (!running_.load(std::memory_order_acquire) || !sendRtpInput_ || !buffer)
         return GST_FLOW_FLUSHING;
     return gst_app_src_push_buffer(sendRtpInput_, gst_buffer_ref(buffer));
+}
+
+GstFlowReturn RtpSessionBridge::sendRtp(GstBuffer *buffer, GstClockTime presentationAge)
+{
+    if (!buffer)
+        return GST_FLOW_ERROR;
+
+    GstBuffer *mapped = gst_buffer_copy(buffer);
+    if (!mapped)
+        return GST_FLOW_ERROR;
+
+    const GstClockTime now = runningTime();
+    if (GST_CLOCK_TIME_IS_VALID(now)) {
+        const GstClockTime mappedPts = GST_CLOCK_TIME_IS_VALID(presentationAge)
+            ? (presentationAge <= now ? now - presentationAge : 0)
+            : now;
+        GST_BUFFER_PTS(mapped) = mappedPts;
+        GST_BUFFER_DTS(mapped) = mappedPts;
+    }
+
+    const auto flow = sendRtp(mapped);
+    gst_buffer_unref(mapped);
+    return flow;
 }
 
 GstFlowReturn RtpSessionBridge::receivePacket(const PRtpPacket &packet)

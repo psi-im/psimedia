@@ -74,8 +74,18 @@ public:
     bool start();
     void stop();
 
-    /** Feed encoded RTP from the sender pipeline, preserving timestamps. */
+    /** Feed encoded RTP already expressed in this bridge's running-time domain. */
     GstFlowReturn sendRtp(GstBuffer *buffer);
+
+    /**
+     * Feed encoded RTP from another pipeline.
+     *
+     * presentationAge is measured in that producer's running-time domain at
+     * callback time. The bridge maps the age into its own running-time domain,
+     * preserving encoder/queue delay without assuming common pipeline base-time.
+     * GST_CLOCK_TIME_NONE falls back to arrival-time.
+     */
+    GstFlowReturn sendRtp(GstBuffer *buffer, GstClockTime presentationAge);
 
     /**
      * Feed an RTP packet from a legacy byte-oriented sender edge.
@@ -278,6 +288,7 @@ private:
     bool          build();
     void          cleanup();
     bool          ownerThread(const char *operation) const;
+    GstClockTime  runningTime() const;
     GstCaps      *payloadCaps(guint pt);
     GstFlowReturn pullNetworkPacket(GstAppSink *sink, PRtpPacket::Type type);
     GstFlowReturn pullMediaPacket(GstAppSink *sink);

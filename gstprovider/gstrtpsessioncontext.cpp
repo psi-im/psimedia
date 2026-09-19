@@ -63,12 +63,14 @@ QList<PPayloadInfo> negotiatedLocalPayloads(bool enabled, bool remoteConfigured,
     return { payload };
 }
 
-bool hasPayloadType(const PRtpPacket &packet, int payloadType)
+bool hasPayloadType(GstBuffer *buffer, int payloadType)
 {
-    if (packet.type != PRtpPacket::Type::Rtp || payloadType < 0 || payloadType > 127 || packet.rawValue.size() < 2)
+    if (!buffer || payloadType < 0 || payloadType > 127 || gst_buffer_get_size(buffer) < 2)
         return false;
 
-    const auto *bytes = reinterpret_cast<const uchar *>(packet.rawValue.constData());
+    guint8 bytes[2] = {};
+    if (gst_buffer_extract(buffer, 0, bytes, sizeof(bytes)) != sizeof(bytes))
+        return false;
     if ((bytes[0] >> 6) != 2)
         return false;
     return (bytes[1] & 0x7f) == payloadType;
@@ -556,12 +558,12 @@ void GstRtpSessionContext::control_audioInputIntensityChanged(int intensity)
 
 void GstRtpSessionContext::recorder_stopped() { emit stoppedRecording(); }
 
-void GstRtpSessionContext::cb_control_rtpAudioOut(const PRtpPacket &packet, void *app)
+void GstRtpSessionContext::cb_control_rtpAudioOut(const RtpWorker::EncodedRtpPacket &packet, void *app)
 {
     static_cast<GstRtpSessionContext *>(app)->control_rtpAudioOut(packet);
 }
 
-void GstRtpSessionContext::cb_control_rtpVideoOut(const PRtpPacket &packet, void *app)
+void GstRtpSessionContext::cb_control_rtpVideoOut(const RtpWorker::EncodedRtpPacket &packet, void *app)
 {
     static_cast<GstRtpSessionContext *>(app)->control_rtpVideoOut(packet);
 }
@@ -571,18 +573,18 @@ void GstRtpSessionContext::cb_control_recordData(const QByteArray &packet, void 
     static_cast<GstRtpSessionContext *>(app)->control_recordData(packet);
 }
 
-void GstRtpSessionContext::control_rtpAudioOut(const PRtpPacket &packet)
+void GstRtpSessionContext::control_rtpAudioOut(const RtpWorker::EncodedRtpPacket &packet)
 {
-    if (!hasPayloadType(packet, audioSendPayloadType.load(std::memory_order_acquire)))
+    if (!hasPayloadType(packet.buffer, audioSendPayloadType.load(std::memory_order_acquire)))
         return;
-    audioBridge.sendRtp(packet);
+    audioBridge.sendRtp(packet.buffer, packet.presentationAge);
 }
 
-void GstRtpSessionContext::control_rtpVideoOut(const PRtpPacket &packet)
+void GstRtpSessionContext::control_rtpVideoOut(const RtpWorker::EncodedRtpPacket &packet)
 {
-    if (!hasPayloadType(packet, videoSendPayloadType.load(std::memory_order_acquire)))
+    if (!hasPayloadType(packet.buffer, videoSendPayloadType.load(std::memory_order_acquire)))
         return;
-    videoBridge.sendRtp(packet);
+    videoBridge.sendRtp(packet.buffer, packet.presentationAge);
 }
 
 void GstRtpSessionContext::control_recordData(const QByteArray &packet) { recorder.push_data_for_read(packet); }
