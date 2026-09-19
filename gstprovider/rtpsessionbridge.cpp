@@ -171,6 +171,7 @@ bool RtpSessionBridge::build()
                      recvRtpOutput, sendRtcpOutput, nullptr);
 
     pipeline_       = pipeline;
+    bus_            = gst_element_get_bus(pipeline_);
     session_        = session;
     sendRtpInput_   = GST_APP_SRC(sendRtpInput);
     recvRtpInput_   = GST_APP_SRC(recvRtpInput);
@@ -244,6 +245,7 @@ bool RtpSessionBridge::build()
 
 void RtpSessionBridge::cleanup()
 {
+    ++busPollGeneration_;
     running_.store(false, std::memory_order_release);
     disableDeliveries();
 
@@ -290,6 +292,9 @@ void RtpSessionBridge::cleanup()
     }
     sendRtpSinkPad_ = recvRtpSinkPad_ = recvRtcpSinkPad_ = sendRtcpSrcPad_ = nullptr;
 
+    if (bus_)
+        gst_object_unref(bus_);
+    bus_ = nullptr;
     if (pipeline_)
         gst_object_unref(pipeline_);
     pipeline_       = nullptr;
@@ -400,19 +405,27 @@ bool RtpSessionBridge::setPayloads(const QList<PPayloadInfo> &local, const QList
 
 bool RtpSessionBridge::start()
 {
-    if (!ownerThread("start") || !pipeline_)
+    if (!ownerThread("start") || !pipeline_ || !bus_)
         return false;
     if (running_.load(std::memory_order_acquire))
         return true;
 
+    // A stopped generation may leave state-change/EOS messages queued. They
+    // are not runtime failures of the new generation.
+    while (GstMessage *message = gst_bus_pop(bus_))
+        gst_message_unref(message);
+
+    const quint64 generation = ++busPollGeneration_;
     enableDeliveries();
     running_.store(true, std::memory_order_release);
     if (gst_element_set_state(pipeline_, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
         running_.store(false, std::memory_order_release);
+        ++busPollGeneration_;
         disableDeliveries();
         gst_element_set_state(pipeline_, GST_STATE_NULL);
         return false;
     }
+    scheduleBusPoll(generation);
     return true;
 }
 
@@ -420,12 +433,66 @@ void RtpSessionBridge::stop()
 {
     if (!ownerThread("stop"))
         return;
+    ++busPollGeneration_;
     const bool wasRunning = running_.exchange(false, std::memory_order_acq_rel);
     disableDeliveries();
     if (!pipeline_ || !wasRunning)
         return;
     gst_element_set_state(pipeline_, GST_STATE_NULL);
     gst_element_get_state(pipeline_, nullptr, nullptr, GST_CLOCK_TIME_NONE);
+}
+
+void RtpSessionBridge::scheduleBusPoll(quint64 generation)
+{
+    QTimer::singleShot(10, this, [this, generation]() {
+        if (generation == busPollGeneration_ && running_.load(std::memory_order_acquire))
+            pollBus(generation);
+    });
+}
+
+void RtpSessionBridge::pollBus(quint64 generation)
+{
+    if (generation != busPollGeneration_ || !running_.load(std::memory_order_acquire) || !bus_)
+        return;
+
+    bool runtimeError = false;
+    while (GstMessage *message = gst_bus_pop(bus_)) {
+        if (GST_MESSAGE_TYPE(message) == GST_MESSAGE_ERROR) {
+            GError *error = nullptr;
+            gchar  *debug = nullptr;
+            gst_message_parse_error(message, &error, &debug);
+            qWarning() << "RTP session bridge GStreamer error:"
+                       << (error && error->message ? error->message : "unknown");
+            if (debug && *debug)
+                qWarning() << "RTP session bridge debug:" << debug;
+            if (error)
+                g_error_free(error);
+            g_free(debug);
+            runtimeError = true;
+        }
+        gst_message_unref(message);
+        if (runtimeError)
+            break;
+    }
+
+    if (!runtimeError) {
+        scheduleBusPoll(generation);
+        return;
+    }
+
+    // Retire this generation before invoking external code. The handler can
+    // synchronously clean up or delete the owning GstRtpSessionContext.
+    ++busPollGeneration_;
+    running_.store(false, std::memory_order_release);
+    disableDeliveries();
+    if (pipeline_) {
+        gst_element_set_state(pipeline_, GST_STATE_NULL);
+        gst_element_get_state(pipeline_, nullptr, nullptr, GST_CLOCK_TIME_NONE);
+    }
+
+    const auto handler = runtimeErrorHandler_;
+    if (handler)
+        handler();
 }
 
 GstClockTime RtpSessionBridge::runningTime() const
@@ -495,6 +562,13 @@ void RtpSessionBridge::setMediaPacketHandler(MediaPacketHandler handler)
     if (!ownerThread("setMediaPacketHandler"))
         return;
     mediaPacketHandler_ = std::move(handler);
+}
+
+void RtpSessionBridge::setRuntimeErrorHandler(RuntimeErrorHandler handler)
+{
+    if (!ownerThread("setRuntimeErrorHandler"))
+        return;
+    runtimeErrorHandler_ = std::move(handler);
 }
 
 bool RtpSessionBridge::requestRtcp(guint64 maxDelay)

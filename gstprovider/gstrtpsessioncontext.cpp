@@ -291,6 +291,7 @@ void GstRtpSessionContext::start()
 {
     Q_ASSERT(!control && !isStarted);
 
+    terminalError = false;
     write_mutex.lock();
 
     control = new RwControlLocal(gstLoop, hardwareDeviceMonitor, this);
@@ -447,11 +448,13 @@ bool GstRtpSessionContext::configureRtpBridges()
             bridge.stop();
             bridge.setNetworkPacketHandler({});
             bridge.setMediaPacketHandler({});
+            bridge.setRuntimeErrorHandler({});
             return true;
         }
         if (!bridge.isValid() || !bridge.setPayloads(local, remote))
             return false;
 
+        bridge.setRuntimeErrorHandler([this]() { control_rtpBridgeError(); });
         auto *channelPtr = &channel;
         bridge.setNetworkPacketHandler(
             [channelPtr](const PRtpPacket &packet) { channelPtr->push_packet_for_read(packet); });
@@ -478,10 +481,14 @@ bool GstRtpSessionContext::configureRtpBridges()
 
 void GstRtpSessionContext::control_statusReady(const RwControlStatus &status)
 {
+    if (terminalError)
+        return;
+
     lastStatus = status;
 
     if (!status.finished && !status.error && pending_status && !status.stopped && !isStopping) {
         if (!configureRtpBridges()) {
+            terminalError        = true;
             lastStatus.error     = true;
             lastStatus.errorCode = int(ErrorGeneric);
             cleanup();
@@ -495,8 +502,10 @@ void GstRtpSessionContext::control_statusReady(const RwControlStatus &status)
         //   sending.  the session still remains active.
         emit finished();
     } else if (status.error) {
+        terminalError = true;
         cleanup();
         emit error();
+        return;
     } else if (pending_status) {
         if (status.stopped) {
             pending_status = false;
@@ -554,6 +563,18 @@ void GstRtpSessionContext::control_audioOutputIntensityChanged(int intensity)
 void GstRtpSessionContext::control_audioInputIntensityChanged(int intensity)
 {
     emit audioInputIntensityChanged(intensity);
+}
+
+void GstRtpSessionContext::control_rtpBridgeError()
+{
+    if (terminalError || isStopping || !control)
+        return;
+
+    terminalError        = true;
+    lastStatus.error     = true;
+    lastStatus.errorCode = int(ErrorGeneric);
+    cleanup();
+    emit error();
 }
 
 void GstRtpSessionContext::recorder_stopped() { emit stoppedRecording(); }

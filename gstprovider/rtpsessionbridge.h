@@ -44,6 +44,7 @@ namespace PsiMedia {
 class RtpSessionBridge : public QObject {
 public:
     using NetworkPacketHandler = std::function<void(const PRtpPacket &)>;
+    using RuntimeErrorHandler  = std::function<void()>;
     // The buffer is borrowed for the duration of the callback. A consumer that
     // queues it or passes ownership to appsrc must take its own reference.
     using MediaPacketHandler = std::function<void(GstBuffer *)>;
@@ -132,6 +133,7 @@ public:
     /** Handler replacement is serialized on the owner thread. */
     void setNetworkPacketHandler(NetworkPacketHandler handler);
     void setMediaPacketHandler(MediaPacketHandler handler);
+    void setRuntimeErrorHandler(RuntimeErrorHandler handler);
 
     /** Request an early RTCP report/feedback packet within maxDelay ns. Owner thread only. */
     bool requestRtcp(guint64 maxDelay = 0);
@@ -289,6 +291,8 @@ private:
     void          cleanup();
     bool          ownerThread(const char *operation) const;
     GstClockTime  runningTime() const;
+    void          scheduleBusPoll(quint64 generation);
+    void          pollBus(quint64 generation);
     GstCaps      *payloadCaps(guint pt);
     GstFlowReturn pullNetworkPacket(GstAppSink *sink, PRtpPacket::Type type);
     GstFlowReturn pullMediaPacket(GstAppSink *sink);
@@ -303,9 +307,12 @@ private:
     void    scheduleDeliveryLocked(quint64 generation);
     void    drainDeliveries(quint64 generation);
 
+    friend struct RtpSessionBridgeTestAccess;
+
     QString media_;
 
     GstElement *pipeline_       = nullptr;
+    GstBus     *bus_            = nullptr;
     GstElement *session_        = nullptr;
     GstAppSrc  *sendRtpInput_   = nullptr;
     GstAppSrc  *recvRtpInput_   = nullptr;
@@ -337,6 +344,8 @@ private:
 
     NetworkPacketHandler networkPacketHandler_;
     MediaPacketHandler   mediaPacketHandler_;
+    RuntimeErrorHandler  runtimeErrorHandler_;
+    quint64              busPollGeneration_ = 0;
     std::atomic<quint64> receivedRtcpPackets_ { 0 };
     std::atomic<bool>    running_ { false };
 };

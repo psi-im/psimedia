@@ -28,6 +28,27 @@
 #include <memory>
 #include <optional>
 
+namespace PsiMedia {
+
+struct RtpSessionBridgeTestAccess {
+    static bool postRuntimeError(RtpSessionBridge &bridge)
+    {
+        if (!bridge.bus_ || !bridge.pipeline_)
+            return false;
+
+        GError *error = g_error_new_literal(GST_CORE_ERROR, GST_CORE_ERROR_FAILED,
+                                            "synthetic RTP bridge runtime failure");
+        GstMessage *message = gst_message_new_error(GST_OBJECT(bridge.pipeline_), error,
+                                                    "psimedia runtime-error regression");
+        g_error_free(error);
+        if (!message)
+            return false;
+        return gst_bus_post(bridge.bus_, message) != FALSE;
+    }
+};
+
+} // namespace PsiMedia
+
 namespace {
 
 constexpr int NegotiatedPayloadType = 109;
@@ -417,7 +438,76 @@ int main(int argc, char **argv)
         return 15;
     }
 
-    qInfo() << "Production RTP sender replaced live/file capture sources and resumed Opus RTP PT"
-            << NegotiatedPayloadType << "without recreating the RTP session";
+    // A bridge can fail after PLAYING even when the legacy media worker is
+    // otherwise healthy. Verify that a real GstBus error reaches the provider
+    // terminal error path exactly once on the Qt owner thread.
+    std::unique_ptr<PsiMedia::RtpSessionContext> errorSession(provider.createRtpSession());
+    auto *errorGstSession = qobject_cast<PsiMedia::GstRtpSessionContext *>(errorSession->qobject());
+    if (!errorGstSession) {
+        qCritical() << "Provider did not create the bridge-error test session";
+        return 16;
+    }
+
+    errorSession->setLocalAudioPreferences({ rawAudio });
+    errorSession->setRemoteAudioPreferences({ remoteOpus });
+    errorSession->audioRtpChannel()->setEnabled(true);
+
+    bool       errorStartFailed   = false;
+    bool       errorStartTimedOut = false;
+    QEventLoop errorStartLoop;
+    QTimer     errorStartTimer;
+    errorStartTimer.setSingleShot(true);
+    QObject::connect(&errorStartTimer, &QTimer::timeout, &errorStartLoop, [&]() {
+        errorStartTimedOut = true;
+        errorStartLoop.quit();
+    });
+    QObject::connect(errorGstSession, &PsiMedia::GstRtpSessionContext::started, &errorStartLoop,
+                     &QEventLoop::quit);
+    QObject::connect(errorGstSession, &PsiMedia::GstRtpSessionContext::error, &errorStartLoop, [&]() {
+        errorStartFailed = true;
+        errorStartLoop.quit();
+    });
+
+    errorStartTimer.start(10000);
+    errorSession->start();
+    errorStartLoop.exec();
+    errorStartTimer.stop();
+    if (errorStartFailed || errorStartTimedOut) {
+        qCritical() << "Bridge-error test session did not start";
+        return 17;
+    }
+
+    int        runtimeErrors = 0;
+    bool       wrongErrorThread = false;
+    QThread   *ownerThread = QThread::currentThread();
+    QEventLoop runtimeErrorLoop;
+    QTimer     runtimeErrorTimer;
+    runtimeErrorTimer.setSingleShot(true);
+    QObject::connect(&runtimeErrorTimer, &QTimer::timeout, &runtimeErrorLoop, &QEventLoop::quit);
+    QObject::connect(errorGstSession, &PsiMedia::GstRtpSessionContext::error, &runtimeErrorLoop, [&]() {
+        ++runtimeErrors;
+        wrongErrorThread |= QThread::currentThread() != ownerThread;
+        runtimeErrorLoop.quit();
+    });
+
+    if (!PsiMedia::RtpSessionBridgeTestAccess::postRuntimeError(errorGstSession->audioBridge)) {
+        qCritical() << "Could not post synthetic RTP bridge bus error";
+        return 18;
+    }
+
+    runtimeErrorTimer.start(3000);
+    runtimeErrorLoop.exec();
+    runtimeErrorTimer.stop();
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+    if (runtimeErrors != 1 || wrongErrorThread
+        || errorGstSession->errorCode() != PsiMedia::RtpSessionContext::ErrorGeneric) {
+        qCritical() << "RTP bridge runtime error did not reach provider terminal path"
+                    << runtimeErrors << wrongErrorThread << int(errorGstSession->errorCode());
+        return 19;
+    }
+
+    qInfo() << "Production RTP sender hotplug and bridge runtime-error regressions passed with Opus RTP PT"
+            << NegotiatedPayloadType;
     return 0;
 }

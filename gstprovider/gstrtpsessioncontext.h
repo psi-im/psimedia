@@ -55,6 +55,7 @@ public:
     bool                   isStarted;
     bool                   isStopping;
     bool                   pending_status;
+    bool                   terminalError = false;
 
 #ifdef QT_GUI_LIB
     GstVideoWidget *outputWidget, *previewWidget;
@@ -146,6 +147,7 @@ private slots:
     void control_outputFrame(const QImage &img);
     void control_audioOutputIntensityChanged(int intensity);
     void control_audioInputIntensityChanged(int intensity);
+    void control_rtpBridgeError();
     void recorder_stopped();
 
 private:
