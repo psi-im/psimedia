@@ -17,6 +17,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMetaObject>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QTimer>
 
@@ -89,6 +90,45 @@ bool waitForControlBarrier(PsiMedia::RtpSessionContext *session, int timeoutMs =
     timer.start(timeoutMs);
     loop.exec();
     return done;
+}
+
+
+QString receiveAppSrcName(PsiMedia::RtpSessionContext *session, int timeoutMs = 5000)
+{
+    QString    dotPath;
+    QEventLoop loop;
+    QTimer     timer;
+    timer.setSingleShot(true);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+
+    session->dumpPipeline([&](const QStringList &paths) {
+        QString recvPath;
+        for (const auto &path : paths) {
+            if (path.endsWith(QStringLiteral("psimedia_recv.dot"))) {
+                recvPath = path;
+                break;
+            }
+        }
+        QMetaObject::invokeMethod(
+            &loop,
+            [&, recvPath]() {
+                dotPath = recvPath;
+                loop.quit();
+            },
+            Qt::QueuedConnection);
+    });
+
+    timer.start(timeoutMs);
+    loop.exec();
+    if (dotPath.isEmpty())
+        return {};
+
+    QFile file(dotPath);
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    const QString dot = QString::fromUtf8(file.readAll());
+    const auto match = QRegularExpression(QStringLiteral("appsrc\\d+")).match(dot);
+    return match.hasMatch() ? match.captured(0) : QString();
 }
 
 void drainPackets(PsiMedia::GstRtpChannel *channel)
@@ -228,9 +268,20 @@ int main(int argc, char **argv)
 
     QTemporaryDir tempDir;
     const QString filePath = tempDir.filePath(QStringLiteral("switch.ogg"));
-    if (!tempDir.isValid() || !createFiniteOpusFile(filePath)) {
+    if (!tempDir.isValid()) {
+        qCritical() << "Could not create temporary test directory";
+        return 6;
+    }
+    qputenv("GST_DEBUG_DUMP_DOT_DIR", QFile::encodeName(tempDir.path()));
+    if (!createFiniteOpusFile(filePath)) {
         qCritical() << "Could not create finite Ogg/Opus test input";
         return 6;
+    }
+
+    const QString receiveBeforeSwitch = receiveAppSrcName(session.get());
+    if (receiveBeforeSwitch.isEmpty()) {
+        qCritical() << "Could not identify the production receive appsrc";
+        return 7;
     }
 
     // Start with an unbounded live source. A live->file switch must tear this
@@ -269,6 +320,12 @@ int main(int argc, char **argv)
         qCritical() << "Timed out switching from live input to file input";
         return 9;
     }
+    const QString receiveAfterFileSwitch = receiveAppSrcName(session.get());
+    if (receiveAfterFileSwitch != receiveBeforeSwitch) {
+        qCritical() << "Live-to-file capture switch recreated the receive pipeline"
+                    << receiveBeforeSwitch << receiveAfterFileSwitch;
+        return 10;
+    }
     // Preserve the previous transmit intent across the source replacement.
     session->transmitAudio();
     if (!waitForRtp(audioChannel, gstSession)) {
@@ -291,6 +348,12 @@ int main(int argc, char **argv)
     if (!waitForControlBarrier(session.get())) {
         qCritical() << "Timed out switching from file input back to live input";
         return 12;
+    }
+    const QString receiveAfterLiveSwitch = receiveAppSrcName(session.get());
+    if (receiveAfterLiveSwitch != receiveBeforeSwitch) {
+        qCritical() << "File-to-live capture switch recreated the receive pipeline"
+                    << receiveBeforeSwitch << receiveAfterLiveSwitch;
+        return 13;
     }
     session->transmitAudio();
     if (!waitForRtp(audioChannel, gstSession)) {
