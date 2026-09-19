@@ -216,14 +216,66 @@ RtpWorker::~RtpWorker()
     delete videoStats;
 }
 
+void RtpWorker::cleanupSend()
+{
+    volumein_mutex.lock();
+    volumein = nullptr;
+    volumein_mutex.unlock();
+
+    rtpaudioout_mutex.lock();
+    rtpaudioout = false;
+    rtpaudioout_mutex.unlock();
+
+    rtpvideoout_mutex.lock();
+    rtpvideoout = false;
+    rtpvideoout_mutex.unlock();
+
+    if (sendbin) {
+        if (shared_clock && send_clock_is_shared) {
+            gst_object_unref(shared_clock);
+            shared_clock         = nullptr;
+            send_clock_is_shared = false;
+
+            if (recv_in_use) {
+                // The send pipeline is the optional master clock. Releasing it
+                // must not tear down the receive graph: temporarily move the
+                // receive pipeline to READY, restore automatic clocking and
+                // continue with the same recvbin/appsrc/sink objects.
+                qDebug("recv clock reverts to auto");
+                gst_element_set_state(rpipeline, GST_STATE_READY);
+                gst_element_get_state(rpipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
+                gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
+                gst_element_set_state(rpipeline, GST_STATE_PLAYING);
+            }
+        }
+
+        send_pipelineContext->deactivate();
+        gst_pipeline_auto_clock(GST_PIPELINE(spipeline));
+        gst_bin_remove(GST_BIN(spipeline), sendbin);
+        sendbin     = nullptr;
+        send_in_use = false;
+    }
+
+    if (pd_audiosrc) {
+        delete pd_audiosrc;
+        pd_audiosrc = nullptr;
+        audiosrc    = nullptr;
+    }
+
+    if (pd_videosrc) {
+        delete pd_videosrc;
+        pd_videosrc = nullptr;
+        videosrc    = nullptr;
+    }
+}
+
 void RtpWorker::cleanup()
 {
 #ifdef RTPWORKER_DEBUG
     qDebug("cleaning up...");
 #endif
-    volumein_mutex.lock();
-    volumein = nullptr;
-    volumein_mutex.unlock();
+
+    cleanupSend();
 
     volumeout_mutex.lock();
     volumeout = nullptr;
@@ -237,96 +289,12 @@ void RtpWorker::cleanup()
     videortpsrc = nullptr;
     videortpsrc_mutex.unlock();
 
-    rtpaudioout_mutex.lock();
-    rtpaudioout = false;
-    rtpaudioout_mutex.unlock();
-
-    rtpvideoout_mutex.lock();
-    rtpvideoout = false;
-    rtpvideoout_mutex.unlock();
-
-    // if(pd_audiosrc)
-    //    pd_audiosrc->deactivate();
-
-    // if(pd_videosrc)
-    //    pd_videosrc->deactivate();
-
-    if (sendbin) {
-        if (shared_clock && send_clock_is_shared) {
-            gst_object_unref(shared_clock);
-            shared_clock         = nullptr;
-            send_clock_is_shared = false;
-
-            if (recv_in_use) {
-                qDebug("recv clock reverts to auto");
-                gst_element_set_state(rpipeline, GST_STATE_READY);
-                gst_element_get_state(rpipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
-                gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
-
-                // only restart the receive pipeline if it is
-                //   owned by a separate session
-                if (!recvbin) {
-                    gst_element_set_state(rpipeline, GST_STATE_PLAYING);
-                    // gst_element_get_state(rpipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
-                }
-            }
-        }
-
-        send_pipelineContext->deactivate();
-        gst_pipeline_auto_clock(GST_PIPELINE(spipeline));
-        // gst_element_set_state(sendbin, GST_STATE_NULL);
-        // gst_element_get_state(sendbin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
-        gst_bin_remove(GST_BIN(spipeline), sendbin);
-        sendbin     = nullptr;
-        send_in_use = false;
-    }
-
     if (recvbin) {
-        // NOTE: commenting this out because recv clock is no longer
-        //  ever shared
-        /*if(shared_clock && recv_clock_is_shared)
-        {
-            gst_object_unref(shared_clock);
-            shared_clock = 0;
-            recv_clock_is_shared = false;
-
-            if(send_in_use)
-            {
-                // FIXME: do we really need to restart the pipeline?
-
-                qDebug("send clock becomes master");
-                send_pipelineContext->deactivate();
-                gst_pipeline_auto_clock(GST_PIPELINE(spipeline));
-                send_pipelineContext->activate();
-                //gst_element_get_state(spipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
-
-                // send clock becomes shared
-                shared_clock = gst_pipeline_get_clock(GST_PIPELINE(spipeline));
-                gst_object_ref(GST_OBJECT(shared_clock));
-                gst_pipeline_use_clock(GST_PIPELINE(spipeline), shared_clock);
-                send_clock_is_shared = true;
-            }
-        }*/
-
         recv_pipelineContext->deactivate();
         gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
-        // gst_element_set_state(recvbin, GST_STATE_NULL);
-        // gst_element_get_state(recvbin, nullptr, nullptr, GST_CLOCK_TIME_NONE);
         gst_bin_remove(GST_BIN(rpipeline), recvbin);
         recvbin     = nullptr;
         recv_in_use = false;
-    }
-
-    if (pd_audiosrc) {
-        delete pd_audiosrc;
-        pd_audiosrc = nullptr;
-        audiosrc    = nullptr;
-    }
-
-    if (pd_videosrc) {
-        delete pd_videosrc;
-        pd_videosrc = nullptr;
-        videosrc    = nullptr;
     }
 
     if (pd_audiosink) {
