@@ -129,7 +129,7 @@ const GstStructure *findSourceStats(const GstStructure *sessionStats, quint32 ss
         return nullptr;
 
     for (guint i = 0; i < sources->n_values; ++i) {
-        const GValue *value = g_value_array_get_nth(sources, i);
+        const GValue *value = &sources->values[i];
         if (!value)
             continue;
         const auto *source = static_cast<const GstStructure *>(g_value_get_boxed(value));
