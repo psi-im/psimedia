@@ -14,8 +14,12 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QEventLoop>
+#include <QFileInfo>
 #include <QMetaObject>
+#include <QTemporaryDir>
 #include <QTimer>
+
+#include <gst/gst.h>
 
 #include <memory>
 #include <optional>
@@ -91,6 +95,76 @@ void drainPackets(PsiMedia::GstRtpChannel *channel)
     QCoreApplication::processEvents(QEventLoop::AllEvents);
     while (channel->packetsAvailable() > 0)
         channel->read();
+}
+
+
+bool createFiniteOpusFile(const QString &path)
+{
+    GstElement *pipeline = gst_pipeline_new("psimedia-test-file");
+    GstElement *source   = gst_element_factory_make("audiotestsrc", nullptr);
+    GstElement *convert  = gst_element_factory_make("audioconvert", nullptr);
+    GstElement *resample = gst_element_factory_make("audioresample", nullptr);
+    GstElement *caps     = gst_element_factory_make("capsfilter", nullptr);
+    GstElement *encoder  = gst_element_factory_make("opusenc", nullptr);
+    GstElement *mux      = gst_element_factory_make("oggmux", nullptr);
+    GstElement *sink     = gst_element_factory_make("filesink", nullptr);
+    if (!pipeline || !source || !convert || !resample || !caps || !encoder || !mux || !sink) {
+        if (pipeline)
+            gst_object_unref(pipeline);
+        return false;
+    }
+
+    g_object_set(source, "is-live", FALSE, "num-buffers", 50, nullptr);
+    g_object_set(sink, "location", QFile::encodeName(path).constData(), nullptr);
+    GstCaps *rawCaps = gst_caps_new_simple("audio/x-raw", "rate", G_TYPE_INT, OpusRtpClockRate, "channels",
+                                           G_TYPE_INT, OpusRtpChannels, nullptr);
+    g_object_set(caps, "caps", rawCaps, nullptr);
+    gst_caps_unref(rawCaps);
+
+    gst_bin_add_many(GST_BIN(pipeline), source, convert, resample, caps, encoder, mux, sink, nullptr);
+    if (!gst_element_link_many(source, convert, resample, caps, encoder, mux, sink, nullptr)) {
+        gst_object_unref(pipeline);
+        return false;
+    }
+
+    const auto stateResult = gst_element_set_state(pipeline, GST_STATE_PLAYING);
+    if (stateResult == GST_STATE_CHANGE_FAILURE) {
+        gst_element_set_state(pipeline, GST_STATE_NULL);
+        gst_object_unref(pipeline);
+        return false;
+    }
+
+    GstBus     *bus = gst_element_get_bus(pipeline);
+    GstMessage *msg = gst_bus_timed_pop_filtered(
+        bus, 10 * GST_SECOND, GstMessageType(GST_MESSAGE_EOS | GST_MESSAGE_ERROR));
+    const bool ok = msg && GST_MESSAGE_TYPE(msg) == GST_MESSAGE_EOS;
+    if (msg)
+        gst_message_unref(msg);
+    gst_object_unref(bus);
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    gst_object_unref(pipeline);
+    return ok && QFileInfo(path).size() > 0;
+}
+
+bool waitForFinished(PsiMedia::GstRtpSessionContext *session, bool *failed, int timeoutMs = 10000)
+{
+    bool       finished = false;
+    QEventLoop loop;
+    QTimer     timer;
+    timer.setSingleShot(true);
+    QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+    QObject::connect(session, &PsiMedia::GstRtpSessionContext::finished, &loop, [&]() {
+        finished = true;
+        loop.quit();
+    });
+    QObject::connect(session, &PsiMedia::GstRtpSessionContext::error, &loop, [&]() {
+        if (failed)
+            *failed = true;
+        loop.quit();
+    });
+    timer.start(timeoutMs);
+    loop.exec();
+    return finished;
 }
 
 } // namespace
@@ -172,47 +246,65 @@ int main(int argc, char **argv)
         return 5;
     }
 
-    // A finite first source makes a stale send pipeline observable: once it has
-    // reached EOS it cannot produce packets after the second source is selected.
-    session->setAudioInputDevice(QStringLiteral("audiotestsrc is-live=true wave=sine num-buffers=32"));
-    if (!waitForControlBarrier(session.get())) {
-        qCritical() << "Timed out attaching the first synthetic audio input";
+    QTemporaryDir tempDir;
+    const QString filePath = tempDir.filePath(QStringLiteral("switch.ogg"));
+    if (!tempDir.isValid() || !createFiniteOpusFile(filePath)) {
+        qCritical() << "Could not create finite Ogg/Opus test input";
         return 6;
+    }
+
+    // Start with an unbounded live source. A live->file switch must tear this
+    // capture source down before the finite file source is committed.
+    session->setAudioInputDevice(QStringLiteral("audiotestsrc is-live=true wave=sine"));
+    if (!waitForControlBarrier(session.get())) {
+        qCritical() << "Timed out attaching the live synthetic audio input";
+        return 7;
     }
     session->transmitAudio();
     if (!waitForRtp(audioChannel, gstSession)) {
-        qCritical() << "Timed out waiting for RTP after late audio-input attach";
-        return 7;
+        qCritical() << "Timed out waiting for RTP from the live input";
+        return 8;
     }
 
-    // Let the finite source reach EOS, then detach it exactly as the native
-    // call path does when capture consent/device availability disappears.
-    QEventLoop drainLoop;
-    QTimer::singleShot(1000, &drainLoop, &QEventLoop::quit);
-    drainLoop.exec();
+    drainPackets(audioChannel);
+    bool fileFailed = false;
+    session->setFileInput(filePath);
+    if (!waitForControlBarrier(session.get())) {
+        qCritical() << "Timed out switching from live input to file input";
+        return 9;
+    }
+    // Preserve the previous transmit intent across the source replacement.
+    session->transmitAudio();
+    if (!waitForRtp(audioChannel, gstSession)) {
+        qCritical() << "File input did not produce RTP after replacing live capture";
+        return 10;
+    }
+    if (!waitForFinished(gstSession, &fileFailed) || fileFailed) {
+        qCritical() << "Finite file input did not replace the unbounded live source";
+        return 11;
+    }
+
+    // The session/bridge survives source replacement. Switching back to a
+    // different live source must rebuild capture and resume RTP without
+    // recreating GstRtpSessionContext.
+    session->setAudioInputDevice(QStringLiteral("audiotestsrc is-live=true wave=white-noise"));
+    if (!waitForControlBarrier(session.get())) {
+        qCritical() << "Timed out switching from file input back to live input";
+        return 12;
+    }
+    session->transmitAudio();
+    if (!waitForRtp(audioChannel, gstSession)) {
+        qCritical() << "RTP did not resume after file-to-live switch";
+        return 13;
+    }
+
     session->pauseAudio();
     session->setAudioInputDevice(QString());
     if (!waitForControlBarrier(session.get())) {
-        qCritical() << "Timed out detaching the synthetic audio input";
-        return 8;
+        qCritical() << "Timed out detaching the final synthetic audio input";
+        return 14;
     }
     drainPackets(audioChannel);
-
-    // Reattach a different live source without recreating RtpSessionContext or
-    // RtpSessionBridge. Before the fix RtpWorker kept the exhausted old sendbin
-    // and this phase timed out.
-    session->setAudioInputDevice(QStringLiteral("audiotestsrc is-live=true wave=white-noise"));
-    if (!waitForControlBarrier(session.get())) {
-        qCritical() << "Timed out reattaching the synthetic audio input";
-        return 9;
-    }
-    session->transmitAudio();
-    if (!waitForRtp(audioChannel, gstSession)) {
-        qCritical() << "RTP did not resume after audio-input hotplug";
-        return 10;
-    }
-
-    session->pauseAudio();
 
     bool       stopTimedOut = false;
     QEventLoop stopLoop;
@@ -231,10 +323,10 @@ int main(int argc, char **argv)
 
     if (stopTimedOut) {
         qCritical() << "Timed out stopping production RTP session";
-        return 11;
+        return 15;
     }
 
-    qInfo() << "Production RTP sender negotiated without capture and resumed Opus RTP PT" << NegotiatedPayloadType
-            << "after audio-input hotplug";
+    qInfo() << "Production RTP sender replaced live/file capture sources and resumed Opus RTP PT"
+            << NegotiatedPayloadType << "without recreating the RTP session";
     return 0;
 }
