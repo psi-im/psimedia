@@ -26,7 +26,6 @@
 #include <gst/gst.h>
 
 #include <memory>
-#include <optional>
 
 namespace PsiMedia {
 
@@ -389,7 +388,7 @@ int main(int argc, char **argv)
     // requiring a physical audio device.
     const QString decodedOutputPath = tempDir.filePath(QStringLiteral("decoded.raw"));
     session->setAudioOutputDevice(
-        QStringLiteral("filesink location=\"%1\" sync=false async=false").arg(decodedOutputPath));
+        QStringLiteral("filesink location=\"%1\" buffer-mode=unbuffered sync=false async=false").arg(decodedOutputPath));
 
     // Negotiation must not require capture. The live source is attached only
     // after the session has started, matching Psi's consent/no-microphone path.
