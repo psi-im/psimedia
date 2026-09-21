@@ -53,6 +53,14 @@ bool SecureRtpGroup::removeEndpoint(const QByteArray &endpointId)
     return ownerThread("removeEndpoint") && bridge_.removeEndpoint(endpointId);
 }
 
+void SecureRtpGroup::clearEndpoints()
+{
+    if (!ownerThread("clearEndpoints"))
+        return;
+    bridge_.clear();
+}
+
+
 bool SecureRtpGroup::activate(const QByteArray &associationId, quint64 epoch, const QString &profile,
                               const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
                               const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt)
