@@ -8,6 +8,8 @@
 #include <QPointer>
 #include <QThread>
 
+#include <limits>
+
 namespace PsiMedia {
 
 RtpGroupBridge::RtpGroupBridge(QObject *parent) : QObject(parent), session_(QStringLiteral("group"))
@@ -155,7 +157,8 @@ QByteArray RtpGroupBridge::bytesFromBuffer(GstBuffer *buffer)
     const auto size = gst_buffer_get_size(buffer);
     if (!size || size > size_t(std::numeric_limits<int>::max()))
         return {};
-    QByteArray bytes(int(size), Qt::Uninitialized);
+    QByteArray bytes;
+    bytes.resize(int(size));
     if (gst_buffer_extract(buffer, 0, bytes.data(), size) != size)
         return {};
     return bytes;
