@@ -15,6 +15,34 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 get_filename_component(ABS_GST_PARENT_DIR "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
 option(PSIMEDIA_BUILD_TESTS "Build psimedia provider regression tests" OFF)
+option(PSIMEDIA_ENABLE_SRTP "Enable direct libSRTP packet protection" ON)
+
+set(PSIMEDIA_SRTP_TARGET "")
+if(PSIMEDIA_ENABLE_SRTP)
+    pkg_check_modules(PSIMEDIA_SRTP QUIET IMPORTED_TARGET libsrtp2>=2.0)
+    if(TARGET PkgConfig::PSIMEDIA_SRTP)
+        set(PSIMEDIA_SRTP_TARGET PkgConfig::PSIMEDIA_SRTP)
+    else()
+        find_path(PSIMEDIA_SRTP_INCLUDE_DIR
+                  NAMES srtp2/srtp.h
+                  HINTS ${SRTP_ROOT} $ENV{SRTP_ROOT} ${GST_SDK}
+                  PATH_SUFFIXES include)
+        find_library(PSIMEDIA_SRTP_LIBRARY
+                     NAMES srtp2
+                     HINTS ${SRTP_ROOT} $ENV{SRTP_ROOT} ${GST_SDK}
+                     PATH_SUFFIXES lib lib64)
+        if(NOT PSIMEDIA_SRTP_INCLUDE_DIR OR NOT PSIMEDIA_SRTP_LIBRARY)
+            message(FATAL_ERROR
+                "PSIMEDIA_ENABLE_SRTP=ON requires libSRTP 2.x (libsrtp2). "
+                "Install the development package, set SRTP_ROOT, or disable SRTP explicitly.")
+        endif()
+        add_library(psimedia_srtp2 UNKNOWN IMPORTED)
+        set_target_properties(psimedia_srtp2 PROPERTIES
+                              IMPORTED_LOCATION "${PSIMEDIA_SRTP_LIBRARY}"
+                              INTERFACE_INCLUDE_DIRECTORIES "${PSIMEDIA_SRTP_INCLUDE_DIR}")
+        set(PSIMEDIA_SRTP_TARGET psimedia_srtp2)
+    endif()
+endif()
 
 if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR ("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo"))
     option(PSIMEDIA_PIPELINE_DEBUG "Add -DPIPELINE_DEBUG definition" OFF)
@@ -50,6 +78,8 @@ set(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/bins.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rtpsessionbridge.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rtpsessionbridge.h
+    ${CMAKE_CURRENT_LIST_DIR}/securertpcontext.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/securertpcontext.h
     ${CMAKE_CURRENT_LIST_DIR}/rtpworker.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rtpworker_devices.cpp
     ${CMAKE_CURRENT_LIST_DIR}/gstthread.cpp
@@ -155,6 +185,13 @@ target_link_libraries(${PROVIDERLIB} PRIVATE
     ${PROJECT_LDFLAGS}
     Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets
 )
+
+if(PSIMEDIA_ENABLE_SRTP)
+    target_compile_definitions(${PROVIDERLIB} PRIVATE PSIMEDIA_HAVE_SRTP=1)
+    # gstprovidersrc is static, so the SRTP dependency must propagate to every
+    # plugin/test executable that consumes it.
+    target_link_libraries(${PROVIDERLIB} PUBLIC ${PSIMEDIA_SRTP_TARGET})
+endif()
 
 if(APPLE)
     target_link_libraries(${PROVIDERLIB} PRIVATE "-framework CoreAudio")
