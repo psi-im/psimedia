@@ -68,8 +68,12 @@ bool SecureRtpGroup::activate(const QByteArray &associationId, quint64 epoch, co
 {
     if (!ownerThread("activate"))
         return false;
-    return crypto_.configure(associationId, epoch, profile, localMasterKey, localMasterSalt, remoteMasterKey,
-                             remoteMasterSalt);
+    const bool configured
+        = crypto_.configure(associationId, epoch, profile, localMasterKey, localMasterSalt, remoteMasterKey,
+                            remoteMasterSalt);
+    if (configured)
+        mediaError_ = SecureRtpSessionContext::Error::None;
+    return configured;
 }
 
 void SecureRtpGroup::invalidate(const QByteArray &associationId, quint64 epoch)
@@ -77,6 +81,8 @@ void SecureRtpGroup::invalidate(const QByteArray &associationId, quint64 epoch)
     if (!ownerThread("invalidate"))
         return;
     crypto_.invalidate(associationId, epoch);
+    if (!crypto_.isReady())
+        mediaError_ = SecureRtpSessionContext::Error::None;
 }
 
 void SecureRtpGroup::setProtectedPacketHandler(ProtectedPacketHandler handler)
@@ -163,6 +169,7 @@ void SecureRtpGroup::protectOutgoing(const PRtpPacket &packet)
         reportCryptoFailure(crypto_.lastError());
         return;
     }
+    mediaError_ = SecureRtpSessionContext::Error::None;
 
     const auto handler = protectedPacketHandler_;
     if (!handler)
@@ -182,6 +189,7 @@ bool SecureRtpGroup::receiveProtectedPacket(const PSecureRtpPacket &packet)
 
     PSecureRtpPacket plain;
     if (!crypto_.unprotect(packet, &plain)) {
+        mediaError_ = SecureRtpSessionContext::Error::None;
         reportCryptoFailure(crypto_.lastError());
         return false;
     }
@@ -189,8 +197,11 @@ bool SecureRtpGroup::receiveProtectedPacket(const PSecureRtpPacket &packet)
     PRtpPacket mediaPacket;
     mediaPacket.rawValue = std::move(plain.rawValue);
     mediaPacket.type     = plain.type;
-    if (bridge_.receivePacket(mediaPacket) != GST_FLOW_OK)
+    if (bridge_.receivePacket(mediaPacket) != GST_FLOW_OK) {
+        mediaError_ = SecureRtpSessionContext::Error::InvalidPacket;
         return false;
+    }
+    mediaError_ = SecureRtpSessionContext::Error::None;
     return true;
 }
 
