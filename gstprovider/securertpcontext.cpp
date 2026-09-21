@@ -350,9 +350,9 @@ SecureRtpSessionContext::Error SrtpAssociation::lastError() const
     return d->error;
 }
 
-static bool processPacket(SrtpAssociation::Private *d, const PSecureRtpPacket &input, PSecureRtpPacket *output,
-                          bool sending)
+bool SrtpAssociation::process(const PSecureRtpPacket &input, PSecureRtpPacket *output, bool sending)
 {
+    QMutexLocker locker(&d->mutex);
     if (!output) {
         d->error = Error::InvalidPacket;
         return false;
@@ -424,14 +424,12 @@ static bool processPacket(SrtpAssociation::Private *d, const PSecureRtpPacket &i
 
 bool SrtpAssociation::protect(const PSecureRtpPacket &plain, PSecureRtpPacket *protectedPacket)
 {
-    QMutexLocker locker(&d->mutex);
-    return processPacket(d.get(), plain, protectedPacket, true);
+    return process(plain, protectedPacket, true);
 }
 
 bool SrtpAssociation::unprotect(const PSecureRtpPacket &protectedPacket, PSecureRtpPacket *plain)
 {
-    QMutexLocker locker(&d->mutex);
-    return processPacket(d.get(), protectedPacket, plain, false);
+    return process(protectedPacket, plain, false);
 }
 
 GstSecureRtpSessionContext::GstSecureRtpSessionContext(QObject *parent) : QObject(parent) { }
