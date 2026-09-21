@@ -80,6 +80,8 @@ set(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/rtpsessionbridge.h
     ${CMAKE_CURRENT_LIST_DIR}/rtpbundlerouter.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rtpbundlerouter.h
+    ${CMAKE_CURRENT_LIST_DIR}/rtpgroupbridge.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/rtpgroupbridge.h
     ${CMAKE_CURRENT_LIST_DIR}/securertpcontext.cpp
     ${CMAKE_CURRENT_LIST_DIR}/securertpcontext.h
     ${CMAKE_CURRENT_LIST_DIR}/rtpworker.cpp
@@ -202,6 +204,11 @@ endif()
 
 if(PSIMEDIA_BUILD_TESTS)
     enable_testing()
+
+    add_executable(psimedia_rtpgroupbridge_test ${ABS_GST_PARENT_DIR}/tests/rtpgroupbridge.cpp)
+    target_link_libraries(psimedia_rtpgroupbridge_test PRIVATE ${PROVIDERLIB})
+    add_test(NAME psimedia_rtpgroupbridge COMMAND psimedia_rtpgroupbridge_test)
+    set_tests_properties(psimedia_rtpgroupbridge PROPERTIES TIMEOUT 20)
 
     add_executable(psimedia_rtpbundlerouter_test ${ABS_GST_PARENT_DIR}/tests/rtpbundlerouter.cpp)
     target_link_libraries(psimedia_rtpbundlerouter_test PRIVATE ${PROVIDERLIB})
