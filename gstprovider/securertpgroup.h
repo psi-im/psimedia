@@ -51,7 +51,10 @@ public:
     bool       isReady() const { return crypto_.isReady(); }
     QByteArray associationId() const { return crypto_.associationId(); }
     quint64    epoch() const { return crypto_.epoch(); }
-    SecureRtpSessionContext::Error lastError() const { return crypto_.lastError(); }
+    SecureRtpSessionContext::Error lastError() const
+    {
+        return mediaError_ == SecureRtpSessionContext::Error::None ? crypto_.lastError() : mediaError_;
+    }
 
     void setProtectedPacketHandler(ProtectedPacketHandler handler);
     void setEndpointMediaPacketHandler(const QByteArray &endpointId, MediaPacketHandler handler);
@@ -83,6 +86,7 @@ private:
     RtpGroupBridge        bridge_;
     ProtectedPacketHandler protectedPacketHandler_;
     RuntimeErrorHandler    runtimeErrorHandler_;
+    SecureRtpSessionContext::Error mediaError_ = SecureRtpSessionContext::Error::None;
 };
 
 } // namespace PsiMedia
