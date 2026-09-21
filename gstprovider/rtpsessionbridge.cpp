@@ -318,14 +318,22 @@ void RtpSessionBridge::cleanup()
 
 bool RtpSessionBridge::setPayloads(const QList<PPayloadInfo> &local, const QList<PPayloadInfo> &remote)
 {
-    if (!ownerThread("setPayloads"))
+    PayloadGroup group;
+    group.endpointId = media_.toUtf8();
+    group.media      = media_;
+    group.local      = local;
+    group.remote     = remote;
+    return setPayloadGroups({ group });
+}
+
+bool RtpSessionBridge::setPayloadGroups(const QList<PayloadGroup> &groups)
+{
+    if (!ownerThread("setPayloadGroups"))
         return false;
 
-    CapsMap                  nextLocal;
-    CapsMap                  nextRemote;
-    CapsMap                  nextCommon;
-    QHash<int, PPayloadInfo> localInfo;
-    QHash<int, PPayloadInfo> remoteInfo;
+    CapsMap nextLocal;
+    CapsMap nextRemote;
+    CapsMap nextCommon;
 
     const auto fail = [&]() {
         unrefCapsMap(nextLocal);
@@ -334,55 +342,70 @@ bool RtpSessionBridge::setPayloads(const QList<PPayloadInfo> &local, const QList
         return false;
     };
 
-    const auto addDirectional = [&](const PPayloadInfo &payload, CapsMap &capsMap,
-                                    QHash<int, PPayloadInfo> &infoMap) {
-        if (payload.id < 0 || payload.id > 127)
+    QSet<QByteArray> endpointIds;
+
+    const auto insertCaps = [&](const PPayloadInfo &payload, const QString &media, CapsMap &capsMap) {
+        if (payload.id < 0 || payload.id > 127 || media.isEmpty())
             return false;
-        GstCaps *caps = capsForPayload(payload, media_);
+        GstCaps *caps = capsForPayload(payload, media);
         if (!caps)
             return false;
         const auto existing = capsMap.constFind(payload.id);
-        if (existing != capsMap.cend()) {
-            const bool same = gst_caps_is_equal(*existing, caps);
-            gst_caps_unref(caps);
-            return same;
+        if (existing == capsMap.cend()) {
+            capsMap.insert(payload.id, caps);
+            return true;
         }
-        capsMap.insert(payload.id, caps);
-        infoMap.insert(payload.id, payload);
-        return true;
+        const bool same = gst_caps_is_equal(*existing, caps);
+        gst_caps_unref(caps);
+        return same;
     };
 
-    for (const auto &payload : local) {
-        if (!addDirectional(payload, nextLocal, localInfo))
-            return fail();
-    }
-    for (const auto &payload : remote) {
-        if (!addDirectional(payload, nextRemote, remoteInfo))
-            return fail();
-    }
-
-    const auto addCommon = [&](const PPayloadInfo &primary, const PPayloadInfo *secondary) {
+    const auto insertCommon = [&](const PPayloadInfo &primary, const PPayloadInfo *secondary,
+                                  const QString &media) {
         if (secondary && !payloadsCompatible(primary, *secondary))
             return false;
         const PPayloadInfo common = commonPayload(primary, secondary);
-        GstCaps           *caps   = capsForPayload(common, media_);
-        if (!caps)
-            return false;
-        nextCommon.insert(common.id, caps);
-        return true;
+        return insertCaps(common, media, nextCommon);
     };
 
-    for (auto it = localInfo.cbegin(); it != localInfo.cend(); ++it) {
-        const auto  remoteIt = remoteInfo.constFind(it.key());
-        const auto *peer     = remoteIt == remoteInfo.cend() ? nullptr : &remoteIt.value();
-        if (!addCommon(it.value(), peer))
+    for (const auto &group : groups) {
+        if (group.endpointId.isEmpty() || group.media.isEmpty() || endpointIds.contains(group.endpointId))
             return fail();
-    }
-    for (auto it = remoteInfo.cbegin(); it != remoteInfo.cend(); ++it) {
-        if (localInfo.contains(it.key()))
-            continue;
-        if (!addCommon(it.value(), nullptr))
-            return fail();
+        endpointIds.insert(group.endpointId);
+
+        QHash<int, PPayloadInfo> localInfo;
+        QHash<int, PPayloadInfo> remoteInfo;
+
+        for (const auto &payload : group.local) {
+            if (!insertCaps(payload, group.media, nextLocal))
+                return fail();
+            const auto existing = localInfo.constFind(payload.id);
+            if (existing != localInfo.cend() && !payloadsCompatible(existing.value(), payload))
+                return fail();
+            localInfo.insert(payload.id, payload);
+        }
+
+        for (const auto &payload : group.remote) {
+            if (!insertCaps(payload, group.media, nextRemote))
+                return fail();
+            const auto existing = remoteInfo.constFind(payload.id);
+            if (existing != remoteInfo.cend() && !payloadsCompatible(existing.value(), payload))
+                return fail();
+            remoteInfo.insert(payload.id, payload);
+        }
+
+        for (auto it = localInfo.cbegin(); it != localInfo.cend(); ++it) {
+            const auto remoteIt = remoteInfo.constFind(it.key());
+            const auto *peer = remoteIt == remoteInfo.cend() ? nullptr : &remoteIt.value();
+            if (!insertCommon(it.value(), peer, group.media))
+                return fail();
+        }
+        for (auto it = remoteInfo.cbegin(); it != remoteInfo.cend(); ++it) {
+            if (localInfo.contains(it.key()))
+                continue;
+            if (!insertCommon(it.value(), nullptr, group.media))
+                return fail();
+        }
     }
 
     CapsMap oldLocal;
