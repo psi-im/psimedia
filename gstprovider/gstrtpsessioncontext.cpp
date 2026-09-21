@@ -118,18 +118,6 @@ GstRtpSessionContext::GstRtpSessionContext(GstMainLoop *_gstLoop, DeviceMonitor 
     audioRtp.session = this;
     videoRtp.session = this;
 
-    if (secureMode_) {
-        secureGroup_ = std::make_unique<SecureRtpGroup>();
-        secureGroup_->setRuntimeErrorHandler([this](SecureRtpSessionContext::Error error) {
-            const auto handler = secureRuntimeErrorHandler_;
-            QPointer<GstRtpSessionContext> guard(this);
-            if (handler)
-                handler(error);
-            if (guard)
-                guard->control_rtpBridgeError();
-        });
-    }
-
     connect(&recorder, SIGNAL(stopped()), SLOT(recorder_stopped()));
 }
 
@@ -143,10 +131,22 @@ void GstRtpSessionContext::stopRtpBridges()
     videoSendPayloadType.store(-1, std::memory_order_release);
 
     if (secureMode_) {
-        if (secureGroup_ && secureGroupStarted_)
-            secureGroup_->stop();
-        secureGroupStarted_  = false;
+        for (auto &[associationId, state] : secureGroups_) {
+            Q_UNUSED(associationId)
+            if (state.started && state.group)
+                state.group->stop();
+            state.started = false;
+        }
         securePayloadsReady_ = false;
+        {
+            QMutexLocker locker(&secureOutgoingMutex_);
+            ++secureRouteGeneration_;
+            if (!secureRouteGeneration_)
+                ++secureRouteGeneration_;
+            audioSecureProducer_ = {};
+            videoSecureProducer_ = {};
+            clearSecureOutgoingLocked();
+        }
         return;
     }
 
@@ -476,7 +476,7 @@ bool GstRtpSessionContext::configureRtpBridges()
         audioSendPayloadType.store(localAudio.isEmpty() ? -1 : localAudio.constFirst().id, std::memory_order_release);
         videoSendPayloadType.store(localVideo.isEmpty() ? -1 : localVideo.constFirst().id, std::memory_order_release);
         securePayloadsReady_ = true;
-        return configureSecureGroup();
+        return configureSecureGroups();
     }
 
     const auto configure = [this](RtpSessionBridge &bridge, std::atomic<int> &sendPayloadType, GstRtpChannel &channel,
@@ -517,25 +517,64 @@ bool GstRtpSessionContext::configureRtpBridges()
         && configure(videoBridge, videoSendPayloadType, videoRtp, localVideo, remoteVideo, false);
 }
 
-bool GstRtpSessionContext::configureSecureGroup()
+GstRtpSessionContext::SecureGroupState *
+GstRtpSessionContext::findSecureGroup(const QByteArray &associationId)
 {
-    if (!secureMode_ || !secureGroup_)
+    const auto it = secureGroups_.find(associationId);
+    return it == secureGroups_.end() ? nullptr : &it->second;
+}
+
+const GstRtpSessionContext::SecureGroupState *
+GstRtpSessionContext::findSecureGroup(const QByteArray &associationId) const
+{
+    const auto it = secureGroups_.find(associationId);
+    return it == secureGroups_.end() ? nullptr : &it->second;
+}
+
+GstRtpSessionContext::SecureGroupState *
+GstRtpSessionContext::ensureSecureGroup(const QByteArray &associationId)
+{
+    if (associationId.isEmpty())
+        return nullptr;
+
+    auto [it, inserted] = secureGroups_.try_emplace(associationId);
+    auto &state = it->second;
+    if (!inserted && state.group)
+        return &state;
+
+    state.group = std::make_unique<SecureRtpGroup>();
+    state.group->setProtectedPacketHandler([this](const PSecureRtpPacket &packet) {
+        const auto handler = secureProtectedPacketHandler_;
+        if (!handler)
+            return;
+        QPointer<GstRtpSessionContext> guard(this);
+        handler(packet);
+        if (!guard)
+            return;
+    });
+    state.group->setRuntimeErrorHandler([this, associationId](SecureRtpSessionContext::Error error) {
+        const auto *current = findSecureGroup(associationId);
+        const quint64 epoch = current && current->group ? current->group->epoch() : 0;
+        const auto handler = secureRuntimeErrorHandler_;
+        QPointer<GstRtpSessionContext> guard(this);
+        if (handler)
+            handler(associationId, epoch, error);
+        if (guard)
+            guard->control_rtpBridgeError();
+    });
+    return &state;
+}
+
+bool GstRtpSessionContext::configureSecureGroup(const QByteArray &associationId)
+{
+    auto *state = findSecureGroup(associationId);
+    if (!secureMode_ || !state || !state->group)
         return false;
-    if (!securePayloadsReady_ || secureEndpoints_.isEmpty())
+    if (!securePayloadsReady_ || state->endpoints.isEmpty())
         return true;
 
     QList<RtpGroupBridge::Endpoint> groupEndpoints;
-    QByteArray nextAudioEndpointId;
-    QByteArray nextVideoEndpointId;
-    QSet<QString> mediaSeen;
-
-    for (const auto &endpoint : secureEndpoints_) {
-        if (endpoint.endpointId.isEmpty() || (endpoint.media != QLatin1String("audio")
-                                               && endpoint.media != QLatin1String("video"))
-            || mediaSeen.contains(endpoint.media))
-            return false;
-        mediaSeen.insert(endpoint.media);
-
+    for (const auto &endpoint : state->endpoints) {
         const bool audio = endpoint.media == QLatin1String("audio");
         const auto &local  = audio ? lastStatus.localAudioPayloadInfo : lastStatus.localVideoPayloadInfo;
         const auto &remote = audio ? lastStatus.remoteAudioPayloadInfo : lastStatus.remoteVideoPayloadInfo;
@@ -568,23 +607,15 @@ bool GstRtpSessionContext::configureSecureGroup()
                 groupEndpoint.route.localSsrcs.insert(ssrc);
         }
 
-        if (audio)
-            nextAudioEndpointId = endpoint.endpointId;
-        else
-            nextVideoEndpointId = endpoint.endpointId;
-
         groupEndpoints.append(std::move(groupEndpoint));
     }
 
-    if (!secureGroup_->configureEndpoints(groupEndpoints))
+    if (!state->group->configureEndpoints(groupEndpoints))
         return false;
-
-    audioSecureEndpointId_ = nextAudioEndpointId;
-    videoSecureEndpointId_ = nextVideoEndpointId;
 
     for (const auto &endpoint : groupEndpoints) {
         const bool audio = endpoint.media == QLatin1String("audio");
-        secureGroup_->setEndpointMediaPacketHandler(endpoint.id, [this, audio](GstBuffer *buffer) {
+        state->group->setEndpointMediaPacketHandler(endpoint.id, [this, audio](GstBuffer *buffer) {
             const auto packet = packetFromBuffer(buffer);
             if (packet.rawValue.isEmpty())
                 return;
@@ -599,97 +630,170 @@ bool GstRtpSessionContext::configureSecureGroup()
         });
     }
 
-    return maybeStartSecureGroup();
+    return maybeStartSecureGroup(associationId);
 }
 
-bool GstRtpSessionContext::maybeStartSecureGroup()
+bool GstRtpSessionContext::configureSecureGroups()
 {
-    if (!secureMode_ || !secureGroup_)
+    if (!secureMode_)
         return false;
-    if (secureGroupStarted_)
-        return true;
-    if (!securePayloadsReady_ || secureEndpoints_.isEmpty() || !secureGroup_->isReady())
+    if (!securePayloadsReady_ || secureEndpoints_.isEmpty())
         return true;
 
-    if (!secureGroup_->start())
+    for (const auto &[associationId, state] : secureGroups_) {
+        if (!state.endpoints.isEmpty() && !configureSecureGroup(associationId))
+            return false;
+    }
+    refreshSecureProducerRoutes();
+    return true;
+}
+
+bool GstRtpSessionContext::maybeStartSecureGroup(const QByteArray &associationId)
+{
+    auto *state = findSecureGroup(associationId);
+    if (!secureMode_ || !state || !state->group)
         return false;
-    secureGroupStarted_ = true;
+    if (state->started)
+        return true;
+    if (!securePayloadsReady_ || state->endpoints.isEmpty() || !state->group->isReady())
+        return true;
+
+    if (!state->group->start())
+        return false;
+    state->started = true;
     return true;
 }
 
 bool GstRtpSessionContext::secureConfigureEndpoints(const QList<PSecureRtpEndpoint> &endpoints)
 {
-    if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread() || endpoints.isEmpty())
+    if (!secureMode_ || QThread::currentThread() != thread() || endpoints.isEmpty())
         return false;
 
-    QSet<QByteArray> ids;
+    QSet<QByteArray> endpointIds;
     QSet<QString>    media;
+    std::map<QByteArray, QList<PSecureRtpEndpoint>> desired;
     for (const auto &endpoint : endpoints) {
-        if (endpoint.endpointId.isEmpty() || ids.contains(endpoint.endpointId)
+        if (endpoint.endpointId.isEmpty() || endpoint.associationId.isEmpty()
+            || endpointIds.contains(endpoint.endpointId)
             || (endpoint.media != QLatin1String("audio") && endpoint.media != QLatin1String("video"))
             || media.contains(endpoint.media))
             return false;
-        ids.insert(endpoint.endpointId);
+        endpointIds.insert(endpoint.endpointId);
         media.insert(endpoint.media);
         for (int payloadType : endpoint.incomingPayloadTypes) {
             if (payloadType < 0 || payloadType > 127)
                 return false;
         }
+        desired[endpoint.associationId].append(endpoint);
     }
 
-    const auto previous = secureEndpoints_;
+    // Snapshot group membership so a later group's rejected route/PT table can
+    // roll back earlier groups without touching crypto state.
+    std::map<QByteArray, QList<PSecureRtpEndpoint>> previous;
+    for (const auto &[associationId, state] : secureGroups_)
+        previous.emplace(associationId, state.endpoints);
+
+    const auto previousEndpoints = secureEndpoints_;
     secureEndpoints_ = endpoints;
-    if (securePayloadsReady_ && !configureSecureGroup()) {
-        secureEndpoints_ = previous;
-        return false;
+
+    for (const auto &[associationId, groupEndpoints] : desired) {
+        auto *state = ensureSecureGroup(associationId);
+        if (!state) {
+            secureEndpoints_ = previousEndpoints;
+            return false;
+        }
+        state->endpoints = groupEndpoints;
+        if (securePayloadsReady_ && !configureSecureGroup(associationId)) {
+            secureEndpoints_ = previousEndpoints;
+            for (auto &[restoreId, restoreEndpoints] : previous) {
+                auto *restore = ensureSecureGroup(restoreId);
+                restore->endpoints = restoreEndpoints;
+                if (securePayloadsReady_ && !restoreEndpoints.isEmpty())
+                    configureSecureGroup(restoreId);
+            }
+            for (auto &[id, value] : secureGroups_) {
+                if (!previous.count(id)) {
+                    if (value.started && value.group)
+                        value.group->stop();
+                    value.started = false;
+                    value.endpoints.clear();
+                }
+            }
+            refreshSecureProducerRoutes();
+            return false;
+        }
     }
+
+    // Groups removed from the route table no longer accept/produce media, but
+    // their crypto object may remain staged until Iris invalidates the DTLS
+    // association explicitly.
+    for (auto &[associationId, state] : secureGroups_) {
+        if (desired.count(associationId))
+            continue;
+        if (state.started && state.group)
+            state.group->stop();
+        state.started = false;
+        state.endpoints.clear();
+    }
+
+    refreshSecureProducerRoutes();
     return true;
 }
 
-bool GstRtpSessionContext::secureConfigure(const QByteArray &associationId, quint64 epoch, const QString &profile,
-                                     const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
-                                     const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt)
+bool GstRtpSessionContext::secureConfigureAssociation(const QByteArray &associationId, quint64 epoch,
+                                                      const QString &profile,
+                                                      const QByteArray &localMasterKey,
+                                                      const QByteArray &localMasterSalt,
+                                                      const QByteArray &remoteMasterKey,
+                                                      const QByteArray &remoteMasterSalt)
 {
-    if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread())
+    if (!secureMode_ || QThread::currentThread() != thread() || associationId.isEmpty())
         return false;
-    if (!secureGroup_->activate(associationId, epoch, profile, localMasterKey, localMasterSalt, remoteMasterKey,
-                                remoteMasterSalt))
+    auto *state = ensureSecureGroup(associationId);
+    if (!state || !state->group->activate(associationId, epoch, profile, localMasterKey, localMasterSalt,
+                                          remoteMasterKey, remoteMasterSalt))
         return false;
-    return maybeStartSecureGroup();
+    if (!maybeStartSecureGroup(associationId))
+        return false;
+    refreshSecureProducerRoutes();
+    return true;
 }
 
-void GstRtpSessionContext::secureInvalidate(const QByteArray &associationId, quint64 epoch)
+void GstRtpSessionContext::secureInvalidateAssociation(const QByteArray &associationId, quint64 epoch)
 {
-    if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread())
+    if (!secureMode_ || QThread::currentThread() != thread())
         return;
-    secureGroup_->invalidate(associationId, epoch);
+    auto *state = findSecureGroup(associationId);
+    if (!state || !state->group)
+        return;
+    state->group->invalidate(associationId, epoch);
+    refreshSecureProducerRoutes();
 }
 
-bool GstRtpSessionContext::secureIsReady() const
+bool GstRtpSessionContext::secureAssociationReady(const QByteArray &associationId) const
 {
-    return secureMode_ && secureGroup_ && secureGroup_->isReady();
+    const auto *state = findSecureGroup(associationId);
+    return secureMode_ && state && state->group && state->group->isReady();
 }
 
-QByteArray GstRtpSessionContext::secureAssociationId() const
+quint64 GstRtpSessionContext::secureAssociationEpoch(const QByteArray &associationId) const
 {
-    return secureMode_ && secureGroup_ ? secureGroup_->associationId() : QByteArray();
+    const auto *state = findSecureGroup(associationId);
+    return secureMode_ && state && state->group ? state->group->epoch() : 0;
 }
 
-quint64 GstRtpSessionContext::secureEpoch() const
+SecureRtpSessionContext::Error GstRtpSessionContext::secureLastError(const QByteArray &associationId) const
 {
-    return secureMode_ && secureGroup_ ? secureGroup_->epoch() : 0;
-}
-
-SecureRtpSessionContext::Error GstRtpSessionContext::secureLastError() const
-{
-    return secureMode_ && secureGroup_ ? secureGroup_->lastError() : SecureRtpSessionContext::Error::NotReady;
+    const auto *state = findSecureGroup(associationId);
+    return secureMode_ && state && state->group ? state->group->lastError()
+                                                : SecureRtpSessionContext::Error::NotReady;
 }
 
 void GstRtpSessionContext::secureSetProtectedPacketHandler(SecureRtpSessionContext::ProtectedPacketHandler handler)
 {
-    if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread())
+    if (!secureMode_ || QThread::currentThread() != thread())
         return;
-    secureGroup_->setProtectedPacketHandler(std::move(handler));
+    secureProtectedPacketHandler_ = std::move(handler);
 }
 
 void GstRtpSessionContext::secureSetRuntimeErrorHandler(SecureRtpSessionContext::RuntimeErrorHandler handler)
@@ -701,8 +805,159 @@ void GstRtpSessionContext::secureSetRuntimeErrorHandler(SecureRtpSessionContext:
 
 bool GstRtpSessionContext::secureReceiveProtectedPacket(const PSecureRtpPacket &packet)
 {
-    return secureMode_ && secureGroup_ && QThread::currentThread() == thread()
-        && secureGroup_->receiveProtectedPacket(packet);
+    if (!secureMode_ || QThread::currentThread() != thread() || packet.associationId.isEmpty())
+        return false;
+    auto *state = findSecureGroup(packet.associationId);
+    return state && state->group && state->group->receiveProtectedPacket(packet);
+}
+
+void GstRtpSessionContext::clearSecureOutgoingLocked()
+{
+    secureOutgoingQueue_.clear();
+    secureOutgoingBytes_     = 0;
+    secureOutgoingScheduled_ = false;
+}
+
+void GstRtpSessionContext::purgeExpiredSecureOutgoingLocked()
+{
+    const auto now = std::chrono::steady_clock::now();
+    while (!secureOutgoingQueue_.isEmpty()) {
+        const auto &front = secureOutgoingQueue_.head();
+        const auto age
+            = std::chrono::duration_cast<std::chrono::milliseconds>(now - front.enqueuedAt).count();
+        if (age <= MaxSecureOutgoingAgeMs)
+            break;
+        const auto dropped = secureOutgoingQueue_.dequeue();
+        const quint64 size = dropped.byteSize();
+        secureOutgoingBytes_ = size > secureOutgoingBytes_ ? 0 : secureOutgoingBytes_ - size;
+    }
+}
+
+void GstRtpSessionContext::scheduleSecureOutgoingLocked()
+{
+    if (secureOutgoingScheduled_)
+        return;
+    const quint64 generation = secureRouteGeneration_;
+    secureOutgoingScheduled_ = true;
+    if (!QMetaObject::invokeMethod(this, [this, generation]() { drainSecureOutgoing(generation); },
+                                   Qt::QueuedConnection))
+        secureOutgoingScheduled_ = false;
+}
+
+void GstRtpSessionContext::refreshSecureProducerRoutes()
+{
+    SecureProducerRoute audio;
+    SecureProducerRoute video;
+
+    for (const auto &endpoint : secureEndpoints_) {
+        const auto *state = findSecureGroup(endpoint.associationId);
+        if (!state || !state->group || !state->started || !state->group->isReady())
+            continue;
+
+        SecureProducerRoute route;
+        route.associationId = endpoint.associationId;
+        route.endpointId    = endpoint.endpointId;
+        route.epoch         = state->group->epoch();
+        route.enabled       = true;
+        if (endpoint.media == QLatin1String("audio"))
+            audio = std::move(route);
+        else if (endpoint.media == QLatin1String("video"))
+            video = std::move(route);
+    }
+
+    QMutexLocker locker(&secureOutgoingMutex_);
+    ++secureRouteGeneration_;
+    if (!secureRouteGeneration_)
+        ++secureRouteGeneration_;
+    clearSecureOutgoingLocked();
+    audioSecureProducer_ = std::move(audio);
+    videoSecureProducer_ = std::move(video);
+}
+
+void GstRtpSessionContext::enqueueSecureOutgoing(bool audio, const RtpWorker::EncodedRtpPacket &packet)
+{
+    if (!packet.buffer)
+        return;
+
+    auto buffer = std::shared_ptr<GstBuffer>(gst_buffer_ref(packet.buffer), [](GstBuffer *value) {
+        gst_buffer_unref(value);
+    });
+
+    QMutexLocker locker(&secureOutgoingMutex_);
+    purgeExpiredSecureOutgoingLocked();
+    const auto &producer = audio ? audioSecureProducer_ : videoSecureProducer_;
+    if (!producer.enabled || producer.associationId.isEmpty() || producer.endpointId.isEmpty())
+        return;
+
+    SecureOutgoingPacket item;
+    item.routeGeneration = secureRouteGeneration_;
+    item.associationId   = producer.associationId;
+    item.endpointId      = producer.endpointId;
+    item.epoch           = producer.epoch;
+    item.buffer          = std::move(buffer);
+    item.presentationAge = packet.presentationAge;
+
+    const quint64 size = item.byteSize();
+    if (!size || size > MaxSecureOutgoingBytes)
+        return;
+
+    while (!secureOutgoingQueue_.isEmpty()
+           && (secureOutgoingQueue_.size() >= MaxSecureOutgoingPackets
+               || secureOutgoingBytes_ + size > MaxSecureOutgoingBytes)) {
+        const auto dropped = secureOutgoingQueue_.dequeue();
+        const quint64 droppedSize = dropped.byteSize();
+        secureOutgoingBytes_ = droppedSize > secureOutgoingBytes_ ? 0 : secureOutgoingBytes_ - droppedSize;
+    }
+
+    secureOutgoingQueue_.enqueue(std::move(item));
+    secureOutgoingBytes_ += size;
+    scheduleSecureOutgoingLocked();
+}
+
+void GstRtpSessionContext::drainSecureOutgoing(quint64 routeGeneration)
+{
+    const auto startedAt = std::chrono::steady_clock::now();
+    int delivered = 0;
+
+    for (;;) {
+        SecureOutgoingPacket item;
+        {
+            QMutexLocker locker(&secureOutgoingMutex_);
+            if (routeGeneration != secureRouteGeneration_)
+                return;
+            purgeExpiredSecureOutgoingLocked();
+            if (secureOutgoingQueue_.isEmpty()) {
+                secureOutgoingScheduled_ = false;
+                return;
+            }
+
+            item = secureOutgoingQueue_.dequeue();
+            const quint64 size = item.byteSize();
+            secureOutgoingBytes_ = size > secureOutgoingBytes_ ? 0 : secureOutgoingBytes_ - size;
+        }
+
+        auto *state = findSecureGroup(item.associationId);
+        if (item.routeGeneration == secureRouteGeneration_ && state && state->started && state->group
+            && state->group->isReady() && state->group->epoch() == item.epoch) {
+            state->group->sendRtp(item.endpointId, item.buffer.get(), item.presentationAge);
+        }
+
+        ++delivered;
+        const auto elapsed
+            = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - startedAt)
+                  .count();
+        if (delivered < MaxSecureOutgoingDrain && elapsed < MaxSecureOutgoingDrainMs)
+            continue;
+
+        QMutexLocker locker(&secureOutgoingMutex_);
+        if (routeGeneration != secureRouteGeneration_)
+            return;
+        secureOutgoingScheduled_ = false;
+        purgeExpiredSecureOutgoingLocked();
+        if (!secureOutgoingQueue_.isEmpty())
+            scheduleSecureOutgoingLocked();
+        return;
+    }
 }
 
 void GstRtpSessionContext::control_statusReady(const RwControlStatus &status)
@@ -828,15 +1083,7 @@ void GstRtpSessionContext::control_rtpAudioOut(const RtpWorker::EncodedRtpPacket
         audioBridge.sendRtp(packet.buffer, packet.presentationAge);
         return;
     }
-
-    auto buffer = std::shared_ptr<GstBuffer>(gst_buffer_ref(packet.buffer), [](GstBuffer *value) {
-        gst_buffer_unref(value);
-    });
-    const auto age = packet.presentationAge;
-    QMetaObject::invokeMethod(this, [this, buffer = std::move(buffer), age]() {
-        if (secureGroup_ && secureGroupStarted_ && !audioSecureEndpointId_.isEmpty())
-            secureGroup_->sendRtp(audioSecureEndpointId_, buffer.get(), age);
-    }, Qt::QueuedConnection);
+    enqueueSecureOutgoing(true, packet);
 }
 
 void GstRtpSessionContext::control_rtpVideoOut(const RtpWorker::EncodedRtpPacket &packet)
@@ -847,15 +1094,7 @@ void GstRtpSessionContext::control_rtpVideoOut(const RtpWorker::EncodedRtpPacket
         videoBridge.sendRtp(packet.buffer, packet.presentationAge);
         return;
     }
-
-    auto buffer = std::shared_ptr<GstBuffer>(gst_buffer_ref(packet.buffer), [](GstBuffer *value) {
-        gst_buffer_unref(value);
-    });
-    const auto age = packet.presentationAge;
-    QMetaObject::invokeMethod(this, [this, buffer = std::move(buffer), age]() {
-        if (secureGroup_ && secureGroupStarted_ && !videoSecureEndpointId_.isEmpty())
-            secureGroup_->sendRtp(videoSecureEndpointId_, buffer.get(), age);
-    }, Qt::QueuedConnection);
+    enqueueSecureOutgoing(false, packet);
 }
 
 void GstRtpSessionContext::control_recordData(const QByteArray &packet) { recorder.push_data_for_read(packet); }
