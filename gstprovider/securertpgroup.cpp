@@ -5,6 +5,7 @@
 
 #include "securertpgroup.h"
 
+#include <QDebug>
 #include <QPointer>
 #include <QThread>
 
