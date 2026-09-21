@@ -78,6 +78,8 @@ set(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/bins.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rtpsessionbridge.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rtpsessionbridge.h
+    ${CMAKE_CURRENT_LIST_DIR}/rtpbundlerouter.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/rtpbundlerouter.h
     ${CMAKE_CURRENT_LIST_DIR}/securertpcontext.cpp
     ${CMAKE_CURRENT_LIST_DIR}/securertpcontext.h
     ${CMAKE_CURRENT_LIST_DIR}/rtpworker.cpp
@@ -200,6 +202,11 @@ endif()
 
 if(PSIMEDIA_BUILD_TESTS)
     enable_testing()
+
+    add_executable(psimedia_rtpbundlerouter_test ${ABS_GST_PARENT_DIR}/tests/rtpbundlerouter.cpp)
+    target_link_libraries(psimedia_rtpbundlerouter_test PRIVATE ${PROVIDERLIB})
+    add_test(NAME psimedia_rtpbundlerouter COMMAND psimedia_rtpbundlerouter_test)
+    set_tests_properties(psimedia_rtpbundlerouter PROPERTIES TIMEOUT 10)
 
     if(PSIMEDIA_ENABLE_SRTP)
         add_executable(psimedia_securertp_test ${ABS_GST_PARENT_DIR}/tests/securertp.cpp)
