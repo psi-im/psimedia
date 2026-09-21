@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -113,10 +114,77 @@ RtpGroupBridge::Endpoint endpoint(const QByteArray &id, const QString &media, co
     return result;
 }
 
-bool containsPacket(const std::vector<PRtpPacket> &packets, const QByteArray &bytes)
+quint16 get16(const QByteArray &packet, int offset)
+{
+    const auto *p = reinterpret_cast<const uchar *>(packet.constData() + offset);
+    return quint16((quint16(p[0]) << 8) | quint16(p[1]));
+}
+
+quint32 get32(const QByteArray &packet, int offset)
+{
+    const auto *p = reinterpret_cast<const uchar *>(packet.constData() + offset);
+    return (quint32(p[0]) << 24) | (quint32(p[1]) << 16) | (quint32(p[2]) << 8) | quint32(p[3]);
+}
+
+std::optional<QByteArray> midExtension(const QByteArray &packet, quint8 wantedId)
+{
+    if (packet.size() < 16)
+        return {};
+    const auto *p = reinterpret_cast<const uchar *>(packet.constData());
+    if ((p[0] >> 6) != 2 || !(p[0] & 0x10))
+        return {};
+
+    const int base = 12 + int(p[0] & 0x0f) * 4;
+    if (packet.size() - base < 4)
+        return {};
+    const quint16 profile = get16(packet, base);
+    const int bytes = int(get16(packet, base + 2)) * 4;
+    if (bytes > packet.size() - base - 4)
+        return {};
+
+    int cursor = base + 4;
+    const int end = cursor + bytes;
+    if (profile == 0xbede) {
+        while (cursor < end) {
+            const quint8 header = quint8(packet.at(cursor++));
+            if (!header)
+                continue;
+            const quint8 id = header >> 4;
+            if (id == 15)
+                return {};
+            const int length = (header & 0x0f) + 1;
+            if (length > end - cursor)
+                return {};
+            if (id == wantedId)
+                return packet.mid(cursor, length);
+            cursor += length;
+        }
+    } else if ((profile & 0xfff0) == 0x1000) {
+        while (cursor < end) {
+            const quint8 id = quint8(packet.at(cursor++));
+            if (!id)
+                continue;
+            if (cursor >= end)
+                return {};
+            const int length = quint8(packet.at(cursor++));
+            if (length > end - cursor)
+                return {};
+            if (id == wantedId)
+                return packet.mid(cursor, length);
+            cursor += length;
+        }
+    }
+    return {};
+}
+
+bool containsRtp(const std::vector<PRtpPacket> &packets, quint32 ssrc, quint8 pt, const QByteArray &mid)
 {
     return std::any_of(packets.cbegin(), packets.cend(), [&](const auto &packet) {
-        return packet.type == PRtpPacket::Type::Rtp && packet.rawValue == bytes;
+        if (packet.type != PRtpPacket::Type::Rtp || packet.rawValue.size() < 12)
+            return false;
+        const auto *p = reinterpret_cast<const uchar *>(packet.rawValue.constData());
+        return (p[1] & 0x7f) == pt && get32(packet.rawValue, 8) == ssrc
+            && midExtension(packet.rawValue, 1) == std::optional<QByteArray>(mid);
     });
 }
 
@@ -134,8 +202,12 @@ int main(int argc, char **argv)
 
     const auto opus = payload(111, "OPUS", 48000, 2);
     const auto vp8  = payload(96, "VP8", 90000);
-    const auto audio = endpoint(QByteArrayLiteral("audio"), QStringLiteral("audio"), opus, AudioRemote, AudioLocal);
-    const auto video = endpoint(QByteArrayLiteral("video"), QStringLiteral("video"), vp8, VideoRemote, VideoLocal);
+    auto audio = endpoint(QByteArrayLiteral("audio"), QStringLiteral("audio"), opus, AudioRemote, AudioLocal);
+    auto video = endpoint(QByteArrayLiteral("video"), QStringLiteral("video"), vp8, VideoRemote, VideoLocal);
+    audio.route.mid            = QByteArrayLiteral("audio");
+    audio.route.midExtensionId = 1;
+    video.route.mid            = QByteArrayLiteral("video");
+    video.route.midExtensionId = 1;
 
     RtpGroupBridge group;
     check(group.isValid(), "failed to construct shared RTP group");
@@ -177,8 +249,10 @@ int main(int argc, char **argv)
           "failed to send video through shared session");
     gst_buffer_unref(videoBuffer);
 
-    check(waitUntil([&] { return containsPacket(networkPackets, audioOut) && containsPacket(networkPackets, videoOut); }),
-          "shared session did not emit both outgoing RTP streams");
+    check(waitUntil([&] {
+        return containsRtp(networkPackets, AudioLocal, 111, QByteArrayLiteral("audio"))
+            && containsRtp(networkPackets, VideoLocal, 96, QByteArrayLiteral("video"));
+    }), "shared session did not emit both outgoing RTP streams with negotiated MID");
 
     // Exercise different RTP clocks in the same rtpsession. Both remote sources
     // need probation packets before the shared session releases media.
@@ -221,8 +295,9 @@ int main(int argc, char **argv)
     audioAfterPacket.rawValue = audioAfter;
     check(group.sendRtp(QByteArrayLiteral("audio"), audioAfterPacket) == GST_FLOW_OK,
           "surviving audio sender stopped after video removal");
-    check(waitUntil([&] { return containsPacket(networkPackets, audioAfter); }),
-          "surviving audio RTP was not emitted after video removal");
+    check(waitUntil([&] {
+        return containsRtp(networkPackets, AudioLocal, 111, QByteArrayLiteral("audio"));
+    }), "surviving audio RTP was not emitted with MID after video removal");
 
     PRtpPacket removedVideo;
     removedVideo.type     = PRtpPacket::Type::Rtp;
