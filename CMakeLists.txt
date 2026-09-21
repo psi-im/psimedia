@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.10.0)
 
 project(gstprovider LANGUAGES CXX)
 
+include(CTest)
+
 get_directory_property(IS_SUBPROJECT PARENT_DIRECTORY)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -140,3 +142,7 @@ if(BUILD_PSIPLUGIN)
     add_subdirectory(psiplugin)
 endif()
 add_subdirectory(gstprovider)
+
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
