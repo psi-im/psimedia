@@ -176,6 +176,14 @@ void testStalePacketAndInvalidReconfigure(const QString &profile)
     require(pair.a.lastError() == SecureRtpSessionContext::Error::StaleEpoch, "stale epoch error not reported");
     require(pair.a.isReady(), "stale packet invalidated current association");
 
+    QByteArray conflictingKey = pair.aKey;
+    conflictingKey[0] = char(quint8(conflictingKey[0]) ^ 0x01);
+    require(!pair.a.configure(pair.id, 3, profile, conflictingKey, pair.aSalt, pair.bKey, pair.bSalt),
+            "same-epoch key replacement succeeded");
+    require(pair.a.lastError() == SecureRtpSessionContext::Error::StaleEpoch,
+            "same-epoch key replacement did not report epoch conflict");
+    require(pair.a.isReady(), "same-epoch key conflict destroyed the active association");
+
     QByteArray badKey(1, char(0));
     require(!pair.a.configure(pair.id, 4, profile, badKey, pair.aSalt, pair.bKey, pair.bSalt),
             "invalid key reconfiguration succeeded");
