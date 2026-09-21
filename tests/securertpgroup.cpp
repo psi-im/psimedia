@@ -4,6 +4,7 @@
  */
 
 #include "securertpgroup.h"
+#include "gstrtpsessioncontext.h"
 
 #include <QCoreApplication>
 #include <QEventLoop>
@@ -128,6 +129,20 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     gst_init(&argc, &argv);
+
+    {
+        GstRtpSessionContext legacy(nullptr, nullptr);
+        check(qobject_cast<RtpSessionContext *>(legacy.qobject()) != nullptr,
+              "legacy session lost RtpSessionContext/1.6");
+        check(qobject_cast<SecureRtpSessionContext *>(legacy.qobject()) == nullptr,
+              "legacy session falsely advertised secure RTP IID");
+
+        GstSecureRtpSessionContext secure(nullptr, nullptr);
+        check(qobject_cast<RtpSessionContext *>(secure.qobject()) != nullptr,
+              "secure session lost legacy media IID");
+        check(qobject_cast<SecureRtpSessionContext *>(secure.qobject()) != nullptr,
+              "secure session did not advertise secure RTP IID");
+    }
 
     const auto profiles = SrtpAssociation::supportedProfiles();
     check(!profiles.isEmpty(), "no usable SRTP profile for secure group test");
