@@ -68,8 +68,22 @@ public:
 
     bool isValid() const { return pipeline_ != nullptr; }
 
-    /** Update the negotiated payload map. Owner thread only; safe while running. */
+    struct PayloadGroup {
+        QByteArray          endpointId;
+        QString             media;
+        QList<PPayloadInfo> local;
+        QList<PPayloadInfo> remote;
+    };
+
+    /** Update the legacy single-media payload map. Owner thread only; safe while running. */
     bool setPayloads(const QList<PPayloadInfo> &local, const QList<PPayloadInfo> &remote);
+
+    /**
+     * Configure the payload map for one RTP session shared by several media
+     * endpoints. Payload types reused by two endpoints must resolve to identical
+     * RTP caps because rtpsession's request-pt-map is keyed only by PT.
+     */
+    bool setPayloadGroups(const QList<PayloadGroup> &groups);
 
     /** Owner-thread control-plane operations. */
     bool start();
