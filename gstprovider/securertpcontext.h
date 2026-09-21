@@ -42,6 +42,8 @@ public:
     bool unprotect(const PSecureRtpPacket &protectedPacket, PSecureRtpPacket *plain);
 
 private:
+    bool process(const PSecureRtpPacket &input, PSecureRtpPacket *output, bool sending);
+
     class Private;
     std::unique_ptr<Private> d;
 };
