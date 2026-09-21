@@ -196,6 +196,10 @@ int main(int argc, char **argv)
         check(secure->associationReady(audio.associationId) && secure->associationEpoch(audio.associationId) == 3,
               "video invalidation disturbed independent audio association");
 
+        check(secure->configureEndpoints({}), "clearing all secure endpoint routes failed");
+        check(secure->associationReady(audio.associationId) && secure->associationEpoch(audio.associationId) == 3,
+              "route teardown destroyed staged audio crypto state");
+
         secure->invalidateAssociation(audio.associationId, 3);
         check(!secure->associationReady(audio.associationId), "audio invalidation did not clear audio crypto");
     }
