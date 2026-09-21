@@ -384,6 +384,8 @@ private:
     void     worker_recordData(const QByteArray &packet);
 
     void resumeMessages();
+    // Owns one reference to timer while non-null. Caller must hold m.
+    void cancelTimerLocked();
 
     // return false to block further message processing
     bool processMessage(RwControlMessage *msg);
