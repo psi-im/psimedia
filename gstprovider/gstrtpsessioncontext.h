@@ -31,6 +31,7 @@
 
 #include <atomic>
 #include <memory>
+#include <utility>
 
 namespace PsiMedia {
 
@@ -41,9 +42,9 @@ class DeviceMonitor;
 //----------------------------------------------------------------------------
 // GstRtpSessionContext
 //----------------------------------------------------------------------------
-class GstRtpSessionContext : public QObject, public RtpSessionContext, public SecureRtpSessionContext {
+class GstRtpSessionContext : public QObject, public RtpSessionContext {
     Q_OBJECT
-    Q_INTERFACES(PsiMedia::RtpSessionContext PsiMedia::SecureRtpSessionContext)
+    Q_INTERFACES(PsiMedia::RtpSessionContext)
 
 public:
     GstMainLoop *gstLoop;
@@ -131,21 +132,19 @@ public:
     RtpChannelContext  *videoRtpChannel() override;
     void                dumpPipeline(std::function<void(const QStringList &)> callback) override;
 
-    // Optional SecureRtpSessionContext/1.0. The same QObject keeps the legacy
-    // RtpSessionContext/1.6 codec/device controls, but secure mode never exposes
-    // plaintext RTP/RTCP through its network boundary.
-    bool configureEndpoints(const QList<PSecureRtpEndpoint> &endpoints) override;
-    bool configure(const QByteArray &associationId, quint64 epoch, const QString &profile,
-                   const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
-                   const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt) override;
-    void invalidate(const QByteArray &associationId, quint64 epoch) override;
-    bool       isReady() const override;
-    QByteArray associationId() const override;
-    quint64    epoch() const override;
-    SecureRtpSessionContext::Error lastError() const override;
-    void setProtectedPacketHandler(SecureRtpSessionContext::ProtectedPacketHandler handler) override;
-    void setRuntimeErrorHandler(SecureRtpSessionContext::RuntimeErrorHandler handler) override;
-    bool receiveProtectedPacket(const PSecureRtpPacket &packet) override;
+    // Internal secure-session implementation used by GstSecureRtpSessionContext.
+    bool secureConfigureEndpoints(const QList<PSecureRtpEndpoint> &endpoints);
+    bool secureConfigure(const QByteArray &associationId, quint64 epoch, const QString &profile,
+                         const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
+                         const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt);
+    void secureInvalidate(const QByteArray &associationId, quint64 epoch);
+    bool       secureIsReady() const;
+    QByteArray secureAssociationId() const;
+    quint64    secureEpoch() const;
+    SecureRtpSessionContext::Error secureLastError() const;
+    void secureSetProtectedPacketHandler(SecureRtpSessionContext::ProtectedPacketHandler handler);
+    void secureSetRuntimeErrorHandler(SecureRtpSessionContext::RuntimeErrorHandler handler);
+    bool secureReceiveProtectedPacket(const PSecureRtpPacket &packet);
 
     // channel calls this, which may be in another thread
     void push_packet_for_write(GstRtpChannel *from, const PRtpPacket &rtp);
@@ -196,6 +195,51 @@ private:
     bool                                 securePayloadsReady_ = false;
     bool                                 secureGroupStarted_  = false;
     SecureRtpSessionContext::RuntimeErrorHandler secureRuntimeErrorHandler_;
+};
+
+class GstSecureRtpSessionContext final : public GstRtpSessionContext, public SecureRtpSessionContext {
+    Q_OBJECT
+    Q_INTERFACES(PsiMedia::SecureRtpSessionContext)
+
+public:
+    explicit GstSecureRtpSessionContext(GstMainLoop *gstLoop, DeviceMonitor *deviceMonitor, QObject *parent = nullptr) :
+        GstRtpSessionContext(gstLoop, deviceMonitor, parent, true)
+    {
+    }
+
+    QObject *qobject() override { return this; }
+
+    bool configureEndpoints(const QList<PSecureRtpEndpoint> &endpoints) override
+    {
+        return secureConfigureEndpoints(endpoints);
+    }
+    bool configure(const QByteArray &associationId, quint64 epoch, const QString &profile,
+                   const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
+                   const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt) override
+    {
+        return secureConfigure(associationId, epoch, profile, localMasterKey, localMasterSalt, remoteMasterKey,
+                               remoteMasterSalt);
+    }
+    void invalidate(const QByteArray &associationId, quint64 epoch) override
+    {
+        secureInvalidate(associationId, epoch);
+    }
+    bool isReady() const override { return secureIsReady(); }
+    QByteArray associationId() const override { return secureAssociationId(); }
+    quint64 epoch() const override { return secureEpoch(); }
+    SecureRtpSessionContext::Error lastError() const override { return secureLastError(); }
+    void setProtectedPacketHandler(SecureRtpSessionContext::ProtectedPacketHandler handler) override
+    {
+        secureSetProtectedPacketHandler(std::move(handler));
+    }
+    void setRuntimeErrorHandler(SecureRtpSessionContext::RuntimeErrorHandler handler) override
+    {
+        secureSetRuntimeErrorHandler(std::move(handler));
+    }
+    bool receiveProtectedPacket(const PSecureRtpPacket &packet) override
+    {
+        return secureReceiveProtectedPacket(packet);
+    }
 };
 
 } // namespace PsiMedia
