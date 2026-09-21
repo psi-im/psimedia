@@ -113,6 +113,9 @@ AudioRecorderContext *GstProvider::createAudioRecorder() { return new GstAudioRe
 
 QStringList GstProvider::supportedSecureRtpProfiles() const { return SrtpAssociation::supportedProfiles(); }
 
-SecureRtpSessionContext *GstProvider::createSecureRtpSession() { return new GstSecureRtpSessionContext; }
+SecureRtpSessionContext *GstProvider::createSecureRtpSession()
+{
+    return new GstRtpSessionContext(gstEventLoop, deviceMonitor, nullptr, true);
+}
 
 }
