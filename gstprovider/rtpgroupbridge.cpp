@@ -146,7 +146,8 @@ GstBuffer *bufferWithBytes(GstBuffer *source, const QByteArray &bytes)
         gst_buffer_unref(result);
         return nullptr;
     }
-    gst_buffer_copy_into(result, source, GST_BUFFER_COPY_METADATA | GST_BUFFER_COPY_TIMESTAMPS, 0, -1);
+    const auto flags = static_cast<GstBufferCopyFlags>(GST_BUFFER_COPY_METADATA | GST_BUFFER_COPY_TIMESTAMPS);
+    gst_buffer_copy_into(result, source, flags, 0, -1);
     return result;
 }
 } // namespace
