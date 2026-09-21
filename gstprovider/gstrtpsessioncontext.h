@@ -206,6 +206,7 @@ private:
     static constexpr quint64 MaxSecureOutgoingBytes   = 512 * 1024;
     static constexpr qint64  MaxSecureOutgoingAgeMs   = 1000;
     static constexpr int     MaxSecureOutgoingDrain   = 64;
+    static constexpr qint64  MaxSecureOutgoingDrainMs = 5;
 
     bool configureRtpBridges();
     bool configureSecureGroups();
