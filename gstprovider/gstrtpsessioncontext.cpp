@@ -617,7 +617,7 @@ bool GstRtpSessionContext::maybeStartSecureGroup()
     return true;
 }
 
-bool GstRtpSessionContext::configureEndpoints(const QList<PSecureRtpEndpoint> &endpoints)
+bool GstRtpSessionContext::secureConfigureEndpoints(const QList<PSecureRtpEndpoint> &endpoints)
 {
     if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread() || endpoints.isEmpty())
         return false;
@@ -646,7 +646,7 @@ bool GstRtpSessionContext::configureEndpoints(const QList<PSecureRtpEndpoint> &e
     return true;
 }
 
-bool GstRtpSessionContext::configure(const QByteArray &associationId, quint64 epoch, const QString &profile,
+bool GstRtpSessionContext::secureConfigure(const QByteArray &associationId, quint64 epoch, const QString &profile,
                                      const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
                                      const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt)
 {
@@ -658,48 +658,48 @@ bool GstRtpSessionContext::configure(const QByteArray &associationId, quint64 ep
     return maybeStartSecureGroup();
 }
 
-void GstRtpSessionContext::invalidate(const QByteArray &associationId, quint64 epoch)
+void GstRtpSessionContext::secureInvalidate(const QByteArray &associationId, quint64 epoch)
 {
     if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread())
         return;
     secureGroup_->invalidate(associationId, epoch);
 }
 
-bool GstRtpSessionContext::isReady() const
+bool GstRtpSessionContext::secureIsReady() const
 {
     return secureMode_ && secureGroup_ && secureGroup_->isReady();
 }
 
-QByteArray GstRtpSessionContext::associationId() const
+QByteArray GstRtpSessionContext::secureAssociationId() const
 {
     return secureMode_ && secureGroup_ ? secureGroup_->associationId() : QByteArray();
 }
 
-quint64 GstRtpSessionContext::epoch() const
+quint64 GstRtpSessionContext::secureEpoch() const
 {
     return secureMode_ && secureGroup_ ? secureGroup_->epoch() : 0;
 }
 
-SecureRtpSessionContext::Error GstRtpSessionContext::lastError() const
+SecureRtpSessionContext::Error GstRtpSessionContext::secureLastError() const
 {
     return secureMode_ && secureGroup_ ? secureGroup_->lastError() : SecureRtpSessionContext::Error::NotReady;
 }
 
-void GstRtpSessionContext::setProtectedPacketHandler(SecureRtpSessionContext::ProtectedPacketHandler handler)
+void GstRtpSessionContext::secureSetProtectedPacketHandler(SecureRtpSessionContext::ProtectedPacketHandler handler)
 {
     if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread())
         return;
     secureGroup_->setProtectedPacketHandler(std::move(handler));
 }
 
-void GstRtpSessionContext::setRuntimeErrorHandler(SecureRtpSessionContext::RuntimeErrorHandler handler)
+void GstRtpSessionContext::secureSetRuntimeErrorHandler(SecureRtpSessionContext::RuntimeErrorHandler handler)
 {
     if (!secureMode_ || QThread::currentThread() != thread())
         return;
     secureRuntimeErrorHandler_ = std::move(handler);
 }
 
-bool GstRtpSessionContext::receiveProtectedPacket(const PSecureRtpPacket &packet)
+bool GstRtpSessionContext::secureReceiveProtectedPacket(const PSecureRtpPacket &packet)
 {
     return secureMode_ && secureGroup_ && QThread::currentThread() == thread()
         && secureGroup_->receiveProtectedPacket(packet);
