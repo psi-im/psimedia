@@ -5,6 +5,7 @@
 
 #include "rtpgroupbridge.h"
 
+#include <QDebug>
 #include <QPointer>
 #include <QThread>
 
