@@ -48,32 +48,6 @@ private:
     std::unique_ptr<Private> d;
 };
 
-class GstSecureRtpSessionContext final : public QObject, public SecureRtpSessionContext {
-    Q_OBJECT
-    Q_INTERFACES(PsiMedia::SecureRtpSessionContext)
-
-public:
-    explicit GstSecureRtpSessionContext(QObject *parent = nullptr);
-    ~GstSecureRtpSessionContext() override;
-
-    QObject *qobject() override { return this; }
-
-    bool configure(const QByteArray &associationId, quint64 epoch, const QString &profile,
-                   const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
-                   const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt) override;
-    void invalidate(const QByteArray &associationId, quint64 epoch) override;
-
-    bool       isReady() const override;
-    QByteArray associationId() const override;
-    quint64    epoch() const override;
-    Error      lastError() const override;
-
-    bool protect(const PSecureRtpPacket &plain, PSecureRtpPacket *protectedPacket) override;
-    bool unprotect(const PSecureRtpPacket &protectedPacket, PSecureRtpPacket *plain) override;
-
-private:
-    SrtpAssociation association_;
-};
 
 } // namespace PsiMedia
 
