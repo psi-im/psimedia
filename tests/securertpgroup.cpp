@@ -151,6 +151,55 @@ int main(int argc, char **argv)
         : profiles.constFirst();
     const auto sizes = sizesFor(profile);
 
+    // Public secure media sessions must represent unbundled audio/video as two
+    // independent associations while keeping one codec/device session object.
+    {
+        GstSecureRtpSessionContext session(nullptr, nullptr);
+        SecureRtpSessionContext *secure = &session;
+
+        PSecureRtpEndpoint audio;
+        audio.endpointId = QByteArrayLiteral("audio");
+        audio.associationId = QByteArrayLiteral("audio-association");
+        audio.media = QStringLiteral("audio");
+        audio.incomingPayloadTypes = { 111 };
+
+        PSecureRtpEndpoint video;
+        video.endpointId = QByteArrayLiteral("video");
+        video.associationId = QByteArrayLiteral("video-association");
+        video.media = QStringLiteral("video");
+        video.incomingPayloadTypes = { 96 };
+
+        check(secure->configureEndpoints({ audio, video }), "unbundled secure endpoint map rejected");
+
+        const QByteArray audioLocalKey(sizes.key, char(0x51));
+        const QByteArray audioLocalSalt(sizes.salt, char(0x52));
+        const QByteArray audioRemoteKey(sizes.key, char(0x53));
+        const QByteArray audioRemoteSalt(sizes.salt, char(0x54));
+        const QByteArray videoLocalKey(sizes.key, char(0x61));
+        const QByteArray videoLocalSalt(sizes.salt, char(0x62));
+        const QByteArray videoRemoteKey(sizes.key, char(0x63));
+        const QByteArray videoRemoteSalt(sizes.salt, char(0x64));
+
+        check(secure->configureAssociation(audio.associationId, 3, profile, audioLocalKey, audioLocalSalt,
+                                           audioRemoteKey, audioRemoteSalt),
+              "audio secure association activation failed");
+        check(secure->configureAssociation(video.associationId, 7, profile, videoLocalKey, videoLocalSalt,
+                                           videoRemoteKey, videoRemoteSalt),
+              "video secure association activation failed");
+        check(secure->associationReady(audio.associationId) && secure->associationEpoch(audio.associationId) == 3,
+              "audio association state missing");
+        check(secure->associationReady(video.associationId) && secure->associationEpoch(video.associationId) == 7,
+              "video association state missing");
+
+        secure->invalidateAssociation(video.associationId, 7);
+        check(!secure->associationReady(video.associationId), "video invalidation did not clear video crypto");
+        check(secure->associationReady(audio.associationId) && secure->associationEpoch(audio.associationId) == 3,
+              "video invalidation disturbed independent audio association");
+
+        secure->invalidateAssociation(audio.associationId, 3);
+        check(!secure->associationReady(audio.associationId), "audio invalidation did not clear audio crypto");
+    }
+
     const QByteArray aKey(sizes.key, char(0x11));
     const QByteArray aSalt(sizes.salt, char(0x22));
     const QByteArray bKey(sizes.key, char(0x33));
