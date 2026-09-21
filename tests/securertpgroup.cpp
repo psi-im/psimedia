@@ -1,0 +1,286 @@
+/*
+ * Copyright (C) 2026 Psi IM team
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ */
+
+#include "securertpgroup.h"
+
+#include <QCoreApplication>
+#include <QEventLoop>
+#include <QtEndian>
+
+#include <algorithm>
+#include <chrono>
+#include <thread>
+#include <vector>
+
+using namespace PsiMedia;
+using namespace std::chrono_literals;
+
+namespace {
+
+void check(bool value, const char *message)
+{
+    if (!value)
+        qFatal("%s", message);
+}
+
+template<typename Predicate> bool waitUntil(Predicate predicate, std::chrono::milliseconds timeout = 2s)
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    do {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        if (predicate())
+            return true;
+        std::this_thread::sleep_for(1ms);
+    } while (std::chrono::steady_clock::now() < deadline);
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+    return predicate();
+}
+
+void put16(uchar *p, quint16 value)
+{
+    p[0] = uchar(value >> 8);
+    p[1] = uchar(value);
+}
+
+void put32(uchar *p, quint32 value)
+{
+    p[0] = uchar(value >> 24);
+    p[1] = uchar(value >> 16);
+    p[2] = uchar(value >> 8);
+    p[3] = uchar(value);
+}
+
+QByteArray makeRtp(quint8 pt, quint16 sequence, quint32 timestamp, quint32 ssrc)
+{
+    QByteArray packet(13, '\0');
+    auto      *p = reinterpret_cast<uchar *>(packet.data());
+    p[0]         = 0x80;
+    p[1]         = pt;
+    put16(p + 2, sequence);
+    put32(p + 4, timestamp);
+    put32(p + 8, ssrc);
+    p[12] = 0x7f;
+    return packet;
+}
+
+GstBuffer *bufferFor(const QByteArray &data, GstClockTime pts)
+{
+    GstBuffer *buffer = gst_buffer_new_allocate(nullptr, gsize(data.size()), nullptr);
+    check(buffer != nullptr, "failed to allocate RTP buffer");
+    check(gst_buffer_fill(buffer, 0, data.constData(), gsize(data.size())) == gsize(data.size()),
+          "failed to fill RTP buffer");
+    GST_BUFFER_PTS(buffer)      = pts;
+    GST_BUFFER_DTS(buffer)      = pts;
+    GST_BUFFER_DURATION(buffer) = 20 * GST_MSECOND;
+    return buffer;
+}
+
+PPayloadInfo payload(int id, const char *name, int clockrate, int channels = -1)
+{
+    PPayloadInfo result;
+    result.id        = id;
+    result.name      = QString::fromLatin1(name);
+    result.clockrate = clockrate;
+    result.channels  = channels;
+    return result;
+}
+
+RtpGroupBridge::Endpoint endpoint(const QByteArray &id, const QString &media, const PPayloadInfo &payload,
+                                  quint32 incomingSsrc, quint32 localSsrc)
+{
+    RtpGroupBridge::Endpoint result;
+    result.id             = id;
+    result.media          = media;
+    result.localPayloads  = { payload };
+    result.remotePayloads = { payload };
+    result.route.endpointId = id;
+    result.route.incomingPayloadTypes.insert(quint8(payload.id));
+    result.route.incomingSsrcs.insert(incomingSsrc);
+    result.route.localSsrcs.insert(localSsrc);
+    return result;
+}
+
+struct ProfileSizes {
+    int key;
+    int salt;
+};
+
+ProfileSizes sizesFor(const QString &profile)
+{
+    if (profile == QLatin1String("SRTP_AES128_CM_HMAC_SHA1_80")
+        || profile == QLatin1String("SRTP_AES128_CM_HMAC_SHA1_32"))
+        return { 16, 14 };
+    if (profile == QLatin1String("SRTP_AEAD_AES_128_GCM"))
+        return { 16, 12 };
+    if (profile == QLatin1String("SRTP_AEAD_AES_256_GCM"))
+        return { 32, 12 };
+    qFatal("unexpected SRTP profile");
+}
+
+bool isRtp(const PSecureRtpPacket &packet) { return packet.type == PRtpPacket::Type::Rtp; }
+bool isRtcp(const PSecureRtpPacket &packet) { return packet.type == PRtpPacket::Type::Rtcp; }
+
+} // namespace
+
+int main(int argc, char **argv)
+{
+    QCoreApplication app(argc, argv);
+    gst_init(&argc, &argv);
+
+    const auto profiles = SrtpAssociation::supportedProfiles();
+    check(!profiles.isEmpty(), "no usable SRTP profile for secure group test");
+    const QString profile = profiles.contains(QStringLiteral("SRTP_AES128_CM_HMAC_SHA1_80"))
+        ? QStringLiteral("SRTP_AES128_CM_HMAC_SHA1_80")
+        : profiles.constFirst();
+    const auto sizes = sizesFor(profile);
+
+    const QByteArray aKey(sizes.key, char(0x11));
+    const QByteArray aSalt(sizes.salt, char(0x22));
+    const QByteArray bKey(sizes.key, char(0x33));
+    const QByteArray bSalt(sizes.salt, char(0x44));
+    const QByteArray associationId = QByteArrayLiteral("bundle-association");
+
+    constexpr quint32 AAudio = 0x10101010;
+    constexpr quint32 AVideo = 0x20202020;
+    constexpr quint32 BAudio = 0x30303030;
+    constexpr quint32 BVideo = 0x40404040;
+
+    const auto opus = payload(111, "OPUS", 48000, 2);
+    const auto vp8  = payload(96, "VP8", 90000);
+
+    SecureRtpGroup a;
+    SecureRtpGroup b;
+    check(a.isValid() && b.isValid(), "failed to construct secure RTP groups");
+
+    const auto aAudio = endpoint(QByteArrayLiteral("audio"), QStringLiteral("audio"), opus, BAudio, AAudio);
+    const auto aVideo = endpoint(QByteArrayLiteral("video"), QStringLiteral("video"), vp8, BVideo, AVideo);
+    const auto bAudio = endpoint(QByteArrayLiteral("audio"), QStringLiteral("audio"), opus, AAudio, BAudio);
+    const auto bVideo = endpoint(QByteArrayLiteral("video"), QStringLiteral("video"), vp8, AVideo, BVideo);
+    check(a.configureEndpoints({ aAudio, aVideo }), "peer A endpoint configuration failed");
+    check(b.configureEndpoints({ bAudio, bVideo }), "peer B endpoint configuration failed");
+
+    check(a.activate(associationId, 1, profile, aKey, aSalt, bKey, bSalt), "peer A SRTP activation failed");
+    check(b.activate(associationId, 1, profile, bKey, bSalt, aKey, aSalt), "peer B SRTP activation failed");
+
+    std::vector<PSecureRtpPacket> aNetwork;
+    std::vector<PSecureRtpPacket> bNetwork;
+    int bAudioDeliveries = 0;
+    int bVideoDeliveries = 0;
+    std::vector<SecureRtpSessionContext::Error> aFatal;
+    std::vector<SecureRtpSessionContext::Error> bFatal;
+
+    a.setProtectedPacketHandler([&](const PSecureRtpPacket &packet) { aNetwork.push_back(packet); });
+    b.setProtectedPacketHandler([&](const PSecureRtpPacket &packet) { bNetwork.push_back(packet); });
+    b.setEndpointMediaPacketHandler(QByteArrayLiteral("audio"), [&](GstBuffer *) { ++bAudioDeliveries; });
+    b.setEndpointMediaPacketHandler(QByteArrayLiteral("video"), [&](GstBuffer *) { ++bVideoDeliveries; });
+    a.setRuntimeErrorHandler([&](auto error) { aFatal.push_back(error); });
+    b.setRuntimeErrorHandler([&](auto error) { bFatal.push_back(error); });
+    a.setRtcpMinimumInterval(10 * GST_MSECOND);
+    b.setRtcpMinimumInterval(10 * GST_MSECOND);
+
+    check(a.start() && b.start(), "failed to start secure groups");
+
+    // Send enough consecutive RTP for the remote shared rtpsession probation.
+    for (quint16 sequence = 1; sequence <= 3; ++sequence) {
+        const QByteArray bytes = makeRtp(111, sequence, quint32(sequence) * 960, AAudio);
+        GstBuffer *buffer = bufferFor(bytes, quint64(sequence) * 20 * GST_MSECOND);
+        check(a.sendRtp(QByteArrayLiteral("audio"), buffer, 0) == GST_FLOW_OK, "secure audio send failed");
+        gst_buffer_unref(buffer);
+    }
+    for (quint16 sequence = 1; sequence <= 3; ++sequence) {
+        const QByteArray bytes = makeRtp(96, sequence, quint32(sequence) * 3000, AVideo);
+        GstBuffer *buffer = bufferFor(bytes, quint64(sequence) * 33 * GST_MSECOND);
+        check(a.sendRtp(QByteArrayLiteral("video"), buffer, 0) == GST_FLOW_OK, "secure video send failed");
+        gst_buffer_unref(buffer);
+    }
+
+    check(waitUntil([&] {
+        return std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp) >= 6;
+    }), "outgoing RTP was not protected");
+
+    size_t deliveredToB = 0;
+    for (const auto &packet : aNetwork) {
+        if (!isRtp(packet))
+            continue;
+        check(b.receiveProtectedPacket(packet), "peer B rejected authenticated SRTP");
+        ++deliveredToB;
+    }
+    check(deliveredToB >= 6, "not enough SRTP reached peer B");
+    check(waitUntil([&] { return bAudioDeliveries > 0 && bVideoDeliveries > 0; }),
+          "authenticated audio/video did not reach endpoint media handlers");
+
+    // Authentication failure is a packet drop, not a fatal backend failure, and
+    // must not consume the packet index or teach an RTP route.
+    const size_t beforeTamper = aNetwork.size();
+    const QByteArray freshBytes = makeRtp(111, 10, 9600, AAudio);
+    PRtpPacket fresh;
+    fresh.type     = PRtpPacket::Type::Rtp;
+    fresh.rawValue = freshBytes;
+    check(a.sendRtp(QByteArrayLiteral("audio"), fresh) == GST_FLOW_OK, "fresh SRTP send failed");
+    check(waitUntil([&] { return aNetwork.size() > beforeTamper; }), "fresh SRTP packet was not protected");
+
+    auto freshProtected = aNetwork.back();
+    check(isRtp(freshProtected), "fresh protected packet was not RTP");
+    auto tampered = freshProtected;
+    tampered.rawValue[tampered.rawValue.size() - 1]
+        = char(quint8(tampered.rawValue.at(tampered.rawValue.size() - 1)) ^ 0x01);
+    check(!b.receiveProtectedPacket(tampered), "tampered SRTP was accepted");
+    check(b.lastError() == SecureRtpSessionContext::Error::Authentication,
+          "tampered SRTP did not report authentication failure");
+    check(bFatal.empty(), "authentication drop was promoted to fatal backend failure");
+    check(b.receiveProtectedPacket(freshProtected), "auth failure poisoned the valid packet/replay state");
+
+    // Group RTCP generated from the same RFC 3550 session is protected as SRTCP
+    // once. The peer authenticates it before feeding the group session once.
+    check(waitUntil([&] { return a.requestRtcp(100 * GST_MSECOND); }),
+          "shared RTCP scheduler did not become ready");
+    check(waitUntil([&] {
+        return std::any_of(aNetwork.cbegin(), aNetwork.cend(), isRtcp);
+    }), "outgoing group RTCP was not protected");
+
+    const auto rtcpIt = std::find_if(aNetwork.cbegin(), aNetwork.cend(), isRtcp);
+    check(rtcpIt != aNetwork.cend(), "protected RTCP packet missing");
+    const auto beforeRtcp = b.receivedRtcpPackets();
+    check(b.receiveProtectedPacket(*rtcpIt), "authenticated SRTCP was rejected");
+    check(waitUntil([&] { return b.receivedRtcpPackets() == beforeRtcp + 1; }),
+          "SRTCP was not consumed exactly once by peer group session");
+
+    // Identical-key activation advances the external epoch while retaining
+    // libSRTP replay/ROC/SRTCP state. Old metadata is fenced immediately.
+    check(a.activate(associationId, 2, profile, aKey, aSalt, bKey, bSalt), "peer A epoch advance failed");
+    check(b.activate(associationId, 2, profile, bKey, bSalt, aKey, aSalt), "peer B epoch advance failed");
+    check(a.isReady() && b.isReady() && a.epoch() == 2 && b.epoch() == 2, "epoch advance lost crypto state");
+    check(!b.receiveProtectedPacket(freshProtected), "old-epoch protected packet crossed reactivation");
+    check(b.lastError() == SecureRtpSessionContext::Error::StaleEpoch, "old epoch was not reported as stale");
+
+    // Endpoint membership changes do not recreate the secure association.
+    check(a.removeEndpoint(QByteArrayLiteral("video")), "peer A video removal failed");
+    check(b.removeEndpoint(QByteArrayLiteral("video")), "peer B video removal failed");
+    check(a.isReady() && b.isReady() && a.epoch() == 2 && b.epoch() == 2,
+          "endpoint removal reset secure association");
+
+    const size_t beforeFinalAudio = aNetwork.size();
+    PRtpPacket finalAudio;
+    finalAudio.type     = PRtpPacket::Type::Rtp;
+    finalAudio.rawValue = makeRtp(111, 11, 10560, AAudio);
+    check(a.sendRtp(QByteArrayLiteral("audio"), finalAudio) == GST_FLOW_OK,
+          "surviving audio failed after video removal");
+    check(waitUntil([&] { return aNetwork.size() > beforeFinalAudio; }),
+          "surviving audio was not protected after video removal");
+    auto finalProtected = aNetwork.back();
+    check(isRtp(finalProtected) && finalProtected.epoch == 2, "final audio used wrong secure epoch");
+    check(b.receiveProtectedPacket(finalProtected), "peer B rejected surviving audio after video removal");
+
+    a.stop();
+    b.stop();
+    check(a.isReady() && b.isReady(), "media stop invalidated secure association");
+    a.invalidate(associationId, 2);
+    b.invalidate(associationId, 2);
+    check(!a.isReady() && !b.isReady(), "explicit security invalidation did not clear associations");
+    check(aFatal.empty() && bFatal.empty(), "unexpected fatal secure group error");
+
+    qInfo("secure RTP group end-to-end regression passed");
+    return 0;
+}
