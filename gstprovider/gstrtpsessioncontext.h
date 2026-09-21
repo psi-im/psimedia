@@ -29,7 +29,12 @@
 #include "securertpgroup.h"
 #include "rwcontrol.h"
 
+#include <QMutex>
+#include <QQueue>
+
 #include <atomic>
+#include <chrono>
+#include <map>
 #include <memory>
 #include <utility>
 
@@ -134,14 +139,13 @@ public:
 
     // Internal secure-session implementation used by GstSecureRtpSessionContext.
     bool secureConfigureEndpoints(const QList<PSecureRtpEndpoint> &endpoints);
-    bool secureConfigure(const QByteArray &associationId, quint64 epoch, const QString &profile,
-                         const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
-                         const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt);
-    void secureInvalidate(const QByteArray &associationId, quint64 epoch);
-    bool       secureIsReady() const;
-    QByteArray secureAssociationId() const;
-    quint64    secureEpoch() const;
-    SecureRtpSessionContext::Error secureLastError() const;
+    bool secureConfigureAssociation(const QByteArray &associationId, quint64 epoch, const QString &profile,
+                                    const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
+                                    const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt);
+    void secureInvalidateAssociation(const QByteArray &associationId, quint64 epoch);
+    bool    secureAssociationReady(const QByteArray &associationId) const;
+    quint64 secureAssociationEpoch(const QByteArray &associationId) const;
+    SecureRtpSessionContext::Error secureLastError(const QByteArray &associationId) const;
     void secureSetProtectedPacketHandler(SecureRtpSessionContext::ProtectedPacketHandler handler);
     void secureSetRuntimeErrorHandler(SecureRtpSessionContext::RuntimeErrorHandler handler);
     bool secureReceiveProtectedPacket(const PSecureRtpPacket &packet);
@@ -173,10 +177,51 @@ private:
     static void cb_control_rtpVideoOut(const RtpWorker::EncodedRtpPacket &packet, void *app);
     static void cb_control_recordData(const QByteArray &packet, void *app);
 
+    struct SecureGroupState {
+        std::unique_ptr<SecureRtpGroup> group;
+        QList<PSecureRtpEndpoint>       endpoints;
+        bool                            started = false;
+    };
+
+    struct SecureProducerRoute {
+        QByteArray associationId;
+        QByteArray endpointId;
+        quint64    epoch   = 0;
+        bool       enabled = false;
+    };
+
+    struct SecureOutgoingPacket {
+        quint64 routeGeneration = 0;
+        QByteArray associationId;
+        QByteArray endpointId;
+        quint64 epoch = 0;
+        std::shared_ptr<GstBuffer> buffer;
+        GstClockTime presentationAge = GST_CLOCK_TIME_NONE;
+        std::chrono::steady_clock::time_point enqueuedAt = std::chrono::steady_clock::now();
+
+        quint64 byteSize() const { return buffer ? quint64(gst_buffer_get_size(buffer.get())) : 0; }
+    };
+
+    static constexpr int     MaxSecureOutgoingPackets = 256;
+    static constexpr quint64 MaxSecureOutgoingBytes   = 512 * 1024;
+    static constexpr qint64  MaxSecureOutgoingAgeMs   = 1000;
+    static constexpr int     MaxSecureOutgoingDrain   = 64;
+
     bool configureRtpBridges();
-    bool configureSecureGroup();
-    bool maybeStartSecureGroup();
+    bool configureSecureGroups();
+    bool configureSecureGroup(const QByteArray &associationId);
+    bool maybeStartSecureGroup(const QByteArray &associationId);
+    SecureGroupState *ensureSecureGroup(const QByteArray &associationId);
+    SecureGroupState *findSecureGroup(const QByteArray &associationId);
+    const SecureGroupState *findSecureGroup(const QByteArray &associationId) const;
     void stopRtpBridges();
+
+    void refreshSecureProducerRoutes();
+    void enqueueSecureOutgoing(bool audio, const RtpWorker::EncodedRtpPacket &packet);
+    void drainSecureOutgoing(quint64 routeGeneration);
+    void scheduleSecureOutgoingLocked();
+    void clearSecureOutgoingLocked();
+    void purgeExpiredSecureOutgoingLocked();
 
     // note: this is executed from a different thread
     void control_rtpAudioOut(const RtpWorker::EncodedRtpPacket &packet);
@@ -188,13 +233,19 @@ private:
     void control_recordData(const QByteArray &packet);
 
     bool                                 secureMode_ = false;
-    std::unique_ptr<SecureRtpGroup>      secureGroup_;
+    std::map<QByteArray, SecureGroupState> secureGroups_;
     QList<PSecureRtpEndpoint>            secureEndpoints_;
-    QByteArray                           audioSecureEndpointId_;
-    QByteArray                           videoSecureEndpointId_;
     bool                                 securePayloadsReady_ = false;
-    bool                                 secureGroupStarted_  = false;
+    SecureRtpSessionContext::ProtectedPacketHandler secureProtectedPacketHandler_;
     SecureRtpSessionContext::RuntimeErrorHandler secureRuntimeErrorHandler_;
+
+    mutable QMutex                       secureOutgoingMutex_;
+    QQueue<SecureOutgoingPacket>         secureOutgoingQueue_;
+    quint64                              secureOutgoingBytes_ = 0;
+    quint64                              secureRouteGeneration_ = 1;
+    bool                                 secureOutgoingScheduled_ = false;
+    SecureProducerRoute                  audioSecureProducer_;
+    SecureProducerRoute                  videoSecureProducer_;
 };
 
 class GstSecureRtpSessionContext final : public GstRtpSessionContext, public SecureRtpSessionContext {
@@ -213,21 +264,29 @@ public:
     {
         return secureConfigureEndpoints(endpoints);
     }
-    bool configure(const QByteArray &associationId, quint64 epoch, const QString &profile,
-                   const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
-                   const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt) override
+    bool configureAssociation(const QByteArray &associationId, quint64 epoch, const QString &profile,
+                              const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
+                              const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt) override
     {
-        return secureConfigure(associationId, epoch, profile, localMasterKey, localMasterSalt, remoteMasterKey,
-                               remoteMasterSalt);
+        return secureConfigureAssociation(associationId, epoch, profile, localMasterKey, localMasterSalt,
+                                          remoteMasterKey, remoteMasterSalt);
     }
-    void invalidate(const QByteArray &associationId, quint64 epoch) override
+    void invalidateAssociation(const QByteArray &associationId, quint64 epoch) override
     {
-        secureInvalidate(associationId, epoch);
+        secureInvalidateAssociation(associationId, epoch);
     }
-    bool isReady() const override { return secureIsReady(); }
-    QByteArray associationId() const override { return secureAssociationId(); }
-    quint64 epoch() const override { return secureEpoch(); }
-    SecureRtpSessionContext::Error lastError() const override { return secureLastError(); }
+    bool associationReady(const QByteArray &associationId) const override
+    {
+        return secureAssociationReady(associationId);
+    }
+    quint64 associationEpoch(const QByteArray &associationId) const override
+    {
+        return secureAssociationEpoch(associationId);
+    }
+    SecureRtpSessionContext::Error lastError(const QByteArray &associationId) const override
+    {
+        return secureLastError(associationId);
+    }
     void setProtectedPacketHandler(SecureRtpSessionContext::ProtectedPacketHandler handler) override
     {
         secureSetProtectedPacketHandler(std::move(handler));
