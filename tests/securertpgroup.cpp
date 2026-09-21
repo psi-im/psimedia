@@ -214,15 +214,19 @@ int main(int argc, char **argv)
     // Authentication failure is a packet drop, not a fatal backend failure, and
     // must not consume the packet index or teach an RTP route.
     const size_t beforeTamper = aNetwork.size();
+    const auto beforeTamperRtp = std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp);
     const QByteArray freshBytes = makeRtp(111, 10, 9600, AAudio);
     PRtpPacket fresh;
     fresh.type     = PRtpPacket::Type::Rtp;
     fresh.rawValue = freshBytes;
     check(a.sendRtp(QByteArrayLiteral("audio"), fresh) == GST_FLOW_OK, "fresh SRTP send failed");
-    check(waitUntil([&] { return aNetwork.size() > beforeTamper; }), "fresh SRTP packet was not protected");
+    check(waitUntil([&] {
+        return std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp) > beforeTamperRtp;
+    }), "fresh SRTP packet was not protected");
 
-    auto freshProtected = aNetwork.back();
-    check(isRtp(freshProtected), "fresh protected packet was not RTP");
+    const auto freshIt = std::find_if(aNetwork.cbegin() + std::ptrdiff_t(beforeTamper), aNetwork.cend(), isRtp);
+    check(freshIt != aNetwork.cend(), "fresh protected RTP packet missing");
+    auto freshProtected = *freshIt;
     auto tampered = freshProtected;
     tampered.rawValue[tampered.rawValue.size() - 1]
         = char(quint8(tampered.rawValue.at(tampered.rawValue.size() - 1)) ^ 0x01);
@@ -262,15 +266,19 @@ int main(int argc, char **argv)
           "endpoint removal reset secure association");
 
     const size_t beforeFinalAudio = aNetwork.size();
+    const auto beforeFinalRtp = std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp);
     PRtpPacket finalAudio;
     finalAudio.type     = PRtpPacket::Type::Rtp;
     finalAudio.rawValue = makeRtp(111, 11, 10560, AAudio);
     check(a.sendRtp(QByteArrayLiteral("audio"), finalAudio) == GST_FLOW_OK,
           "surviving audio failed after video removal");
-    check(waitUntil([&] { return aNetwork.size() > beforeFinalAudio; }),
-          "surviving audio was not protected after video removal");
-    auto finalProtected = aNetwork.back();
-    check(isRtp(finalProtected) && finalProtected.epoch == 2, "final audio used wrong secure epoch");
+    check(waitUntil([&] {
+        return std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp) > beforeFinalRtp;
+    }), "surviving audio was not protected after video removal");
+    const auto finalIt = std::find_if(aNetwork.cbegin() + std::ptrdiff_t(beforeFinalAudio), aNetwork.cend(), isRtp);
+    check(finalIt != aNetwork.cend(), "final protected RTP packet missing");
+    auto finalProtected = *finalIt;
+    check(finalProtected.epoch == 2, "final audio used wrong secure epoch");
     check(b.receiveProtectedPacket(finalProtected), "peer B rejected surviving audio after video removal");
 
     a.stop();
