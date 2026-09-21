@@ -376,9 +376,20 @@ RwControlRemote::RwControlRemote(GMainContext *mainContext, DeviceMonitor *hardw
 
 RwControlRemote::~RwControlRemote()
 {
+    {
+        QMutexLocker locker(&m);
+        // doDestroyRemote() runs on mainContext_, so no callback can currently
+        // execute concurrently here. Remove any later dispatch before freeing
+        // the callback data (this).
+        cancelTimerLocked();
+        blocking = true;
+    }
+
     delete worker;
+    worker = nullptr;
 
     qDeleteAll(in);
+    in.clear();
 }
 
 gboolean RwControlRemote::cb_processMessages(gpointer data)
@@ -433,9 +444,15 @@ void RwControlRemote::cb_worker_recordData(const QByteArray &packet, void *app)
 
 gboolean RwControlRemote::processMessages()
 {
+    // The main context owns a dispatch reference while this callback runs.
+    // Drop our scheduling reference now; a concurrently posted message may
+    // install a new source, which remains independently owned through timer.
     m.lock();
-    timer = nullptr;
+    GSource *dispatched = timer;
+    timer               = nullptr;
     m.unlock();
+    if (dispatched)
+        g_source_unref(dispatched);
 
     while (true) {
         m.lock();
@@ -458,10 +475,7 @@ gboolean RwControlRemote::processMessages()
         if (!ret) {
             m.lock();
             blocking = true;
-            if (timer) {
-                g_source_destroy(timer);
-                timer = nullptr;
-            }
+            cancelTimerLocked();
             m.unlock();
             break;
         }
@@ -632,6 +646,15 @@ void RwControlRemote::worker_recordData(const QByteArray &packet)
 {
     if (local_->cb_recordData)
         local_->cb_recordData(packet, local_->app);
+}
+
+void RwControlRemote::cancelTimerLocked()
+{
+    if (!timer)
+        return;
+    g_source_destroy(timer);
+    g_source_unref(timer);
+    timer = nullptr;
 }
 
 void RwControlRemote::resumeMessages()
