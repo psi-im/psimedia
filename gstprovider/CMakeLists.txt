@@ -84,6 +84,8 @@ set(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/rtpgroupbridge.h
     ${CMAKE_CURRENT_LIST_DIR}/securertpcontext.cpp
     ${CMAKE_CURRENT_LIST_DIR}/securertpcontext.h
+    ${CMAKE_CURRENT_LIST_DIR}/securertpgroup.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/securertpgroup.h
     ${CMAKE_CURRENT_LIST_DIR}/rtpworker.cpp
     ${CMAKE_CURRENT_LIST_DIR}/rtpworker_devices.cpp
     ${CMAKE_CURRENT_LIST_DIR}/gstthread.cpp
@@ -216,6 +218,11 @@ if(PSIMEDIA_BUILD_TESTS)
     set_tests_properties(psimedia_rtpbundlerouter PROPERTIES TIMEOUT 10)
 
     if(PSIMEDIA_ENABLE_SRTP)
+        add_executable(psimedia_securertpgroup_test ${ABS_GST_PARENT_DIR}/tests/securertpgroup.cpp)
+        target_link_libraries(psimedia_securertpgroup_test PRIVATE ${PROVIDERLIB})
+        add_test(NAME psimedia_securertpgroup COMMAND psimedia_securertpgroup_test)
+        set_tests_properties(psimedia_securertpgroup PROPERTIES TIMEOUT 25)
+
         add_executable(psimedia_securertp_test ${ABS_GST_PARENT_DIR}/tests/securertp.cpp)
         target_link_libraries(psimedia_securertp_test PRIVATE ${PROVIDERLIB})
         add_test(NAME psimedia_securertp COMMAND psimedia_securertp_test)
