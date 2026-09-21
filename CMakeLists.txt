@@ -133,6 +133,7 @@ if("${QT_DEFAULT_MAJOR_VERSION}" STREQUAL "")
 endif()
 
 option(PSIMEDIA_BUILD_TESTS "Build psimedia provider regression tests" OFF)
+option(PSIMEDIA_ENABLE_SRTP "Enable direct libSRTP packet protection" ON)
 if(PSIMEDIA_BUILD_TESTS)
     enable_testing()
 endif()
