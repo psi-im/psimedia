@@ -173,6 +173,8 @@ private slots:
     void recorder_stopped();
 
 private:
+    friend struct GstRtpSessionContextTestAccess;
+
     static void cb_control_rtpAudioOut(const RtpWorker::EncodedRtpPacket &packet, void *app);
     static void cb_control_rtpVideoOut(const RtpWorker::EncodedRtpPacket &packet, void *app);
     static void cb_control_recordData(const QByteArray &packet, void *app);
