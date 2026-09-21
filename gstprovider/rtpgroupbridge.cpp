@@ -255,6 +255,19 @@ bool RtpGroupBridge::removeEndpoint(const QByteArray &endpointId)
     return configure(remaining);
 }
 
+void RtpGroupBridge::clear()
+{
+    if (!ownerThread("clear"))
+        return;
+
+    session_.stop();
+    session_.setPayloadGroups({});
+    router_.reset();
+    endpoints_.clear();
+    mediaHandlers_.clear();
+}
+
+
 void RtpGroupBridge::setNetworkPacketHandler(NetworkPacketHandler handler)
 {
     if (!ownerThread("setNetworkPacketHandler"))
