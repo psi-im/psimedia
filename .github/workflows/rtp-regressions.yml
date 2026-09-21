@@ -20,6 +20,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: ai/jingle-srtp-psimedia
+          path: _psi
+          fetch-depth: 1
+
       - name: Install Qt and GStreamer dependencies
         shell: bash
         run: |
@@ -27,6 +35,7 @@ jobs:
           sudo apt-get install -y \
             cmake \
             ninja-build \
+            qtbase5-dev \
             qt6-base-dev \
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev \
@@ -68,3 +77,31 @@ jobs:
 
       - name: Build provider without SRTP
         run: cmake --build build-no-srtp --parallel 2
+
+
+      - name: Configure with Psi plugin API
+        shell: bash
+        run: |
+          cmake -S . -B build-psi-plugin -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DQT_DEFAULT_MAJOR_VERSION=6 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=ON \
+            -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPLUGINS_ROOT_DIR="$GITHUB_WORKSPACE/_psi/plugins"
+
+      - name: Build with Psi plugin API
+        run: cmake --build build-psi-plugin --parallel 2
+
+      - name: Configure Qt5 compatibility
+        shell: bash
+        run: |
+          cmake -S . -B build-qt5 -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DQT_DEFAULT_MAJOR_VERSION=5 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=OFF \
+            -DPSIMEDIA_BUILD_TESTS=OFF
+
+      - name: Build Qt5 compatibility
+        run: cmake --build build-qt5 --parallel 2
