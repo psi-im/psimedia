@@ -708,13 +708,17 @@ bool GstRtpSessionContext::secureConfigureEndpoints(const QList<PSecureRtpEndpoi
             for (auto &[restoreId, restoreEndpoints] : previous) {
                 auto *restore = ensureSecureGroup(restoreId);
                 restore->endpoints = restoreEndpoints;
-                if (securePayloadsReady_ && !restoreEndpoints.isEmpty())
+                if (restore->group && restoreEndpoints.isEmpty()) {
+                    restore->group->clearEndpoints();
+                    restore->started = false;
+                } else if (securePayloadsReady_ && !restoreEndpoints.isEmpty()) {
                     configureSecureGroup(restoreId);
+                }
             }
             for (auto &[id, value] : secureGroups_) {
                 if (!previous.count(id)) {
-                    if (value.started && value.group)
-                        value.group->stop();
+                    if (value.group)
+                        value.group->clearEndpoints();
                     value.started = false;
                     value.endpoints.clear();
                 }
@@ -730,8 +734,8 @@ bool GstRtpSessionContext::secureConfigureEndpoints(const QList<PSecureRtpEndpoi
     for (auto &[associationId, state] : secureGroups_) {
         if (desired.count(associationId))
             continue;
-        if (state.started && state.group)
-            state.group->stop();
+        if (state.group)
+            state.group->clearEndpoints();
         state.started = false;
         state.endpoints.clear();
     }
