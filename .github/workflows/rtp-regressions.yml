@@ -1,0 +1,55 @@
+name: RTP provider regressions
+
+on:
+  push:
+    branches:
+      - 'jingle/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: psimedia-rtp-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qt6-gstreamer:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt and GStreamer dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            qt6-base-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libgstreamer-plugins-bad1.0-dev \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad \
+            gstreamer1.0-tools
+
+      - name: Configure provider regressions
+        shell: bash
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DQT_DEFAULT_MAJOR_VERSION=6 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=OFF \
+            -DPSIMEDIA_BUILD_TESTS=ON
+
+      - name: Build provider regressions
+        run: cmake --build build --parallel 2
+
+      - name: Test provider regressions
+        env:
+          GST_DEBUG_NO_COLOR: '1'
+        run: ctest --test-dir build --output-on-failure --no-tests=error -j1
