@@ -126,7 +126,7 @@ public:
     void                setOutputVolume(int level) override;
     int                 inputVolume() const override;
     void                setInputVolume(int level) override;
-    Error               errorCode() const override;
+    RtpSessionContext::Error errorCode() const override;
     RtpChannelContext  *audioRtpChannel() override;
     RtpChannelContext  *videoRtpChannel() override;
     void                dumpPipeline(std::function<void(const QStringList &)> callback) override;
