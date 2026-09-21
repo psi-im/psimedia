@@ -277,6 +277,14 @@ bool SrtpAssociation::configure(const QByteArray &associationId, quint64 epoch, 
         return true;
     }
 
+    // A key/profile change under the same opaque association must advance the
+    // security epoch. Otherwise queued packets carrying the same metadata could
+    // be interpreted under two different key sets.
+    if (sameAssociation && epoch == d->epoch) {
+        d->error = Error::StaleEpoch;
+        return false;
+    }
+
     SecureBuffer local;
     SecureBuffer remote;
     local.assign(localMasterKey, localMasterSalt);
