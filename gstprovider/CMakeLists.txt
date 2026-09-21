@@ -201,6 +201,13 @@ endif()
 if(PSIMEDIA_BUILD_TESTS)
     enable_testing()
 
+    if(PSIMEDIA_ENABLE_SRTP)
+        add_executable(psimedia_securertp_test ${ABS_GST_PARENT_DIR}/tests/securertp.cpp)
+        target_link_libraries(psimedia_securertp_test PRIVATE ${PROVIDERLIB})
+        add_test(NAME psimedia_securertp COMMAND psimedia_securertp_test)
+        set_tests_properties(psimedia_securertp PROPERTIES TIMEOUT 15)
+    endif()
+
     add_executable(psimedia_rtpworkerownership_test ${ABS_GST_PARENT_DIR}/tests/rtpworkerownership.cpp)
     target_link_libraries(psimedia_rtpworkerownership_test PRIVATE ${PROVIDERLIB})
     add_test(NAME psimedia_rtpworkerownership COMMAND psimedia_rtpworkerownership_test)
