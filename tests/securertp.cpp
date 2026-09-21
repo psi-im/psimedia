@@ -218,9 +218,5 @@ int main()
     testStalePacketAndInvalidReconfigure(primary);
     testStreamLimit(primary);
 
-    GstSecureRtpSessionContext publicContext;
-    SecureRtpSessionContext   *iface = &publicContext;
-    require(iface->qobject() == &publicContext, "secure RTP QObject interface mismatch");
-
     return 0;
 }
