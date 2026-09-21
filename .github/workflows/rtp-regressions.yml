@@ -31,6 +31,7 @@ jobs:
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-bad1.0-dev \
+            libsrtp2-dev \
             gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good \
             gstreamer1.0-plugins-bad \
@@ -53,3 +54,17 @@ jobs:
         env:
           GST_DEBUG_NO_COLOR: '1'
         run: ctest --test-dir build --output-on-failure --no-tests=error -j1
+
+      - name: Configure provider without SRTP
+        shell: bash
+        run: |
+          cmake -S . -B build-no-srtp -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DQT_DEFAULT_MAJOR_VERSION=6 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=OFF \
+            -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPSIMEDIA_ENABLE_SRTP=OFF
+
+      - name: Build provider without SRTP
+        run: cmake --build build-no-srtp --parallel 2
