@@ -666,7 +666,7 @@ bool GstRtpSessionContext::maybeStartSecureGroup(const QByteArray &associationId
 
 bool GstRtpSessionContext::secureConfigureEndpoints(const QList<PSecureRtpEndpoint> &endpoints)
 {
-    if (!secureMode_ || QThread::currentThread() != thread() || endpoints.isEmpty())
+    if (!secureMode_ || QThread::currentThread() != thread())
         return false;
 
     QSet<QByteArray> endpointIds;
