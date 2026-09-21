@@ -50,6 +50,7 @@ public:
     // while members are added/removed; surviving RTP/RTCP state is not reset.
     bool configure(const QList<Endpoint> &endpoints);
     bool removeEndpoint(const QByteArray &endpointId);
+    void clear();
 
     void setNetworkPacketHandler(NetworkPacketHandler handler);
     void setEndpointMediaPacketHandler(const QByteArray &endpointId, MediaPacketHandler handler);
