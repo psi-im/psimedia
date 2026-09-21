@@ -300,6 +300,24 @@ int main(int argc, char **argv)
     check(bFatal.empty(), "authentication drop was promoted to fatal backend failure");
     check(b.receiveProtectedPacket(freshProtected), "auth failure poisoned the valid packet/replay state");
 
+    // An authenticated packet that does not belong to any negotiated media
+    // route is a nonfatal media-layer drop. It must not be reported as a
+    // cryptographic failure and must not teach the router.
+    SrtpAssociation rogueSender;
+    check(rogueSender.configure(associationId, 1, profile, aKey, aSalt, bKey, bSalt),
+          "rogue sender SRTP setup failed");
+    PSecureRtpPacket roguePlain;
+    roguePlain.associationId = associationId;
+    roguePlain.epoch         = 1;
+    roguePlain.type          = PRtpPacket::Type::Rtp;
+    roguePlain.rawValue      = makeRtp(127, 1, 12345, 0x51515151);
+    PSecureRtpPacket rogueProtected;
+    check(rogueSender.protect(roguePlain, &rogueProtected), "rogue RTP protection failed");
+    check(!b.receiveProtectedPacket(rogueProtected), "authenticated unknown-route RTP was accepted");
+    check(b.lastError() == SecureRtpSessionContext::Error::InvalidPacket,
+          "authenticated route drop did not report InvalidPacket");
+    check(bFatal.empty(), "authenticated route drop was promoted to fatal backend failure");
+
     // Group RTCP generated from the same RFC 3550 session is protected as SRTCP
     // once. The peer authenticates it before feeding the group session once.
     check(waitUntil([&] { return a.requestRtcp(100 * GST_MSECOND); }),
