@@ -177,13 +177,14 @@ std::optional<QByteArray> midExtension(const QByteArray &packet, quint8 wantedId
     return {};
 }
 
-bool containsRtp(const std::vector<PRtpPacket> &packets, quint32 ssrc, quint8 pt, const QByteArray &mid)
+bool containsRtp(const std::vector<PRtpPacket> &packets, quint32 ssrc, quint8 pt, quint16 sequence,
+                 const QByteArray &mid)
 {
     return std::any_of(packets.cbegin(), packets.cend(), [&](const auto &packet) {
         if (packet.type != PRtpPacket::Type::Rtp || packet.rawValue.size() < 12)
             return false;
         const auto *p = reinterpret_cast<const uchar *>(packet.rawValue.constData());
-        return (p[1] & 0x7f) == pt && get32(packet.rawValue, 8) == ssrc
+        return (p[1] & 0x7f) == pt && get16(packet.rawValue, 2) == sequence && get32(packet.rawValue, 8) == ssrc
             && midExtension(packet.rawValue, 1) == std::optional<QByteArray>(mid);
     });
 }
@@ -250,8 +251,8 @@ int main(int argc, char **argv)
     gst_buffer_unref(videoBuffer);
 
     check(waitUntil([&] {
-        return containsRtp(networkPackets, AudioLocal, 111, QByteArrayLiteral("audio"))
-            && containsRtp(networkPackets, VideoLocal, 96, QByteArrayLiteral("video"));
+        return containsRtp(networkPackets, AudioLocal, 111, 1, QByteArrayLiteral("audio"))
+            && containsRtp(networkPackets, VideoLocal, 96, 1, QByteArrayLiteral("video"));
     }), "shared session did not emit both outgoing RTP streams with negotiated MID");
 
     // Exercise different RTP clocks in the same rtpsession. Both remote sources
@@ -296,7 +297,7 @@ int main(int argc, char **argv)
     check(group.sendRtp(QByteArrayLiteral("audio"), audioAfterPacket) == GST_FLOW_OK,
           "surviving audio sender stopped after video removal");
     check(waitUntil([&] {
-        return containsRtp(networkPackets, AudioLocal, 111, QByteArrayLiteral("audio"));
+        return containsRtp(networkPackets, AudioLocal, 111, 2, QByteArrayLiteral("audio"));
     }), "surviving audio RTP was not emitted with MID after video removal");
 
     PRtpPacket removedVideo;
