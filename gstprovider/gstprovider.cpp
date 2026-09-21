@@ -115,7 +115,7 @@ QStringList GstProvider::supportedSecureRtpProfiles() const { return SrtpAssocia
 
 SecureRtpSessionContext *GstProvider::createSecureRtpSession()
 {
-    return new GstRtpSessionContext(gstEventLoop, deviceMonitor, nullptr, true);
+    return new GstSecureRtpSessionContext(gstEventLoop, deviceMonitor);
 }
 
 }
