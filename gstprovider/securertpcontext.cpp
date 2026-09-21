@@ -432,39 +432,5 @@ bool SrtpAssociation::unprotect(const PSecureRtpPacket &protectedPacket, PSecure
     return process(protectedPacket, plain, false);
 }
 
-GstSecureRtpSessionContext::GstSecureRtpSessionContext(QObject *parent) : QObject(parent) { }
-
-GstSecureRtpSessionContext::~GstSecureRtpSessionContext() = default;
-
-bool GstSecureRtpSessionContext::configure(const QByteArray &associationId, quint64 epoch, const QString &profile,
-                                           const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
-                                           const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt)
-{
-    return association_.configure(associationId, epoch, profile, localMasterKey, localMasterSalt, remoteMasterKey,
-                                  remoteMasterSalt);
-}
-
-void GstSecureRtpSessionContext::invalidate(const QByteArray &associationId, quint64 epoch)
-{
-    association_.invalidate(associationId, epoch);
-}
-
-bool GstSecureRtpSessionContext::isReady() const { return association_.isReady(); }
-
-QByteArray GstSecureRtpSessionContext::associationId() const { return association_.associationId(); }
-
-quint64 GstSecureRtpSessionContext::epoch() const { return association_.epoch(); }
-
-SecureRtpSessionContext::Error GstSecureRtpSessionContext::lastError() const { return association_.lastError(); }
-
-bool GstSecureRtpSessionContext::protect(const PSecureRtpPacket &plain, PSecureRtpPacket *protectedPacket)
-{
-    return association_.protect(plain, protectedPacket);
-}
-
-bool GstSecureRtpSessionContext::unprotect(const PSecureRtpPacket &protectedPacket, PSecureRtpPacket *plain)
-{
-    return association_.unprotect(protectedPacket, plain);
-}
 
 } // namespace PsiMedia
