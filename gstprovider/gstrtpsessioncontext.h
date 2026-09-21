@@ -26,9 +26,11 @@
 #include "gstrecorder.h"
 #include "gstrtpchannel.h"
 #include "rtpsessionbridge.h"
+#include "securertpgroup.h"
 #include "rwcontrol.h"
 
 #include <atomic>
+#include <memory>
 
 namespace PsiMedia {
 
@@ -39,9 +41,9 @@ class DeviceMonitor;
 //----------------------------------------------------------------------------
 // GstRtpSessionContext
 //----------------------------------------------------------------------------
-class GstRtpSessionContext : public QObject, public RtpSessionContext {
+class GstRtpSessionContext : public QObject, public RtpSessionContext, public SecureRtpSessionContext {
     Q_OBJECT
-    Q_INTERFACES(PsiMedia::RtpSessionContext)
+    Q_INTERFACES(PsiMedia::RtpSessionContext PsiMedia::SecureRtpSessionContext)
 
 public:
     GstMainLoop *gstLoop;
@@ -78,7 +80,8 @@ public:
     QMutex write_mutex;
     bool   allow_writes;
 
-    explicit GstRtpSessionContext(GstMainLoop *_gstLoop, DeviceMonitor *deviceMonitor, QObject *parent = nullptr);
+    explicit GstRtpSessionContext(GstMainLoop *_gstLoop, DeviceMonitor *deviceMonitor, QObject *parent = nullptr,
+                                  bool secureMode = false);
 
     ~GstRtpSessionContext() override;
 
@@ -128,6 +131,22 @@ public:
     RtpChannelContext  *videoRtpChannel() override;
     void                dumpPipeline(std::function<void(const QStringList &)> callback) override;
 
+    // Optional SecureRtpSessionContext/1.0. The same QObject keeps the legacy
+    // RtpSessionContext/1.6 codec/device controls, but secure mode never exposes
+    // plaintext RTP/RTCP through its network boundary.
+    bool configureEndpoints(const QList<PSecureRtpEndpoint> &endpoints) override;
+    bool configure(const QByteArray &associationId, quint64 epoch, const QString &profile,
+                   const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
+                   const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt) override;
+    void invalidate(const QByteArray &associationId, quint64 epoch) override;
+    bool       isReady() const override;
+    QByteArray associationId() const override;
+    quint64    epoch() const override;
+    SecureRtpSessionContext::Error lastError() const override;
+    void setProtectedPacketHandler(SecureRtpSessionContext::ProtectedPacketHandler handler) override;
+    void setRuntimeErrorHandler(SecureRtpSessionContext::RuntimeErrorHandler handler) override;
+    bool receiveProtectedPacket(const PSecureRtpPacket &packet) override;
+
     // channel calls this, which may be in another thread
     void push_packet_for_write(GstRtpChannel *from, const PRtpPacket &rtp);
 
@@ -156,6 +175,8 @@ private:
     static void cb_control_recordData(const QByteArray &packet, void *app);
 
     bool configureRtpBridges();
+    bool configureSecureGroup();
+    bool maybeStartSecureGroup();
     void stopRtpBridges();
 
     // note: this is executed from a different thread
@@ -166,6 +187,15 @@ private:
 
     // note: this is executed from a different thread
     void control_recordData(const QByteArray &packet);
+
+    bool                                 secureMode_ = false;
+    std::unique_ptr<SecureRtpGroup>      secureGroup_;
+    QList<PSecureRtpEndpoint>            secureEndpoints_;
+    QByteArray                           audioSecureEndpointId_;
+    QByteArray                           videoSecureEndpointId_;
+    bool                                 securePayloadsReady_ = false;
+    bool                                 secureGroupStarted_  = false;
+    SecureRtpSessionContext::RuntimeErrorHandler secureRuntimeErrorHandler_;
 };
 
 } // namespace PsiMedia
