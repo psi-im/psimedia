@@ -9,8 +9,147 @@
 #include <QThread>
 
 #include <limits>
+#include <optional>
 
 namespace PsiMedia {
+
+namespace {
+quint16 readNetwork16(const QByteArray &data, int offset)
+{
+    const auto *p = reinterpret_cast<const uchar *>(data.constData() + offset);
+    return quint16((quint16(p[0]) << 8) | quint16(p[1]));
+}
+
+void appendNetwork16(QByteArray &data, quint16 value)
+{
+    data.append(char(value >> 8));
+    data.append(char(value));
+}
+
+std::optional<QByteArray> stampMidExtension(const QByteArray &packet, quint16 extensionId, const QByteArray &mid)
+{
+    if (packet.size() < 12 || !extensionId || extensionId > 255 || mid.isEmpty() || mid.size() > 255)
+        return {};
+
+    const auto *bytes = reinterpret_cast<const uchar *>(packet.constData());
+    if ((bytes[0] >> 6) != 2)
+        return {};
+
+    const int csrcBytes = int(bytes[0] & 0x0f) * 4;
+    if (csrcBytes > packet.size() - 12)
+        return {};
+    const int baseHeader = 12 + csrcBytes;
+
+    auto appendElement = [&](QByteArray &extensions, bool oneByte) {
+        if (oneByte) {
+            if (extensionId > 14 || mid.size() > 16)
+                return false;
+            extensions.append(char((extensionId << 4) | quint16(mid.size() - 1)));
+            extensions.append(mid);
+        } else {
+            extensions.append(char(extensionId));
+            extensions.append(char(mid.size()));
+            extensions.append(mid);
+        }
+        return true;
+    };
+
+    auto containsElement = [&](const QByteArray &extensions, bool oneByte) -> std::optional<bool> {
+        int cursor = 0;
+        while (cursor < extensions.size()) {
+            const quint8 id = quint8(extensions.at(cursor++));
+            if (!id)
+                continue;
+
+            if (oneByte) {
+                const quint8 elementId = id >> 4;
+                if (elementId == 15)
+                    return {};
+                const int length = (id & 0x0f) + 1;
+                if (length > extensions.size() - cursor)
+                    return {};
+                if (elementId == extensionId)
+                    return extensions.mid(cursor, length) == mid;
+                cursor += length;
+            } else {
+                const quint8 elementId = id;
+                if (cursor >= extensions.size())
+                    return {};
+                const int length = quint8(extensions.at(cursor++));
+                if (length > extensions.size() - cursor)
+                    return {};
+                if (elementId == extensionId)
+                    return extensions.mid(cursor, length) == mid;
+                cursor += length;
+            }
+        }
+        return false;
+    };
+
+    QByteArray extensions;
+    quint16 profile = 0;
+    int payloadOffset = baseHeader;
+
+    if (bytes[0] & 0x10) {
+        if (packet.size() - baseHeader < 4)
+            return {};
+        profile = readNetwork16(packet, baseHeader);
+        const int extensionBytes = int(readNetwork16(packet, baseHeader + 2)) * 4;
+        if (extensionBytes > packet.size() - baseHeader - 4)
+            return {};
+        extensions = packet.mid(baseHeader + 4, extensionBytes);
+        payloadOffset = baseHeader + 4 + extensionBytes;
+
+        const bool oneByte = profile == 0xbede;
+        const bool twoByte = (profile & 0xfff0) == 0x1000;
+        if (!oneByte && !twoByte)
+            return {};
+        if ((oneByte && (extensionId > 14 || mid.size() > 16)) || (!oneByte && extensionId > 255))
+            return {};
+
+        const auto existing = containsElement(extensions, oneByte);
+        if (!existing)
+            return {};
+        if (*existing)
+            return packet;
+        if (!appendElement(extensions, oneByte))
+            return {};
+    } else {
+        const bool oneByte = extensionId <= 14 && mid.size() <= 16;
+        profile = oneByte ? quint16(0xbede) : quint16(0x1000);
+        if (!appendElement(extensions, oneByte))
+            return {};
+    }
+
+    while (extensions.size() & 3)
+        extensions.append(char(0));
+    if (extensions.size() / 4 > std::numeric_limits<quint16>::max())
+        return {};
+
+    QByteArray result = packet.left(baseHeader);
+    result[0] = char(quint8(result.at(0)) | 0x10);
+    appendNetwork16(result, profile);
+    appendNetwork16(result, quint16(extensions.size() / 4));
+    result.append(extensions);
+    result.append(packet.mid(payloadOffset));
+    return result;
+}
+
+GstBuffer *bufferWithBytes(GstBuffer *source, const QByteArray &bytes)
+{
+    if (!source || bytes.isEmpty())
+        return nullptr;
+    GstBuffer *result = gst_buffer_new_allocate(nullptr, gsize(bytes.size()), nullptr);
+    if (!result)
+        return nullptr;
+    if (gst_buffer_fill(result, 0, bytes.constData(), gsize(bytes.size())) != gsize(bytes.size())) {
+        gst_buffer_unref(result);
+        return nullptr;
+    }
+    gst_buffer_copy_into(result, source, GST_BUFFER_COPY_METADATA | GST_BUFFER_COPY_TIMESTAMPS, 0, -1);
+    return result;
+}
+} // namespace
 
 RtpGroupBridge::RtpGroupBridge(QObject *parent) : QObject(parent), session_(QStringLiteral("group"))
 {
@@ -195,17 +334,50 @@ GstFlowReturn RtpGroupBridge::sendRtp(const QByteArray &endpointId, GstBuffer *b
 {
     if (!buffer)
         return GST_FLOW_ERROR;
-    const auto bytes = bytesFromBuffer(buffer);
-    if (!registerOutgoing(endpointId, bytes))
+    const auto endpoint = endpoints_.constFind(endpointId);
+    if (endpoint == endpoints_.cend())
         return GST_FLOW_ERROR;
-    return session_.sendRtp(buffer, presentationAge);
+
+    auto bytes = bytesFromBuffer(buffer);
+    if (bytes.isEmpty() || !registerOutgoing(endpointId, bytes))
+        return GST_FLOW_ERROR;
+
+    GstBuffer *stampedBuffer = nullptr;
+    const auto &route = endpoint->config.route;
+    if (!route.mid.isEmpty() && route.midExtensionId) {
+        auto stamped = stampMidExtension(bytes, route.midExtensionId, route.mid);
+        if (!stamped)
+            return GST_FLOW_ERROR;
+        bytes = std::move(*stamped);
+        stampedBuffer = bufferWithBytes(buffer, bytes);
+        if (!stampedBuffer)
+            return GST_FLOW_ERROR;
+        buffer = stampedBuffer;
+    }
+
+    const auto result = session_.sendRtp(buffer, presentationAge);
+    if (stampedBuffer)
+        gst_buffer_unref(stampedBuffer);
+    return result;
 }
 
 GstFlowReturn RtpGroupBridge::sendRtp(const QByteArray &endpointId, const PRtpPacket &packet)
 {
-    if (packet.type != PRtpPacket::Type::Rtp || !registerOutgoing(endpointId, packet.rawValue))
+    if (packet.type != PRtpPacket::Type::Rtp)
         return GST_FLOW_ERROR;
-    return session_.sendRtp(packet);
+    const auto endpoint = endpoints_.constFind(endpointId);
+    if (endpoint == endpoints_.cend() || !registerOutgoing(endpointId, packet.rawValue))
+        return GST_FLOW_ERROR;
+
+    PRtpPacket outgoing = packet;
+    const auto &route = endpoint->config.route;
+    if (!route.mid.isEmpty() && route.midExtensionId) {
+        auto stamped = stampMidExtension(packet.rawValue, route.midExtensionId, route.mid);
+        if (!stamped)
+            return GST_FLOW_ERROR;
+        outgoing.rawValue = std::move(*stamped);
+    }
+    return session_.sendRtp(outgoing);
 }
 
 GstFlowReturn RtpGroupBridge::receivePacket(const PRtpPacket &packet)
