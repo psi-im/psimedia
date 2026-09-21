@@ -829,12 +829,13 @@ void GstRtpSessionContext::control_rtpAudioOut(const RtpWorker::EncodedRtpPacket
         return;
     }
 
-    GstBuffer *buffer = gst_buffer_ref(packet.buffer);
+    auto buffer = std::shared_ptr<GstBuffer>(gst_buffer_ref(packet.buffer), [](GstBuffer *value) {
+        gst_buffer_unref(value);
+    });
     const auto age = packet.presentationAge;
-    QMetaObject::invokeMethod(this, [this, buffer, age]() {
+    QMetaObject::invokeMethod(this, [this, buffer = std::move(buffer), age]() {
         if (secureGroup_ && secureGroupStarted_ && !audioSecureEndpointId_.isEmpty())
-            secureGroup_->sendRtp(audioSecureEndpointId_, buffer, age);
-        gst_buffer_unref(buffer);
+            secureGroup_->sendRtp(audioSecureEndpointId_, buffer.get(), age);
     }, Qt::QueuedConnection);
 }
 
@@ -847,12 +848,13 @@ void GstRtpSessionContext::control_rtpVideoOut(const RtpWorker::EncodedRtpPacket
         return;
     }
 
-    GstBuffer *buffer = gst_buffer_ref(packet.buffer);
+    auto buffer = std::shared_ptr<GstBuffer>(gst_buffer_ref(packet.buffer), [](GstBuffer *value) {
+        gst_buffer_unref(value);
+    });
     const auto age = packet.presentationAge;
-    QMetaObject::invokeMethod(this, [this, buffer, age]() {
+    QMetaObject::invokeMethod(this, [this, buffer = std::move(buffer), age]() {
         if (secureGroup_ && secureGroupStarted_ && !videoSecureEndpointId_.isEmpty())
-            secureGroup_->sendRtp(videoSecureEndpointId_, buffer, age);
-        gst_buffer_unref(buffer);
+            secureGroup_->sendRtp(videoSecureEndpointId_, buffer.get(), age);
     }, Qt::QueuedConnection);
 }
 
