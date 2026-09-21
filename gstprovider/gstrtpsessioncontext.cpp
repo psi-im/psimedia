@@ -8,6 +8,10 @@
 
 #include <climits>
 
+#include <QPointer>
+#include <QSet>
+#include <QThread>
+
 namespace PsiMedia {
 namespace {
 
@@ -94,10 +98,11 @@ PRtpPacket packetFromBuffer(GstBuffer *buffer)
 
 } // namespace
 
-GstRtpSessionContext::GstRtpSessionContext(GstMainLoop *_gstLoop, DeviceMonitor *deviceMonitor, QObject *parent) :
+GstRtpSessionContext::GstRtpSessionContext(GstMainLoop *_gstLoop, DeviceMonitor *deviceMonitor, QObject *parent,
+                                           bool secureMode) :
     QObject(parent), gstLoop(_gstLoop), control(nullptr), hardwareDeviceMonitor(deviceMonitor), isStarted(false),
     isStopping(false), pending_status(false), recorder(this), audioBridge(QStringLiteral("audio")),
-    videoBridge(QStringLiteral("video")), allow_writes(false)
+    videoBridge(QStringLiteral("video")), allow_writes(false), secureMode_(secureMode)
 {
 #ifdef QT_GUI_LIB
     outputWidget  = nullptr;
@@ -113,6 +118,18 @@ GstRtpSessionContext::GstRtpSessionContext(GstMainLoop *_gstLoop, DeviceMonitor 
     audioRtp.session = this;
     videoRtp.session = this;
 
+    if (secureMode_) {
+        secureGroup_ = std::make_unique<SecureRtpGroup>();
+        secureGroup_->setRuntimeErrorHandler([this](SecureRtpSessionContext::Error error) {
+            const auto handler = secureRuntimeErrorHandler_;
+            QPointer<GstRtpSessionContext> guard(this);
+            if (handler)
+                handler(error);
+            if (guard)
+                guard->control_rtpBridgeError();
+        });
+    }
+
     connect(&recorder, SIGNAL(stopped()), SLOT(recorder_stopped()));
 }
 
@@ -124,6 +141,14 @@ void GstRtpSessionContext::stopRtpBridges()
 {
     audioSendPayloadType.store(-1, std::memory_order_release);
     videoSendPayloadType.store(-1, std::memory_order_release);
+
+    if (secureMode_) {
+        if (secureGroup_ && secureGroupStarted_)
+            secureGroup_->stop();
+        secureGroupStarted_  = false;
+        securePayloadsReady_ = false;
+        return;
+    }
 
     audioBridge.stop();
     videoBridge.stop();
@@ -418,6 +443,12 @@ void GstRtpSessionContext::push_packet_for_write(GstRtpChannel *from, const PRtp
             return;
     }
 
+    // Secure sessions have a protected-only network boundary. The legacy RTP
+    // channels remain present for Provider/1.6 ABI compatibility but cannot be
+    // used to inject plaintext network packets.
+    if (secureMode_)
+        return;
+
     if (from == &audioRtp)
         audioBridge.receivePacket(rtp);
     else if (from == &videoRtp)
@@ -440,6 +471,13 @@ bool GstRtpSessionContext::configureRtpBridges()
     lastStatus.localVideoPayloadInfo  = localVideo;
     lastStatus.remoteAudioPayloadInfo = remoteAudio;
     lastStatus.remoteVideoPayloadInfo = remoteVideo;
+
+    if (secureMode_) {
+        audioSendPayloadType.store(localAudio.isEmpty() ? -1 : localAudio.constFirst().id, std::memory_order_release);
+        videoSendPayloadType.store(localVideo.isEmpty() ? -1 : localVideo.constFirst().id, std::memory_order_release);
+        securePayloadsReady_ = true;
+        return configureSecureGroup();
+    }
 
     const auto configure = [this](RtpSessionBridge &bridge, std::atomic<int> &sendPayloadType, GstRtpChannel &channel,
                                   const QList<PPayloadInfo> &local, const QList<PPayloadInfo> &remote, bool audio) {
@@ -477,6 +515,194 @@ bool GstRtpSessionContext::configureRtpBridges()
 
     return configure(audioBridge, audioSendPayloadType, audioRtp, localAudio, remoteAudio, true)
         && configure(videoBridge, videoSendPayloadType, videoRtp, localVideo, remoteVideo, false);
+}
+
+bool GstRtpSessionContext::configureSecureGroup()
+{
+    if (!secureMode_ || !secureGroup_)
+        return false;
+    if (!securePayloadsReady_ || secureEndpoints_.isEmpty())
+        return true;
+
+    QList<RtpGroupBridge::Endpoint> groupEndpoints;
+    QByteArray nextAudioEndpointId;
+    QByteArray nextVideoEndpointId;
+    QSet<QString> mediaSeen;
+
+    for (const auto &endpoint : secureEndpoints_) {
+        if (endpoint.endpointId.isEmpty() || (endpoint.media != QLatin1String("audio")
+                                               && endpoint.media != QLatin1String("video"))
+            || mediaSeen.contains(endpoint.media))
+            return false;
+        mediaSeen.insert(endpoint.media);
+
+        const bool audio = endpoint.media == QLatin1String("audio");
+        const auto &local  = audio ? lastStatus.localAudioPayloadInfo : lastStatus.localVideoPayloadInfo;
+        const auto &remote = audio ? lastStatus.remoteAudioPayloadInfo : lastStatus.remoteVideoPayloadInfo;
+        if (local.isEmpty() || remote.isEmpty())
+            return false;
+
+        RtpGroupBridge::Endpoint groupEndpoint;
+        groupEndpoint.id             = endpoint.endpointId;
+        groupEndpoint.media          = endpoint.media;
+        groupEndpoint.localPayloads  = local;
+        groupEndpoint.remotePayloads = remote;
+        groupEndpoint.route.endpointId     = endpoint.endpointId;
+        groupEndpoint.route.mid            = endpoint.mid;
+        groupEndpoint.route.midExtensionId = endpoint.midExtensionId;
+
+        for (int payloadType : endpoint.incomingPayloadTypes) {
+            if (payloadType < 0 || payloadType > 127)
+                return false;
+            groupEndpoint.route.incomingPayloadTypes.insert(quint8(payloadType));
+        }
+        if (groupEndpoint.route.incomingPayloadTypes.isEmpty())
+            return false;
+
+        for (quint32 ssrc : endpoint.incomingSsrcs) {
+            if (ssrc)
+                groupEndpoint.route.incomingSsrcs.insert(ssrc);
+        }
+        for (quint32 ssrc : endpoint.localSsrcs) {
+            if (ssrc)
+                groupEndpoint.route.localSsrcs.insert(ssrc);
+        }
+
+        if (audio)
+            nextAudioEndpointId = endpoint.endpointId;
+        else
+            nextVideoEndpointId = endpoint.endpointId;
+
+        groupEndpoints.append(std::move(groupEndpoint));
+    }
+
+    if (!secureGroup_->configureEndpoints(groupEndpoints))
+        return false;
+
+    audioSecureEndpointId_ = nextAudioEndpointId;
+    videoSecureEndpointId_ = nextVideoEndpointId;
+
+    for (const auto &endpoint : groupEndpoints) {
+        const bool audio = endpoint.media == QLatin1String("audio");
+        secureGroup_->setEndpointMediaPacketHandler(endpoint.id, [this, audio](GstBuffer *buffer) {
+            const auto packet = packetFromBuffer(buffer);
+            if (packet.rawValue.isEmpty())
+                return;
+
+            QMutexLocker locker(&write_mutex);
+            if (!allow_writes || !control)
+                return;
+            if (audio)
+                control->rtpAudioIn(packet);
+            else
+                control->rtpVideoIn(packet);
+        });
+    }
+
+    return maybeStartSecureGroup();
+}
+
+bool GstRtpSessionContext::maybeStartSecureGroup()
+{
+    if (!secureMode_ || !secureGroup_)
+        return false;
+    if (secureGroupStarted_)
+        return true;
+    if (!securePayloadsReady_ || secureEndpoints_.isEmpty() || !secureGroup_->isReady())
+        return true;
+
+    if (!secureGroup_->start())
+        return false;
+    secureGroupStarted_ = true;
+    return true;
+}
+
+bool GstRtpSessionContext::configureEndpoints(const QList<PSecureRtpEndpoint> &endpoints)
+{
+    if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread() || endpoints.isEmpty())
+        return false;
+
+    QSet<QByteArray> ids;
+    QSet<QString>    media;
+    for (const auto &endpoint : endpoints) {
+        if (endpoint.endpointId.isEmpty() || ids.contains(endpoint.endpointId)
+            || (endpoint.media != QLatin1String("audio") && endpoint.media != QLatin1String("video"))
+            || media.contains(endpoint.media))
+            return false;
+        ids.insert(endpoint.endpointId);
+        media.insert(endpoint.media);
+        for (int payloadType : endpoint.incomingPayloadTypes) {
+            if (payloadType < 0 || payloadType > 127)
+                return false;
+        }
+    }
+
+    const auto previous = secureEndpoints_;
+    secureEndpoints_ = endpoints;
+    if (securePayloadsReady_ && !configureSecureGroup()) {
+        secureEndpoints_ = previous;
+        return false;
+    }
+    return true;
+}
+
+bool GstRtpSessionContext::configure(const QByteArray &associationId, quint64 epoch, const QString &profile,
+                                     const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
+                                     const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt)
+{
+    if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread())
+        return false;
+    if (!secureGroup_->activate(associationId, epoch, profile, localMasterKey, localMasterSalt, remoteMasterKey,
+                                remoteMasterSalt))
+        return false;
+    return maybeStartSecureGroup();
+}
+
+void GstRtpSessionContext::invalidate(const QByteArray &associationId, quint64 epoch)
+{
+    if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread())
+        return;
+    secureGroup_->invalidate(associationId, epoch);
+}
+
+bool GstRtpSessionContext::isReady() const
+{
+    return secureMode_ && secureGroup_ && secureGroup_->isReady();
+}
+
+QByteArray GstRtpSessionContext::associationId() const
+{
+    return secureMode_ && secureGroup_ ? secureGroup_->associationId() : QByteArray();
+}
+
+quint64 GstRtpSessionContext::epoch() const
+{
+    return secureMode_ && secureGroup_ ? secureGroup_->epoch() : 0;
+}
+
+SecureRtpSessionContext::Error GstRtpSessionContext::lastError() const
+{
+    return secureMode_ && secureGroup_ ? secureGroup_->lastError() : SecureRtpSessionContext::Error::NotReady;
+}
+
+void GstRtpSessionContext::setProtectedPacketHandler(SecureRtpSessionContext::ProtectedPacketHandler handler)
+{
+    if (!secureMode_ || !secureGroup_ || QThread::currentThread() != thread())
+        return;
+    secureGroup_->setProtectedPacketHandler(std::move(handler));
+}
+
+void GstRtpSessionContext::setRuntimeErrorHandler(SecureRtpSessionContext::RuntimeErrorHandler handler)
+{
+    if (!secureMode_ || QThread::currentThread() != thread())
+        return;
+    secureRuntimeErrorHandler_ = std::move(handler);
+}
+
+bool GstRtpSessionContext::receiveProtectedPacket(const PSecureRtpPacket &packet)
+{
+    return secureMode_ && secureGroup_ && QThread::currentThread() == thread()
+        && secureGroup_->receiveProtectedPacket(packet);
 }
 
 void GstRtpSessionContext::control_statusReady(const RwControlStatus &status)
@@ -598,14 +824,36 @@ void GstRtpSessionContext::control_rtpAudioOut(const RtpWorker::EncodedRtpPacket
 {
     if (!hasPayloadType(packet.buffer, audioSendPayloadType.load(std::memory_order_acquire)))
         return;
-    audioBridge.sendRtp(packet.buffer, packet.presentationAge);
+    if (!secureMode_) {
+        audioBridge.sendRtp(packet.buffer, packet.presentationAge);
+        return;
+    }
+
+    GstBuffer *buffer = gst_buffer_ref(packet.buffer);
+    const auto age = packet.presentationAge;
+    QMetaObject::invokeMethod(this, [this, buffer, age]() {
+        if (secureGroup_ && secureGroupStarted_ && !audioSecureEndpointId_.isEmpty())
+            secureGroup_->sendRtp(audioSecureEndpointId_, buffer, age);
+        gst_buffer_unref(buffer);
+    }, Qt::QueuedConnection);
 }
 
 void GstRtpSessionContext::control_rtpVideoOut(const RtpWorker::EncodedRtpPacket &packet)
 {
     if (!hasPayloadType(packet.buffer, videoSendPayloadType.load(std::memory_order_acquire)))
         return;
-    videoBridge.sendRtp(packet.buffer, packet.presentationAge);
+    if (!secureMode_) {
+        videoBridge.sendRtp(packet.buffer, packet.presentationAge);
+        return;
+    }
+
+    GstBuffer *buffer = gst_buffer_ref(packet.buffer);
+    const auto age = packet.presentationAge;
+    QMetaObject::invokeMethod(this, [this, buffer, age]() {
+        if (secureGroup_ && secureGroupStarted_ && !videoSecureEndpointId_.isEmpty())
+            secureGroup_->sendRtp(videoSecureEndpointId_, buffer, age);
+        gst_buffer_unref(buffer);
+    }, Qt::QueuedConnection);
 }
 
 void GstRtpSessionContext::control_recordData(const QByteArray &packet) { recorder.push_data_for_read(packet); }
