@@ -39,6 +39,7 @@ public:
     // RTP route/PT membership is independent from the crypto epoch.
     bool configureEndpoints(const QList<RtpGroupBridge::Endpoint> &endpoints);
     bool removeEndpoint(const QByteArray &endpointId);
+    void clearEndpoints();
 
     // Repeated activation with identical association/profile/material may advance
     // epoch without resetting libSRTP replay/ROC/SRTCP-index state.
