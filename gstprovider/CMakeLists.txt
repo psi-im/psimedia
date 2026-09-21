@@ -218,6 +218,11 @@ if(PSIMEDIA_BUILD_TESTS)
     set_tests_properties(psimedia_rtpbundlerouter PROPERTIES TIMEOUT 10)
 
     if(PSIMEDIA_ENABLE_SRTP)
+        add_executable(psimedia_securertpqueue_test ${ABS_GST_PARENT_DIR}/tests/securertpqueue.cpp)
+        target_link_libraries(psimedia_securertpqueue_test PRIVATE ${PROVIDERLIB})
+        add_test(NAME psimedia_securertpqueue COMMAND psimedia_securertpqueue_test)
+        set_tests_properties(psimedia_securertpqueue PROPERTIES TIMEOUT 10)
+
         add_executable(psimedia_securertpgroup_test ${ABS_GST_PARENT_DIR}/tests/securertpgroup.cpp)
         target_link_libraries(psimedia_securertpgroup_test PRIVATE ${PROVIDERLIB})
         add_test(NAME psimedia_securertpgroup COMMAND psimedia_securertpgroup_test)
