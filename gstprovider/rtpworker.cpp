@@ -79,15 +79,16 @@ public:
     int           sizes[30];
     int           sizes_at;
     int           frames;
+    int           keyframes;
     QElapsedTimer calltime;
 
-    Stats(const QString &_name) : name(_name), calls(-1), sizes_at(0), frames(0)
+    Stats(const QString &_name) : name(_name), calls(-1), sizes_at(0), frames(0), keyframes(0)
     {
         for (int k = 0; k < 30; ++k)
             sizes[k] = 0;
     }
 
-    void print_stats(int current_size, bool frameBoundary = false)
+    void print_stats(int current_size, bool frameBoundary = false, bool keyframe = false)
     {
         // -2 means quit
         if (calls == -2)
@@ -100,6 +101,8 @@ public:
         sizes[sizes_at++] = current_size;
         if (frameBoundary)
             ++frames;
+        if (keyframe)
+            ++keyframes;
 
         // set timer on first call
         if (calls == -1) {
@@ -121,7 +124,8 @@ public:
             calltime.restart();
             if (frames > 0) {
                 const double fps = elapsedMs > 0 ? (double(frames) * 1000.0 / double(elapsedMs)) : 0.0;
-                qDebug("%s: average packet size=%d, kbps=%d, rtp-fps=%.1f", qPrintable(name), avg, kbps, fps);
+                qDebug("%s: average packet size=%d, kbps=%d, rtp-fps=%.1f, keyframes=%d",
+                       qPrintable(name), avg, kbps, fps, keyframes);
             } else {
                 qDebug("%s: average packet size=%d, kbps=%d", qPrintable(name), avg, kbps);
             }
@@ -404,6 +408,66 @@ void RtpWorker::stop()
     g_source_set_callback(timer, cb_doStop, this, nullptr);
     g_source_attach(timer, mainContext_);
 }
+
+#ifdef RTPWORKER_DEBUG
+static bool vp8PacketStartsKeyframe(const guint8 *data, gsize size)
+{
+    if (!data || size < 13 || (data[0] >> 6) != 2)
+        return false;
+
+    gsize offset = 12 + gsize(data[0] & 0x0f) * 4;
+    if (offset >= size)
+        return false;
+
+    // Skip the RTP header extension, if present.
+    if (data[0] & 0x10) {
+        if (offset + 4 > size)
+            return false;
+        const guint16 words = (guint16(data[offset + 2]) << 8) | guint16(data[offset + 3]);
+        offset += 4 + gsize(words) * 4;
+        if (offset >= size)
+            return false;
+    }
+
+    // RFC 7741 payload descriptor. A VP8 frame starts only when S=1 and
+    // PartID=0. Optional descriptor fields precede the actual VP8 frame tag.
+    const guint8 descriptor = data[offset++];
+    if (!(descriptor & 0x10) || (descriptor & 0x0f) != 0)
+        return false;
+
+    if (descriptor & 0x80) {
+        if (offset >= size)
+            return false;
+        const guint8 extension = data[offset++];
+        if (extension & 0x80) { // I: PictureID
+            if (offset >= size)
+                return false;
+            const guint8 pictureId = data[offset++];
+            if (pictureId & 0x80) {
+                if (offset >= size)
+                    return false;
+                ++offset;
+            }
+        }
+        if (extension & 0x40) { // L: TL0PICIDX
+            if (offset >= size)
+                return false;
+            ++offset;
+        }
+        if (extension & 0x20 || extension & 0x10) { // T/K share one byte
+            if (offset >= size)
+                return false;
+            ++offset;
+        }
+    }
+
+    if (offset >= size)
+        return false;
+
+    // First bit of the VP8 uncompressed frame tag is 0 for a key frame.
+    return (data[offset] & 0x01) == 0;
+}
+#endif
 
 static GstBuffer *makeGstBuffer(const PRtpPacket &packet)
 {
@@ -904,12 +968,14 @@ GstFlowReturn RtpWorker::packet_ready_rtp_video(GstAppSink *appsink)
 
 #ifdef RTPWORKER_DEBUG
     bool frameBoundary = false;
+    bool keyframe = false;
     GstMapInfo rtpMap;
     if (gst_buffer_map(buffer, &rtpMap, GST_MAP_READ)) {
         frameBoundary = rtpMap.size >= 2 && (rtpMap.data[1] & 0x80) != 0;
+        keyframe = vp8PacketStartsKeyframe(rtpMap.data, rtpMap.size);
         gst_buffer_unmap(buffer, &rtpMap);
     }
-    videoStats->print_stats(int(gst_buffer_get_size(buffer)), frameBoundary);
+    videoStats->print_stats(int(gst_buffer_get_size(buffer)), frameBoundary, keyframe);
 #endif
 
     {
