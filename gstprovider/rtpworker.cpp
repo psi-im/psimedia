@@ -947,8 +947,10 @@ bool RtpWorker::setupSendRecv()
     //   - input device/file indicates desire to send
     //   - remote payloadinfo indicates desire to receive (we need this
     //     to support vp8)
-    //   - once sending or receiving is started, media types cannot
-    //     be added or removed (doing so will throw an error)
+    //   - once sending or receiving is started, topology changes are
+    //     generally rejected. The negotiated audio->A/V receive transition is
+    //     the one supported exception: a VP8 branch may be added in place while
+    //     the existing audio receive graph keeps running. Removal remains unsupported.
     //   - once sending or receiving is started, codecs can't be changed
     //     (changes will be rejected).  one exception: remote  vp8
     //     config can be updated.
