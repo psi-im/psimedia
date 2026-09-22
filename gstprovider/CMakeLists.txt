@@ -269,13 +269,9 @@ if(PSIMEDIA_BUILD_TESTS)
                          ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     add_executable(psimedia_rtpsessioncontext_sender_test ${ABS_GST_PARENT_DIR}/tests/rtpsessioncontext_sender.cpp)
-    target_link_libraries(psimedia_rtpsessioncontext_sender_test PRIVATE
-                          ${PROVIDERLIB}
-                          Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets)
+    target_link_libraries(psimedia_rtpsessioncontext_sender_test PRIVATE ${PROVIDERLIB})
     add_test(NAME psimedia_rtpsessioncontext_sender COMMAND psimedia_rtpsessioncontext_sender_test)
-    set_tests_properties(psimedia_rtpsessioncontext_sender PROPERTIES
-                         TIMEOUT 45
-                         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    set_tests_properties(psimedia_rtpsessioncontext_sender PROPERTIES TIMEOUT 45)
 
     add_executable(psimedia_rtpsessionbridge_test ${ABS_GST_PARENT_DIR}/tests/rtpsessionbridge.cpp)
     target_link_libraries(psimedia_rtpsessionbridge_test PRIVATE ${PROVIDERLIB})
