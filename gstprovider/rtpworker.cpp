@@ -2153,7 +2153,7 @@ bool RtpWorker::addVideoSendChain()
     videoPayload.id        = Vp8PayloadType;
     videoPayload.name      = QStringLiteral("VP8");
     videoPayload.clockrate = Vp8RtpClockRate;
-    for (const auto &remote : std::as_const(remoteVideoPayloadInfo)) {
+    for (const auto &remote : remoteVideoPayloadInfo) {
         if (remote.name.compare(QLatin1String("VP8"), Qt::CaseInsensitive) == 0
             && remote.clockrate == Vp8RtpClockRate) {
             videoPayload.id = remote.id;
