@@ -156,6 +156,7 @@ private:
     QMutex      rtpvideoout_mutex;
     std::atomic<quint32> remoteVideoSsrc_ { 0 };
     std::atomic<int>     remoteVideoPayloadType_ { -1 };
+    std::atomic_bool     firstOutgoingVideoLogged_ { false };
 
     // GSource *recordTimer;
 
