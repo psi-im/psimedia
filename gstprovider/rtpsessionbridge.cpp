@@ -118,7 +118,26 @@ PPayloadInfo commonPayload(const PPayloadInfo &primary, const PPayloadInfo *seco
     }
     common.ptime = -1;
     common.maxptime = -1;
-    common.parameters.clear();
+
+    // Codec fmtp is direction-specific and must not leak into rtpsession's
+    // shared PT map. Negotiated RTCP feedback, however, is session metadata:
+    // rtpsession checks for these caps fields before turning a decoder
+    // GstForceKeyUnit request into PLI/FIR.
+    QList<PPayloadInfo::Parameter> feedback;
+    const auto collectFeedback = [&feedback](const PPayloadInfo &payload) {
+        for (const auto &parameter : payload.parameters) {
+            if (!parameter.name.startsWith(QLatin1String("rtcp-fb-")))
+                continue;
+            if (std::none_of(feedback.cbegin(), feedback.cend(), [&](const auto &existing) {
+                    return existing.name == parameter.name;
+                }))
+                feedback.append(parameter);
+        }
+    };
+    collectFeedback(primary);
+    if (secondary)
+        collectFeedback(*secondary);
+    common.parameters = std::move(feedback);
     return common;
 }
 
@@ -612,6 +631,27 @@ bool RtpSessionBridge::requestRtcp(guint64 maxDelay)
     g_signal_emit_by_name(internalSession, "send-rtcp-full", maxDelay, &scheduled);
     g_object_unref(internalSession);
     return scheduled;
+}
+
+bool RtpSessionBridge::requestRemoteKeyframe(quint32 ssrc, quint8 payloadType)
+{
+    if (!ownerThread("requestRemoteKeyframe") || !running_.load(std::memory_order_acquire) || !session_ || !ssrc
+        || payloadType > 127)
+        return false;
+
+    GstPad *pad = gst_element_get_static_pad(session_, "recv_rtp_src");
+    if (!pad)
+        return false;
+
+    GstStructure *structure = gst_structure_new("GstForceKeyUnit",
+                                                 "ssrc", G_TYPE_UINT, guint(ssrc),
+                                                 "payload", G_TYPE_UINT, guint(payloadType),
+                                                 "all-headers", G_TYPE_BOOLEAN, TRUE,
+                                                 nullptr);
+    GstEvent *event = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, structure);
+    const bool handled = gst_pad_send_event(pad, event) != FALSE;
+    gst_object_unref(pad);
+    return handled;
 }
 
 void RtpSessionBridge::setRtcpMinimumInterval(guint64 interval)
