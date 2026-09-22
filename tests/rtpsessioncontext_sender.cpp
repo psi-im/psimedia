@@ -89,40 +89,6 @@ bool isExpectedRtpPacket(const PsiMedia::PRtpPacket &packet)
     return (bytes[0] >> 6) == 2 && (bytes[1] & 0x7f) == NegotiatedPayloadType;
 }
 
-QList<PsiMedia::PRtpPacket> waitForPayloadFrame(PsiMedia::RtpChannelContext *channel, int payloadType,
-                                                  PsiMedia::GstRtpSessionContext *session,
-                                                  int timeoutMs = 10000)
-{
-    QList<PsiMedia::PRtpPacket> packets;
-    bool failed = false;
-    bool markerSeen = false;
-    const auto errorConnection = QObject::connect(
-        session, &PsiMedia::GstRtpSessionContext::error, [&]() { failed = true; });
-
-    QElapsedTimer timer;
-    timer.start();
-    while (!failed && !markerSeen && packets.size() < 256 && timer.elapsed() < timeoutMs) {
-        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
-        while (channel->packetsAvailable() > 0 && packets.size() < 256) {
-            const auto packet = channel->read();
-            if (packet.type != PsiMedia::PRtpPacket::Type::Rtp || packet.rawValue.size() < 12)
-                continue;
-            const auto *bytes = reinterpret_cast<const uchar *>(packet.rawValue.constData());
-            if ((bytes[0] >> 6) != 2 || (bytes[1] & 0x7f) != payloadType)
-                continue;
-            packets.append(packet);
-            if (bytes[1] & 0x80) {
-                markerSeen = true;
-                break;
-            }
-        }
-        if (!markerSeen)
-            QThread::msleep(5);
-    }
-    QObject::disconnect(errorConnection);
-    return markerSeen ? packets : QList<PsiMedia::PRtpPacket>();
-}
-
 bool waitForPayloadPacket(PsiMedia::RtpChannelContext *channel, int payloadType,
                           PsiMedia::GstRtpSessionContext *session, int timeoutMs = 10000)
 {
@@ -742,33 +708,37 @@ int main(int argc, char **argv)
         return 16;
     }
     videoSession->transmitVideo();
-    const auto videoPackets = waitForPayloadFrame(videoChannel, 96, videoGstSession);
-    if (videoPackets.isEmpty()) {
-        qCritical() << "Synthetic video input did not produce one complete VP8 RTP frame";
-        return 16;
-    }
 
+    // Reflect the produced VP8 stream continuously instead of sampling one
+    // arbitrary frame. A single observed frame is not guaranteed to be a
+    // keyframe, while a real RTP receiver remains attached until the decoder
+    // sees a usable keyframe.
     constexpr quint32 RemoteVideoSsrc = 0x24681357;
-    for (auto packet : videoPackets) {
-        if (packet.rawValue.size() < 12)
-            continue;
-        auto *bytes = reinterpret_cast<uchar *>(packet.rawValue.data());
-        bytes[8]  = uchar(RemoteVideoSsrc >> 24);
-        bytes[9]  = uchar(RemoteVideoSsrc >> 16);
-        bytes[10] = uchar(RemoteVideoSsrc >> 8);
-        bytes[11] = uchar(RemoteVideoSsrc);
-        videoChannel->write(packet);
-    }
-
+    int reflectedPackets = 0;
     QElapsedTimer decodedTimer;
     decodedTimer.start();
-    while (!decodedVideo.sizeUpdates && decodedTimer.elapsed() < 5000) {
+    while (!decodedVideo.sizeUpdates && decodedTimer.elapsed() < 10000) {
         QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
-        QThread::msleep(5);
+        while (videoChannel->packetsAvailable() > 0) {
+            auto packet = videoChannel->read();
+            if (packet.type != PsiMedia::PRtpPacket::Type::Rtp || packet.rawValue.size() < 12)
+                continue;
+            auto *bytes = reinterpret_cast<uchar *>(packet.rawValue.data());
+            if ((bytes[0] >> 6) != 2 || (bytes[1] & 0x7f) != 96)
+                continue;
+            bytes[8]  = uchar(RemoteVideoSsrc >> 24);
+            bytes[9]  = uchar(RemoteVideoSsrc >> 16);
+            bytes[10] = uchar(RemoteVideoSsrc >> 8);
+            bytes[11] = uchar(RemoteVideoSsrc);
+            videoChannel->write(packet);
+            ++reflectedPackets;
+        }
+        if (!decodedVideo.sizeUpdates)
+            QThread::msleep(5);
     }
     if (!decodedVideo.sizeUpdates || decodedVideo.lastSize.isEmpty()) {
         qCritical() << "Production receive path did not decode reflected VP8 RTP"
-                    << videoPackets.size() << decodedVideo.sizeUpdates << decodedVideo.lastSize;
+                    << reflectedPackets << decodedVideo.sizeUpdates << decodedVideo.lastSize;
         return 16;
     }
 
