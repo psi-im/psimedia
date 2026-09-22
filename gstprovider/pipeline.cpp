@@ -281,6 +281,14 @@ static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, int p
     return bestCaps;
 }
 
+GstCaps *selectVideoCaptureCaps(const QString &nativeCaps, const QSize &desiredSize, int preferredFps,
+                                QString *selectedMime)
+{
+    GstDevice device;
+    device.nativeCaps = nativeCaps;
+    return filter_for_desired_size(&device, desiredSize, preferredFps, selectedMime);
+}
+
 static GstElement *make_webrtcdsp_filter()
 {
     GstStructure *cs;
