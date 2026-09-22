@@ -410,7 +410,18 @@ GstElement *bins_videodec_create(const QString &codec)
 
     gst_element_link_many(videortpjitterbuffer, videortpdepay, videodec, NULL);
 
-    g_object_set(G_OBJECT(videortpjitterbuffer), "latency", (unsigned int)get_rtp_latency(), NULL);
+    // Lost-packet events allow RTP video depayloaders to decide when decoding
+    // needs a fresh keyframe. The receive graph is separated from the shared
+    // rtpsession by appsrc, so RtpWorker forwards the resulting
+    // GstForceKeyUnit event back to the group session explicitly.
+    g_object_set(G_OBJECT(videortpjitterbuffer), "latency", (unsigned int)get_rtp_latency(), "do-lost", TRUE, NULL);
+    if (codec == QLatin1String("vp8")) {
+        auto *klass = G_OBJECT_GET_CLASS(videortpdepay);
+        if (g_object_class_find_property(klass, "request-keyframe"))
+            g_object_set(G_OBJECT(videortpdepay), "request-keyframe", TRUE, nullptr);
+        if (g_object_class_find_property(klass, "wait-for-keyframe"))
+            g_object_set(G_OBJECT(videortpdepay), "wait-for-keyframe", TRUE, nullptr);
+    }
 
     GstPad *pad;
 
