@@ -1119,9 +1119,11 @@ bool RtpWorker::startSend()
 
         if (!vin.isEmpty() && !localVideoParams.isEmpty()) {
             PipelineDeviceOptions opts;
-            opts.videoSize = localVideoParams[0].size;
-            // opts.videoSize = QSize(640, 480);
-            opts.fps = 30;
+            opts.videoSize = localVideoParams[0].size.isValid() ? localVideoParams[0].size : QSize(640, 480);
+            // A live camera is allowed to run at its native cadence unless the
+            // caller explicitly requested a frame rate. Forcing 30 fps here
+            // makes low-light/low-fps webcams duplicate frames downstream.
+            opts.fps = localVideoParams[0].fps > 0 ? localVideoParams[0].fps : -1;
 
             pd_videosrc = PipelineDeviceContext::create(send_pipelineContext, vin, PDevice::VideoIn,
                                                         hardwareDeviceMonitor_, opts);
@@ -1914,15 +1916,17 @@ bool RtpWorker::addAudioChain()
 
 bool RtpWorker::addVideoChain()
 {
-    // TODO: support other codecs.  for now, we only support vp8
-    QString codec = "vp8";
-    QSize   size  = QSize(640, 480);
-    int     fps   = 30;
-    // QString codec = localVideoParams[0].codec;
-    // QSize size = localVideoParams[0].size;
-    // int fps = localVideoParams[0].fps;
+    // TODO: support other codecs. For now, only VP8 is implemented, but honor
+    // the size/fps selected by the caller instead of inventing 30 fps.
+    const PVideoParams requested = localVideoParams.isEmpty() ? PVideoParams() : localVideoParams.constFirst();
+    QString codec = requested.codec.isEmpty() ? QStringLiteral("vp8") : requested.codec.toLower();
+    QSize   size  = requested.size.isValid() ? requested.size : QSize(640, 480);
+    int     fps   = requested.fps > 0 ? requested.fps : -1;
+    if (fileDemux && fps <= 0)
+        fps = 30; // keep deterministic legacy pacing for file input
 #ifdef RTPWORKER_DEBUG
-    qDebug("codec=%s", qPrintable(codec));
+    qDebug("codec=%s, video prep=%dx%d @ %s fps", qPrintable(codec), size.width(), size.height(),
+           fps > 0 ? qPrintable(QString::number(fps)) : "source");
 #endif
 
     // see if we need to match a pt id
