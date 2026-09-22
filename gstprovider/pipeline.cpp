@@ -903,11 +903,26 @@ public:
 
     void deactivate()
     {
-        if (activated) {
-            gst_element_set_state(pipeline, GST_STATE_NULL);
-            gst_element_get_state(pipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
-            activated = false;
+        if (!activated)
+            return;
+
+        const GstStateChangeReturn setResult = gst_element_set_state(pipeline, GST_STATE_NULL);
+        if (setResult == GST_STATE_CHANGE_FAILURE) {
+            qWarning("Pipeline failed to enter NULL during teardown");
+        } else if (setResult == GST_STATE_CHANGE_ASYNC) {
+            GstState current = GST_STATE_VOID_PENDING;
+            GstState pending = GST_STATE_VOID_PENDING;
+            const GstStateChangeReturn waitResult
+                = gst_element_get_state(pipeline, &current, &pending, 2 * GST_SECOND);
+            if (waitResult == GST_STATE_CHANGE_ASYNC) {
+                qWarning("Pipeline teardown timed out after 2s (current=%s pending=%s)",
+                         state_to_str(current) ? state_to_str(current) : "unknown",
+                         state_to_str(pending) ? state_to_str(pending) : "unknown");
+            } else if (waitResult == GST_STATE_CHANGE_FAILURE) {
+                qWarning("Pipeline teardown failed while waiting for NULL");
+            }
         }
+        activated = false;
     }
 };
 
