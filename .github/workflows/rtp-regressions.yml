@@ -218,7 +218,7 @@ jobs:
         runner:
           - ubuntu-24.04
           - ubuntu-26.04
-    runs-on: \${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -304,7 +304,7 @@ jobs:
       - name: Install package in clean Ubuntu fixture
         shell: bash
         env:
-          UBUNTU_RELEASE: \${{ matrix.runner == 'ubuntu-24.04' && '24.04' || '26.04' }}
+          UBUNTU_RELEASE: ${{ matrix.runner == 'ubuntu-24.04' && '24.04' || '26.04' }}
         run: |
           set -euo pipefail
           pkg=$(find artifacts -maxdepth 1 -type f -name '*.deb' -print -quit)
@@ -325,7 +325,7 @@ jobs:
       - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
-          name: psimedia-\${{ matrix.runner }}-deb
+          name: psimedia-${{ matrix.runner }}-deb
           path: artifacts/*.deb
           if-no-files-found: error
           retention-days: 14
