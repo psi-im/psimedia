@@ -435,30 +435,6 @@ public:
         gst_device_monitor_add_filter(_monitor, "Audio/Sink", nullptr);
         gst_device_monitor_add_filter(_monitor, "Audio/Source", nullptr);
 
-#ifdef Q_OS_LINUX
-        // GstDeviceMonitor chooses matching provider factories when a filter is
-        // added. On PipeWire desktops both pipewiredeviceprovider and
-        // v4l2deviceprovider match Video/Source. PipeWire later hides the V4L2
-        // provider for v4l2-backed nodes, but by then the V4L2 provider may
-        // already have probed the webcam and emitted GstIntRange criticals for
-        // malformed/equal driver ranges. Keep V4L2 available globally, but do
-        // not add it to this monitor when the PipeWire provider is available.
-        GstDeviceProviderFactory *pipeWireFactory
-            = gst_device_provider_factory_find("pipewiredeviceprovider");
-        GstDeviceProviderFactory *v4l2Factory = nullptr;
-        guint savedV4l2Rank = GST_RANK_NONE;
-        if (pipeWireFactory) {
-            v4l2Factory = gst_device_provider_factory_find("v4l2deviceprovider");
-            if (v4l2Factory) {
-                savedV4l2Rank = gst_plugin_feature_get_rank(GST_PLUGIN_FEATURE(v4l2Factory));
-                gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE(v4l2Factory), GST_RANK_NONE);
-#ifdef DEVICES_DEBUG
-                qDebug("DeviceMonitor: preferring PipeWire over V4L2 for video enumeration");
-#endif
-            }
-        }
-#endif
-
         GstCaps *caps;
         caps = gst_caps_new_empty_simple("video/x-raw");
         gst_device_monitor_add_filter(_monitor, "Video/Source", caps);
@@ -469,15 +445,6 @@ public:
         caps = gst_caps_new_empty_simple("image/jpeg");
         gst_device_monitor_add_filter(_monitor, "Video/Source", caps);
         gst_caps_unref(caps);
-
-#ifdef Q_OS_LINUX
-        if (v4l2Factory) {
-            gst_plugin_feature_set_rank(GST_PLUGIN_FEATURE(v4l2Factory), savedV4l2Rank);
-            gst_object_unref(v4l2Factory);
-        }
-        if (pipeWireFactory)
-            gst_object_unref(pipeWireFactory);
-#endif
 
         updateDevList();
         if (!gst_device_monitor_start(_monitor)) {
