@@ -1497,11 +1497,13 @@ bool RtpWorker::addVideoRecvChain()
 {
     if (!recvbin || !recv_in_use)
         return false;
+    bool alreadyConfigured = false;
     {
         QMutexLocker locker(&videortpsrc_mutex);
-        if (videortpsrc)
-            return updateVp8Config();
+        alreadyConfigured = videortpsrc != nullptr;
     }
+    if (alreadyConfigured)
+        return updateVp8Config();
 
     int vp8At = -1;
     for (int n = 0; n < remoteVideoPayloadInfo.count(); ++n) {
