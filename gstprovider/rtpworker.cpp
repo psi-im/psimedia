@@ -366,8 +366,22 @@ void RtpWorker::cleanupSend()
                 // receive pipeline to READY, restore automatic clocking and
                 // continue with the same recvbin/appsrc/sink objects.
                 qDebug("recv clock reverts to auto");
-                gst_element_set_state(rpipeline, GST_STATE_READY);
-                gst_element_get_state(rpipeline, nullptr, nullptr, GST_CLOCK_TIME_NONE);
+                const GstStateChangeReturn setResult = gst_element_set_state(rpipeline, GST_STATE_READY);
+                if (setResult == GST_STATE_CHANGE_ASYNC) {
+                    GstState current = GST_STATE_VOID_PENDING;
+                    GstState pending = GST_STATE_VOID_PENDING;
+                    const GstStateChangeReturn waitResult
+                        = gst_element_get_state(rpipeline, &current, &pending, 2 * GST_SECOND);
+                    if (waitResult == GST_STATE_CHANGE_ASYNC) {
+                        qWarning("Receive pipeline READY transition timed out after 2s (current=%s pending=%s)",
+                                 state_to_str(current) ? state_to_str(current) : "unknown",
+                                 state_to_str(pending) ? state_to_str(pending) : "unknown");
+                    } else if (waitResult == GST_STATE_CHANGE_FAILURE) {
+                        qWarning("Receive pipeline failed while waiting for READY");
+                    }
+                } else if (setResult == GST_STATE_CHANGE_FAILURE) {
+                    qWarning("Receive pipeline failed to enter READY");
+                }
                 gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
                 gst_element_set_state(rpipeline, GST_STATE_PLAYING);
             }
@@ -409,6 +423,9 @@ void RtpWorker::cleanup()
 #endif
 
     cleanupSend();
+#ifdef RTPWORKER_DEBUG
+    qDebug("cleanup: sender done");
+#endif
 
     volumeout_mutex.lock();
     volumeout = nullptr;
@@ -421,18 +438,36 @@ void RtpWorker::cleanup()
     videortpsrc_mutex.lock();
     videortpsrc = nullptr;
     videortpsrc_mutex.unlock();
+#ifdef RTPWORKER_DEBUG
+    qDebug("cleanup: receive callbacks detached");
+#endif
 
     if (recvbin) {
+#ifdef RTPWORKER_DEBUG
+        qDebug("cleanup: deactivating receive pipeline");
+#endif
         recv_pipelineContext->deactivate();
+#ifdef RTPWORKER_DEBUG
+        qDebug("cleanup: receive pipeline deactivated");
+#endif
         gst_pipeline_auto_clock(GST_PIPELINE(rpipeline));
         gst_bin_remove(GST_BIN(rpipeline), recvbin);
         recvbin     = nullptr;
         recv_in_use = false;
+#ifdef RTPWORKER_DEBUG
+        qDebug("cleanup: recvbin removed");
+#endif
     }
 
     if (pd_audiosink) {
+#ifdef RTPWORKER_DEBUG
+        qDebug("cleanup: releasing AudioOut");
+#endif
         delete pd_audiosink;
         pd_audiosink = nullptr;
+#ifdef RTPWORKER_DEBUG
+        qDebug("cleanup: AudioOut released");
+#endif
     }
 
 #ifdef RTPWORKER_DEBUG
