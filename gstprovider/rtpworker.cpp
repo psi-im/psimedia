@@ -1082,11 +1082,13 @@ GstFlowReturn RtpWorker::packet_ready_rtp_audio(GstAppSink *appsink)
     audioStats->print_stats(int(gst_buffer_get_size(buffer)));
 #endif
 
+    bool deliverAudio = false;
     {
         QMutexLocker locker(&rtpaudioout_mutex);
-        if (cb_rtpAudioOut && rtpaudioout)
-            cb_rtpAudioOut(packet, app);
+        deliverAudio = rtpaudioout && cb_rtpAudioOut;
     }
+    if (deliverAudio)
+        cb_rtpAudioOut(packet, app);
 
     gst_sample_unref(sample);
     return GST_FLOW_OK;
@@ -1127,11 +1129,13 @@ GstFlowReturn RtpWorker::packet_ready_rtp_video(GstAppSink *appsink)
     }
 #endif
 
+    bool deliverVideo = false;
     {
         QMutexLocker locker(&rtpvideoout_mutex);
-        if (cb_rtpVideoOut && rtpvideoout)
-            cb_rtpVideoOut(packet, app);
+        deliverVideo = rtpvideoout && cb_rtpVideoOut;
     }
+    if (deliverVideo)
+        cb_rtpVideoOut(packet, app);
 
     gst_sample_unref(sample);
     return GST_FLOW_OK;
