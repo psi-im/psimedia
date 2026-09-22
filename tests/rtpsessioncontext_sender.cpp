@@ -640,6 +640,9 @@ int main(int argc, char **argv)
 
     // Synthetic video capture has no DeviceMonitor hardware metadata. It must
     // still be usable as a raw GStreamer source for headless calls/tests.
+    // Keep the widget context alive longer than the media session even on an
+    // early failure return: the session destructor clears its output widget.
+    TestVideoContext decodedVideo;
     std::unique_ptr<PsiMedia::RtpSessionContext> videoSession(provider.createRtpSession());
     auto *videoGstSession = qobject_cast<PsiMedia::GstRtpSessionContext *>(videoSession->qobject());
     auto *videoChannel = videoSession->videoRtpChannel();
@@ -655,7 +658,6 @@ int main(int argc, char **argv)
     videoSession->setRemoteAudioPreferences({ remoteOpus });
     videoSession->audioRtpChannel()->setEnabled(true);
 
-    TestVideoContext decodedVideo;
     videoSession->setVideoOutputWidget(&decodedVideo);
 
     bool       videoStartFailed   = false;
