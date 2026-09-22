@@ -39,7 +39,10 @@ GstVideoWidget::GstVideoWidget(VideoWidgetContext *_context, QObject *parent) : 
 
 void GstVideoWidget::show_frame(const QImage &image)
 {
-    curImage = image;
+    const auto previousSize = curImage.size();
+    curImage                = image;
+    if (!image.isNull() && image.size() != previousSize)
+        context->setVideoSize(image.size());
     context->qwidget()->update();
 }
 
