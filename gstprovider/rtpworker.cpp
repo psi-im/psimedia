@@ -78,15 +78,16 @@ public:
     int           calls;
     int           sizes[30];
     int           sizes_at;
+    int           frames;
     QElapsedTimer calltime;
 
-    Stats(const QString &_name) : name(_name), calls(-1), sizes_at(0)
+    Stats(const QString &_name) : name(_name), calls(-1), sizes_at(0), frames(0)
     {
         for (int k = 0; k < 30; ++k)
             sizes[k] = 0;
     }
 
-    void print_stats(int current_size)
+    void print_stats(int current_size, bool frameBoundary = false)
     {
         // -2 means quit
         if (calls == -2)
@@ -97,6 +98,8 @@ public:
             --sizes_at;
         }
         sizes[sizes_at++] = current_size;
+        if (frameBoundary)
+            ++frames;
 
         // set timer on first call
         if (calls == -1) {
@@ -110,12 +113,18 @@ public:
             for (int n = 0; n < sizes_at; ++n)
                 avg += sizes[n];
             avg /= sizes_at;
+            const qint64 elapsedMs = calltime.elapsed();
             int bytesPerSec = (calls * avg) / 10;
             int bps         = bytesPerSec * 10;
             int kbps        = bps / 1000;
             calls           = -2;
             calltime.restart();
-            qDebug("%s: average packet size=%d, kbps=%d", qPrintable(name), avg, kbps);
+            if (frames > 0) {
+                const double fps = elapsedMs > 0 ? (double(frames) * 1000.0 / double(elapsedMs)) : 0.0;
+                qDebug("%s: average packet size=%d, kbps=%d, rtp-fps=%.1f", qPrintable(name), avg, kbps, fps);
+            } else {
+                qDebug("%s: average packet size=%d, kbps=%d", qPrintable(name), avg, kbps);
+            }
         } else
             ++calls;
     }
@@ -894,7 +903,13 @@ GstFlowReturn RtpWorker::packet_ready_rtp_video(GstAppSink *appsink)
     packet.presentationAge = samplePresentationAge(sample, spipeline);
 
 #ifdef RTPWORKER_DEBUG
-    videoStats->print_stats(int(gst_buffer_get_size(buffer)));
+    bool frameBoundary = false;
+    GstMapInfo rtpMap;
+    if (gst_buffer_map(buffer, &rtpMap, GST_MAP_READ)) {
+        frameBoundary = rtpMap.size >= 2 && (rtpMap.data[1] & 0x80) != 0;
+        gst_buffer_unmap(buffer, &rtpMap);
+    }
+    videoStats->print_stats(int(gst_buffer_get_size(buffer)), frameBoundary);
 #endif
 
     {
