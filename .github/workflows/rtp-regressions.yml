@@ -275,7 +275,7 @@ jobs:
           cmake -S . -B build-deb -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=/usr \
-            -DQT_DEFAULT_MAJOR_VERSION=5 \
+            -DQT_DEFAULT_MAJOR_VERSION=${{ matrix.qt_major }} \
             -DBUILD_DEMO=OFF \
             -DBUILD_PSIPLUGIN=ON \
             -DPSIMEDIA_BUILD_TESTS=OFF \
