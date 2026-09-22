@@ -442,6 +442,16 @@ void RtpWorker::rtpAudioIn(const PRtpPacket &packet)
 
 void RtpWorker::rtpVideoIn(const PRtpPacket &packet)
 {
+    if (packet.type == PRtpPacket::Type::Rtp && packet.rawValue.size() >= 12) {
+        const auto *bytes = reinterpret_cast<const uchar *>(packet.rawValue.constData());
+        if ((bytes[0] >> 6) == 2) {
+            remoteVideoPayloadType_.store(int(bytes[1] & 0x7f), std::memory_order_release);
+            const quint32 ssrc = (quint32(bytes[8]) << 24) | (quint32(bytes[9]) << 16)
+                | (quint32(bytes[10]) << 8) | quint32(bytes[11]);
+            remoteVideoSsrc_.store(ssrc, std::memory_order_release);
+        }
+    }
+
     QMutexLocker locker(&videortpsrc_mutex);
     if (packet.type == PRtpPacket::Type::Rtp && videortpsrc)
         gst_app_src_push_buffer((GstAppSrc *)videortpsrc, makeGstBuffer(packet));
@@ -593,6 +603,8 @@ gboolean RtpWorker::doStart()
     videosrc    = nullptr;
     audiortpsrc = nullptr;
     videortpsrc = nullptr;
+    remoteVideoSsrc_.store(0, std::memory_order_release);
+    remoteVideoPayloadType_.store(-1, std::memory_order_release);
     audiortppay = nullptr;
     videortppay = nullptr;
 
@@ -909,11 +921,16 @@ GstPadProbeReturn RtpWorker::video_keyframe_event(GstPad *pad, GstPadProbeInfo *
     if (!structure || !gst_structure_has_name(structure, "GstForceKeyUnit"))
         return GST_PAD_PROBE_OK;
 
-    guint ssrc = 0;
-    guint payloadType = 0;
-    if (!gst_structure_get_uint(structure, "ssrc", &ssrc)
-        || !gst_structure_get_uint(structure, "payload", &payloadType)
-        || !ssrc || payloadType > 127)
+    // In a normal rtpbin graph rtpssrcdemux annotates this upstream event
+    // with SSRC metadata. Our decoder sits behind an appsrc boundary, so use
+    // event fields when present and fall back to the last validated RTP header
+    // that crossed that boundary.
+    guint ssrc = remoteVideoSsrc_.load(std::memory_order_acquire);
+    const int rememberedPayload = remoteVideoPayloadType_.load(std::memory_order_acquire);
+    guint payloadType = rememberedPayload >= 0 ? guint(rememberedPayload) : G_MAXUINT;
+    gst_structure_get_uint(structure, "ssrc", &ssrc);
+    gst_structure_get_uint(structure, "payload", &payloadType);
+    if (!ssrc || payloadType > 127)
         return GST_PAD_PROBE_OK;
 
 #ifdef RTPWORKER_DEBUG
