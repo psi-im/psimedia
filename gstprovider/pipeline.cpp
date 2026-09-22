@@ -915,9 +915,7 @@ public:
             const GstStateChangeReturn waitResult
                 = gst_element_get_state(pipeline, &current, &pending, 2 * GST_SECOND);
             if (waitResult == GST_STATE_CHANGE_ASYNC) {
-                qWarning("Pipeline teardown timed out after 2s (current=%s pending=%s)",
-                         state_to_str(current) ? state_to_str(current) : "unknown",
-                         state_to_str(pending) ? state_to_str(pending) : "unknown");
+                qWarning("Pipeline teardown timed out after 2s (current=%d pending=%d)", int(current), int(pending));
             } else if (waitResult == GST_STATE_CHANGE_FAILURE) {
                 qWarning("Pipeline teardown failed while waiting for NULL");
             }
