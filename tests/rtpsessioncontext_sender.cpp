@@ -11,6 +11,7 @@
 #include "gstrtpchannel.h"
 #include "gstrtpsessioncontext.h"
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QDebug>
 #include <QElapsedTimer>
@@ -18,6 +19,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMetaObject>
+#include <QPainter>
+#include <QWidget>
 #include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QThread>
@@ -50,6 +53,26 @@ struct RtpSessionBridgeTestAccess {
 
 namespace {
 
+class TestVideoContext final : public QObject, public PsiMedia::VideoWidgetContext {
+    Q_OBJECT
+public:
+    QObject *qobject() override { return this; }
+    QWidget *qwidget() override { return &widget; }
+    void setVideoSize(const QSize &size) override
+    {
+        lastSize = size;
+        ++sizeUpdates;
+    }
+
+    QWidget widget;
+    QSize lastSize;
+    int sizeUpdates = 0;
+
+signals:
+    void resized(const QSize &newSize);
+    void paintEvent(QPainter *p);
+};
+
 constexpr int NegotiatedPayloadType = 109;
 constexpr int RawSampleRate         = 44100;
 constexpr int RawChannels           = 1;
@@ -64,6 +87,34 @@ bool isExpectedRtpPacket(const PsiMedia::PRtpPacket &packet)
 
     const auto *bytes = reinterpret_cast<const uchar *>(packet.rawValue.constData());
     return (bytes[0] >> 6) == 2 && (bytes[1] & 0x7f) == NegotiatedPayloadType;
+}
+
+QList<PsiMedia::PRtpPacket> waitForPayloadPackets(PsiMedia::RtpChannelContext *channel, int payloadType,
+                                                    PsiMedia::GstRtpSessionContext *session, int count = 24,
+                                                    int timeoutMs = 10000)
+{
+    QList<PsiMedia::PRtpPacket> packets;
+    bool failed = false;
+    const auto errorConnection = QObject::connect(
+        session, &PsiMedia::GstRtpSessionContext::error, [&]() { failed = true; });
+
+    QElapsedTimer timer;
+    timer.start();
+    while (!failed && packets.size() < count && timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        while (channel->packetsAvailable() > 0 && packets.size() < count) {
+            const auto packet = channel->read();
+            if (packet.type != PsiMedia::PRtpPacket::Type::Rtp || packet.rawValue.size() < 12)
+                continue;
+            const auto *bytes = reinterpret_cast<const uchar *>(packet.rawValue.constData());
+            if ((bytes[0] >> 6) == 2 && (bytes[1] & 0x7f) == payloadType)
+                packets.append(packet);
+        }
+        if (packets.size() < count)
+            QThread::msleep(5);
+    }
+    QObject::disconnect(errorConnection);
+    return packets;
 }
 
 bool waitForPayloadPacket(PsiMedia::RtpChannelContext *channel, int payloadType,
@@ -372,7 +423,7 @@ bool createFiniteOpusFile(const QString &path)
 
 int main(int argc, char **argv)
 {
-    QCoreApplication app(argc, argv);
+    QApplication app(argc, argv);
 
     // GStreamer reads GST_DEBUG_DUMP_DOT_DIR during initialization on older
     // 1.24.x builds. Set it before GstProvider triggers gst_init().
@@ -604,6 +655,9 @@ int main(int argc, char **argv)
     videoSession->setRemoteVideoPreferences({ remoteVp8 });
     videoChannel->setEnabled(true);
 
+    TestVideoContext decodedVideo;
+    videoSession->setVideoOutputWidget(&decodedVideo);
+
     bool       videoStartFailed   = false;
     bool       videoStartTimedOut = false;
     QEventLoop videoStartLoop;
@@ -635,8 +689,33 @@ int main(int argc, char **argv)
         return 16;
     }
     videoSession->transmitVideo();
-    if (!waitForPayloadPacket(videoChannel, 96, videoGstSession)) {
-        qCritical() << "Synthetic video input did not produce VP8 RTP";
+    const auto videoPackets = waitForPayloadPackets(videoChannel, 96, videoGstSession);
+    if (videoPackets.size() < 8) {
+        qCritical() << "Synthetic video input did not produce enough VP8 RTP" << videoPackets.size();
+        return 16;
+    }
+
+    constexpr quint32 RemoteVideoSsrc = 0x24681357;
+    for (auto packet : videoPackets) {
+        if (packet.rawValue.size() < 12)
+            continue;
+        auto *bytes = reinterpret_cast<uchar *>(packet.rawValue.data());
+        bytes[8]  = uchar(RemoteVideoSsrc >> 24);
+        bytes[9]  = uchar(RemoteVideoSsrc >> 16);
+        bytes[10] = uchar(RemoteVideoSsrc >> 8);
+        bytes[11] = uchar(RemoteVideoSsrc);
+        videoChannel->write(packet);
+    }
+
+    QElapsedTimer decodedTimer;
+    decodedTimer.start();
+    while (!decodedVideo.sizeUpdates && decodedTimer.elapsed() < 5000) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        QThread::msleep(5);
+    }
+    if (!decodedVideo.sizeUpdates || decodedVideo.lastSize.isEmpty()) {
+        qCritical() << "Production receive path did not decode reflected VP8 RTP"
+                    << videoPackets.size() << decodedVideo.sizeUpdates << decodedVideo.lastSize;
         return 16;
     }
 
@@ -737,3 +816,5 @@ int main(int argc, char **argv)
             << NegotiatedPayloadType;
     return 0;
 }
+
+#include "rtpsessioncontext_sender.moc"
