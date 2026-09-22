@@ -624,10 +624,22 @@ GstAppSink *RtpWorker::makeVideoPlayAppSink(const gchar *name)
 
 void RtpWorker::rtpAudioIn(const PRtpPacket &packet)
 {
-    QMutexLocker locker(&audiortpsrc_mutex);
-    if (packet.type == PRtpPacket::Type::Rtp && audiortpsrc) {
-        gst_app_src_push_buffer((GstAppSrc *)audiortpsrc, makeGstBuffer(packet));
+    if (packet.type != PRtpPacket::Type::Rtp)
+        return;
+
+    GstAppSrc *source = nullptr;
+    {
+        QMutexLocker locker(&audiortpsrc_mutex);
+        if (audiortpsrc)
+            source = GST_APP_SRC(gst_object_ref(audiortpsrc));
     }
+    if (!source)
+        return;
+
+    GstBuffer *buffer = makeGstBuffer(packet);
+    if (buffer)
+        gst_app_src_push_buffer(source, buffer);
+    gst_object_unref(source);
 }
 
 void RtpWorker::rtpVideoIn(const PRtpPacket &packet)
@@ -642,9 +654,22 @@ void RtpWorker::rtpVideoIn(const PRtpPacket &packet)
         }
     }
 
-    QMutexLocker locker(&videortpsrc_mutex);
-    if (packet.type == PRtpPacket::Type::Rtp && videortpsrc)
-        gst_app_src_push_buffer((GstAppSrc *)videortpsrc, makeGstBuffer(packet));
+    if (packet.type != PRtpPacket::Type::Rtp)
+        return;
+
+    GstAppSrc *source = nullptr;
+    {
+        QMutexLocker locker(&videortpsrc_mutex);
+        if (videortpsrc)
+            source = GST_APP_SRC(gst_object_ref(videortpsrc));
+    }
+    if (!source)
+        return;
+
+    GstBuffer *buffer = makeGstBuffer(packet);
+    if (buffer)
+        gst_app_src_push_buffer(source, buffer);
+    gst_object_unref(source);
 }
 
 void RtpWorker::setOutputVolume(int level)
