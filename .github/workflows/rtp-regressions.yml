@@ -149,6 +149,68 @@ jobs:
       - name: Build Qt5 compatibility
         run: cmake --build build-qt5 --parallel 2
 
+  windows-qt5-srtp-plugin:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: f28d63973e1e6e93787bf61431957d990c977c73
+          path: _psi
+          fetch-depth: 1
+
+      - name: Set up MSYS2 secure-media dependencies
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-qt5-base
+            mingw-w64-x86_64-gstreamer
+            mingw-w64-x86_64-gst-plugins-base
+            mingw-w64-x86_64-gst-plugins-good
+            mingw-w64-x86_64-gst-plugins-bad
+            mingw-w64-x86_64-opus
+            mingw-w64-x86_64-libsrtp
+
+      - name: Configure secure Psi media plugin
+        shell: msys2 {0}
+        env:
+          GSTREAMER_1_0_ROOT_X86_64: /mingw64
+        run: |
+          cmake -S . -B build-windows -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage" \
+            -DQT_DEFAULT_MAJOR_VERSION=5 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=ON \
+            -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPSIMEDIA_ENABLE_SRTP=ON \
+            -DPLUGINS_ROOT_DIR="$PWD/_psi/plugins"
+
+      - name: Build and install secure Psi media plugin
+        shell: msys2 {0}
+        run: |
+          cmake --build build-windows --parallel 2
+          cmake --install build-windows
+
+      - name: Verify packaged SRTP runtime dependency
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          plugin=$(find stage -type f \( -iname 'mediaplugin.dll' -o -iname 'libmediaplugin.dll' \) -print -quit)
+          test -n "$plugin"
+          objdump -p "$plugin" > plugin-dependencies.txt
+          cat plugin-dependencies.txt
+          grep -Eiq 'DLL Name: .*srtp.*\.dll' plugin-dependencies.txt
+
   macos-qt6-srtp:
     runs-on: macos-15
     steps:
