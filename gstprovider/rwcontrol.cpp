@@ -371,6 +371,7 @@ RwControlRemote::RwControlRemote(GMainContext *mainContext, DeviceMonitor *hardw
     worker->cb_outputFrame          = cb_worker_outputFrame;
     worker->cb_rtpAudioOut          = cb_worker_rtpAudioOut;
     worker->cb_rtpVideoOut          = cb_worker_rtpVideoOut;
+    worker->cb_videoKeyframeRequest = cb_worker_videoKeyframeRequest;
     worker->cb_recordData           = cb_worker_recordData;
 }
 
@@ -435,6 +436,11 @@ void RwControlRemote::cb_worker_rtpAudioOut(const RtpWorker::EncodedRtpPacket &p
 void RwControlRemote::cb_worker_rtpVideoOut(const RtpWorker::EncodedRtpPacket &packet, void *app)
 {
     static_cast<RwControlRemote *>(app)->worker_rtpVideoOut(packet);
+}
+
+void RwControlRemote::cb_worker_videoKeyframeRequest(quint32 ssrc, quint8 payloadType, void *app)
+{
+    static_cast<RwControlRemote *>(app)->worker_videoKeyframeRequest(ssrc, payloadType);
 }
 
 void RwControlRemote::cb_worker_recordData(const QByteArray &packet, void *app)
@@ -640,6 +646,17 @@ void RwControlRemote::worker_rtpVideoOut(const RtpWorker::EncodedRtpPacket &pack
 {
     if (local_->cb_rtpVideoOut)
         local_->cb_rtpVideoOut(packet, local_->app);
+}
+
+void RwControlRemote::worker_videoKeyframeRequest(quint32 ssrc, quint8 payloadType)
+{
+    QPointer<RwControlLocal> local(local_);
+    QMetaObject::invokeMethod(
+        local_, [local, ssrc, payloadType]() {
+            if (local)
+                emit local->videoKeyframeRequested(ssrc, payloadType);
+        },
+        Qt::QueuedConnection);
 }
 
 void RwControlRemote::worker_recordData(const QByteArray &packet)
