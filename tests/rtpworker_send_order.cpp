@@ -182,6 +182,65 @@ int main(int argc, char **argv)
     if (!spinUntil(context, [&] { return result.stopped.load(std::memory_order_acquire); }))
         qFatal("Sender-order worker did not stop cleanly");
 
+    // A hot-added live camera is allowed to take time before producing its
+    // first frame/caps. appsrc with no producer models that startup window:
+    // adding the video branch must complete without waiting for current caps
+    // or tearing down the already-running audio sender.
+    {
+        PsiMedia::RtpWorker delayedWorker(context, nullptr);
+        Result delayed;
+        delayed.worker = &delayedWorker;
+        delayedWorker.app = &delayed;
+        delayedWorker.cb_started = [](void *p) { static_cast<Result *>(p)->started = true; };
+        delayedWorker.cb_updated = [](void *p) { static_cast<Result *>(p)->updated = true; };
+        delayedWorker.cb_stopped = [](void *p) { static_cast<Result *>(p)->stopped = true; };
+        delayedWorker.cb_error = [](void *p) { static_cast<Result *>(p)->failed = true; };
+        delayedWorker.cb_rtpAudioOut = [](const PsiMedia::RtpWorker::EncodedRtpPacket &, void *p) {
+            static_cast<Result *>(p)->audioPackets.fetch_add(1, std::memory_order_release);
+        };
+
+        delayedWorker.localAudioParams = { opusParams() };
+        delayedWorker.setInputDevices(audioSource, QString(), QString(), QByteArray(), false);
+        delayedWorker.start();
+        if (!spinUntil(context, [&] {
+                return delayed.started.load(std::memory_order_acquire)
+                    || delayed.failed.load(std::memory_order_acquire);
+            }, 10000)
+            || delayed.failed.load(std::memory_order_acquire)) {
+            qFatal("Could not establish delayed-video audio sender");
+        }
+
+        delayedWorker.transmitAudio();
+        if (!spinUntil(context, [&] { return delayed.audioPackets.load(std::memory_order_acquire) >= 5; }, 5000))
+            qFatal("Delayed-video setup produced no audio RTP");
+
+        delayedWorker.transmitVideo();
+        delayedWorker.setInputDevices(audioSource, QStringLiteral("appsrc is-live=true format=time"),
+                                      QString(), QByteArray(), false);
+        delayedWorker.localVideoParams = { vp8Params() };
+        const int audioBeforeDelayedVideo = delayed.audioPackets.load(std::memory_order_acquire);
+        delayed.updated.store(false, std::memory_order_release);
+        delayedWorker.update();
+        if (!spinUntil(context, [&] {
+                return delayed.updated.load(std::memory_order_acquire)
+                    || delayed.failed.load(std::memory_order_acquire);
+            }, 2000)
+            || delayed.failed.load(std::memory_order_acquire)) {
+            qFatal("Hot-added delayed video waited for first caps or failed");
+        }
+        if (delayedWorker.localVideoPayloadInfo.isEmpty() || !delayedWorker.canTransmitVideo)
+            qFatal("Delayed video payload negotiation was not committed");
+        if (!spinUntil(context, [&] {
+                return delayed.audioPackets.load(std::memory_order_acquire) >= audioBeforeDelayedVideo + 5;
+            }, 5000)) {
+            qFatal("Delayed video hot-add interrupted the running audio sender");
+        }
+
+        delayedWorker.stop();
+        if (!spinUntil(context, [&] { return delayed.stopped.load(std::memory_order_acquire); }))
+            qFatal("Delayed-video worker did not stop cleanly");
+    }
+
     qInfo("Audio-first video send transition regression passed");
     return 0;
 }
