@@ -273,6 +273,11 @@ if(PSIMEDIA_BUILD_TESTS)
                          TIMEOUT 10
                          ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+    add_executable(psimedia_videoprep_test ${ABS_GST_PARENT_DIR}/tests/videoprep.cpp)
+    target_link_libraries(psimedia_videoprep_test PRIVATE ${PROVIDERLIB})
+    add_test(NAME psimedia_videoprep COMMAND psimedia_videoprep_test)
+    set_tests_properties(psimedia_videoprep PROPERTIES TIMEOUT 10)
+
     add_executable(psimedia_rtpsessioncontext_sender_test ${ABS_GST_PARENT_DIR}/tests/rtpsessioncontext_sender.cpp)
     target_link_libraries(psimedia_rtpsessioncontext_sender_test PRIVATE ${PROVIDERLIB})
     add_test(NAME psimedia_rtpsessioncontext_sender COMMAND psimedia_rtpsessioncontext_sender_test)
