@@ -29,6 +29,8 @@
 #include <gst/app/gstappsink.h>
 #include <gst/gst.h>
 
+#include <atomic>
+
 namespace PsiMedia {
 
 class PipelineDeviceContext;
@@ -152,6 +154,8 @@ private:
     QMutex      volumeout_mutex;
     QMutex      rtpaudioout_mutex;
     QMutex      rtpvideoout_mutex;
+    std::atomic<quint32> remoteVideoSsrc_ { 0 };
+    std::atomic<int>     remoteVideoPayloadType_ { -1 };
 
     // GSource *recordTimer;
 
