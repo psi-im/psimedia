@@ -155,7 +155,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Qt, GStreamer and libSRTP
-        run: brew install cmake ninja qt gstreamer libsrtp pkgconf
+        run: brew install cmake ninja qt gstreamer srtp pkgconf
 
       - name: Configure secure provider
         shell: bash
