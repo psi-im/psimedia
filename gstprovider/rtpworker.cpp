@@ -976,10 +976,16 @@ bool RtpWorker::setupSendRecv()
                 return false;
         }
     } else {
-        // TODO: support adding/removing audio/video to existing session
-
-        // see if vp8 was updated in the remote config
-        updateVp8Config();
+        // The Jingle adapter negotiates endpoints serially. Audio may therefore
+        // start the receive graph before video negotiation is applied. Add the
+        // missing VP8 receive branch without rebuilding the live audio graph.
+        if (!localVideoParams.isEmpty() && !remoteVideoPayloadInfo.isEmpty() && !videortpsrc) {
+            if (!addVideoRecvChain())
+                return false;
+        } else if (videortpsrc) {
+            // Existing VP8 receive chains may still receive fmtp updates.
+            updateVp8Config();
+        }
     }
 
     // apply actual settings back to these variables, so the user can
@@ -1485,6 +1491,105 @@ fail1:
     recv_in_use = false;
 
     return false;
+}
+
+bool RtpWorker::addVideoRecvChain()
+{
+    if (!recvbin || !recv_in_use)
+        return false;
+    {
+        QMutexLocker locker(&videortpsrc_mutex);
+        if (videortpsrc)
+            return updateVp8Config();
+    }
+
+    int vp8At = -1;
+    for (int n = 0; n < remoteVideoPayloadInfo.count(); ++n) {
+        const auto &payload = remoteVideoPayloadInfo[n];
+        if (payload.name.compare(QLatin1String("VP8"), Qt::CaseInsensitive) == 0
+            && payload.clockrate == Vp8RtpClockRate) {
+            vp8At = n;
+            break;
+        }
+    }
+    if (vp8At < 0)
+        return false;
+
+    GstStructure *structure = payloadInfoToStructure(remoteVideoPayloadInfo[vp8At], "video");
+    if (!structure)
+        return false;
+
+    static quint64 videoRecvSourceSerial = 0;
+    const QByteArray sourceName
+        = QByteArrayLiteral("psimedia_video_rtp_recv_") + QByteArray::number(++videoRecvSourceSerial);
+    GstElement *source = gst_element_factory_make("appsrc", sourceName.constData());
+    if (!source) {
+        gst_structure_free(structure);
+        return false;
+    }
+
+    GstCaps *caps = gst_caps_new_empty();
+    gst_caps_append_structure(caps, structure);
+    g_object_set(G_OBJECT(source), "caps", caps, nullptr);
+    gst_caps_unref(caps);
+
+    QString codec = remoteVideoPayloadInfo[vp8At].name;
+    if (codec == QLatin1String("H263-1998"))
+        codec = QStringLiteral("h263p");
+    else
+        codec = codec.toLower();
+
+    GstElement *decoder = bins_videodec_create(codec);
+    GstElement *convert = gst_element_factory_make("videoconvert", nullptr);
+    GstAppSink *sink = makeVideoPlayAppSink("netvideoplay");
+    if (!decoder || !convert || !sink) {
+        if (decoder)
+            gst_object_unref(decoder);
+        if (convert)
+            gst_object_unref(convert);
+        if (sink)
+            gst_object_unref(sink);
+        gst_object_unref(source);
+        return false;
+    }
+
+    GstAppSinkCallbacks callbacks {};
+    callbacks.new_sample  = cb_show_frame_output;
+    callbacks.eos         = cb_packet_ready_eos_stub;
+    callbacks.new_preroll = cb_packet_ready_preroll_stub;
+#if GST_CHECK_VERSION(1, 22, 0)
+    callbacks.new_event = cb_packet_ready_event_stub;
+#endif
+#if GST_CHECK_VERSION(1, 24, 0)
+    callbacks.propose_allocation = cb_packet_ready_allocation_stub;
+#endif
+    gst_app_sink_set_callbacks(sink, &callbacks, this, nullptr);
+
+    gst_bin_add_many(GST_BIN(recvbin), source, decoder, convert, reinterpret_cast<GstElement *>(sink), nullptr);
+    if (!gst_element_link_many(source, decoder, convert, reinterpret_cast<GstElement *>(sink), nullptr)) {
+        gst_bin_remove_many(GST_BIN(recvbin), source, decoder, convert, reinterpret_cast<GstElement *>(sink), nullptr);
+        return false;
+    }
+
+    // recvbin is already part of the active receive pipeline. Newly added
+    // children remain in NULL until explicitly synchronized with their parent.
+    if (!gst_element_sync_state_with_parent(source) || !gst_element_sync_state_with_parent(decoder)
+        || !gst_element_sync_state_with_parent(convert)
+        || !gst_element_sync_state_with_parent(reinterpret_cast<GstElement *>(sink))) {
+        gst_element_set_state(source, GST_STATE_NULL);
+        gst_element_set_state(decoder, GST_STATE_NULL);
+        gst_element_set_state(convert, GST_STATE_NULL);
+        gst_element_set_state(reinterpret_cast<GstElement *>(sink), GST_STATE_NULL);
+        gst_bin_remove_many(GST_BIN(recvbin), source, decoder, convert, reinterpret_cast<GstElement *>(sink), nullptr);
+        return false;
+    }
+
+    {
+        QMutexLocker locker(&videortpsrc_mutex);
+        videortpsrc = source;
+    }
+    actual_remoteVideoPayloadInfo = remoteVideoPayloadInfo;
+    return true;
 }
 
 bool RtpWorker::addAudioChain()
