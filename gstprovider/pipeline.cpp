@@ -330,16 +330,23 @@ path2::caps="video/x-raw" \
             }
 
             if (selectedMime.isEmpty()) {
-                const auto hasMime = [device](QLatin1String mime) {
-                    return std::any_of(device->caps.begin(), device->caps.end(),
-                                       [mime](const auto &c) { return c.mime == mime; });
-                };
-                if (hasMime(QLatin1String("video/x-raw")))
+                if (device->caps.isEmpty()) {
+                    // DeviceMonitor only records fixed tuples. PipeWire/V4L2
+                    // cameras that advertise ranges can therefore legitimately
+                    // arrive here with no fixed entries at all.
                     selectedMime = QStringLiteral("video/x-raw");
-                else if (hasMime(QLatin1String("image/jpeg")))
-                    selectedMime = QStringLiteral("image/jpeg");
-                else if (hasMime(QLatin1String("video/x-h264")))
-                    selectedMime = QStringLiteral("video/x-h264");
+                } else {
+                    const auto hasMime = [device](const QString &mime) {
+                        return std::any_of(device->caps.begin(), device->caps.end(),
+                                           [&mime](const auto &c) { return c.mime == mime; });
+                    };
+                    if (hasMime(QStringLiteral("video/x-raw")))
+                        selectedMime = QStringLiteral("video/x-raw");
+                    else if (hasMime(QStringLiteral("image/jpeg")))
+                        selectedMime = QStringLiteral("image/jpeg");
+                    else if (hasMime(QStringLiteral("video/x-h264")))
+                        selectedMime = QStringLiteral("video/x-h264");
+                }
             }
 
 #ifdef PIPELINE_DEBUG
