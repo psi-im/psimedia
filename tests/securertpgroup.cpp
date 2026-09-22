@@ -26,7 +26,7 @@ void check(bool value, const char *message)
         qFatal("%s", message);
 }
 
-template<typename Predicate> bool waitUntil(Predicate predicate, std::chrono::milliseconds timeout = 2s)
+template <typename Predicate> bool waitUntil(Predicate predicate, std::chrono::milliseconds timeout = 2s)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     do {
@@ -92,10 +92,10 @@ RtpGroupBridge::Endpoint endpoint(const QByteArray &id, const QString &media, co
                                   quint32 incomingSsrc, quint32 localSsrc)
 {
     RtpGroupBridge::Endpoint result;
-    result.id             = id;
-    result.media          = media;
-    result.localPayloads  = { payload };
-    result.remotePayloads = { payload };
+    result.id               = id;
+    result.media            = media;
+    result.localPayloads    = { payload };
+    result.remotePayloads   = { payload };
     result.route.endpointId = id;
     result.route.incomingPayloadTypes.insert(quint8(payload.id));
     result.route.incomingSsrcs.insert(incomingSsrc);
@@ -138,8 +138,7 @@ int main(int argc, char **argv)
               "legacy session falsely advertised secure RTP IID");
 
         GstSecureRtpSessionContext secure(nullptr, nullptr);
-        check(qobject_cast<RtpSessionContext *>(secure.qobject()) != nullptr,
-              "secure session lost legacy media IID");
+        check(qobject_cast<RtpSessionContext *>(secure.qobject()) != nullptr, "secure session lost legacy media IID");
         check(qobject_cast<SecureRtpSessionContext *>(secure.qobject()) != nullptr,
               "secure session did not advertise secure RTP IID");
     }
@@ -149,24 +148,24 @@ int main(int argc, char **argv)
     const QString profile = profiles.contains(QStringLiteral("SRTP_AES128_CM_HMAC_SHA1_80"))
         ? QStringLiteral("SRTP_AES128_CM_HMAC_SHA1_80")
         : profiles.constFirst();
-    const auto sizes = sizesFor(profile);
+    const auto    sizes   = sizesFor(profile);
 
     // Public secure media sessions must represent unbundled audio/video as two
     // independent associations while keeping one codec/device session object.
     {
         GstSecureRtpSessionContext session(nullptr, nullptr);
-        SecureRtpSessionContext *secure = &session;
+        SecureRtpSessionContext   *secure = &session;
 
         PSecureRtpEndpoint audio;
-        audio.endpointId = QByteArrayLiteral("audio");
-        audio.associationId = QByteArrayLiteral("audio-association");
-        audio.media = QStringLiteral("audio");
+        audio.endpointId           = QByteArrayLiteral("audio");
+        audio.associationId        = QByteArrayLiteral("audio-association");
+        audio.media                = QStringLiteral("audio");
         audio.incomingPayloadTypes = { 111 };
 
         PSecureRtpEndpoint video;
-        video.endpointId = QByteArrayLiteral("video");
-        video.associationId = QByteArrayLiteral("video-association");
-        video.media = QStringLiteral("video");
+        video.endpointId           = QByteArrayLiteral("video");
+        video.associationId        = QByteArrayLiteral("video-association");
+        video.media                = QStringLiteral("video");
         video.incomingPayloadTypes = { 96 };
 
         check(secure->configureEndpoints({ audio, video }), "unbundled secure endpoint map rejected");
@@ -232,10 +231,10 @@ int main(int argc, char **argv)
     check(a.activate(associationId, 1, profile, aKey, aSalt, bKey, bSalt), "peer A SRTP activation failed");
     check(b.activate(associationId, 1, profile, bKey, bSalt, aKey, aSalt), "peer B SRTP activation failed");
 
-    std::vector<PSecureRtpPacket> aNetwork;
-    std::vector<PSecureRtpPacket> bNetwork;
-    int bAudioDeliveries = 0;
-    int bVideoDeliveries = 0;
+    std::vector<PSecureRtpPacket>               aNetwork;
+    std::vector<PSecureRtpPacket>               bNetwork;
+    int                                         bAudioDeliveries = 0;
+    int                                         bVideoDeliveries = 0;
     std::vector<SecureRtpSessionContext::Error> aFatal;
     std::vector<SecureRtpSessionContext::Error> bFatal;
 
@@ -252,21 +251,20 @@ int main(int argc, char **argv)
 
     // Send enough consecutive RTP for the remote shared rtpsession probation.
     for (quint16 sequence = 1; sequence <= 3; ++sequence) {
-        const QByteArray bytes = makeRtp(111, sequence, quint32(sequence) * 960, AAudio);
-        GstBuffer *buffer = bufferFor(bytes, quint64(sequence) * 20 * GST_MSECOND);
+        const QByteArray bytes  = makeRtp(111, sequence, quint32(sequence) * 960, AAudio);
+        GstBuffer       *buffer = bufferFor(bytes, quint64(sequence) * 20 * GST_MSECOND);
         check(a.sendRtp(QByteArrayLiteral("audio"), buffer, 0) == GST_FLOW_OK, "secure audio send failed");
         gst_buffer_unref(buffer);
     }
     for (quint16 sequence = 1; sequence <= 3; ++sequence) {
-        const QByteArray bytes = makeRtp(96, sequence, quint32(sequence) * 3000, AVideo);
-        GstBuffer *buffer = bufferFor(bytes, quint64(sequence) * 33 * GST_MSECOND);
+        const QByteArray bytes  = makeRtp(96, sequence, quint32(sequence) * 3000, AVideo);
+        GstBuffer       *buffer = bufferFor(bytes, quint64(sequence) * 33 * GST_MSECOND);
         check(a.sendRtp(QByteArrayLiteral("video"), buffer, 0) == GST_FLOW_OK, "secure video send failed");
         gst_buffer_unref(buffer);
     }
 
-    check(waitUntil([&] {
-        return std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp) >= 6;
-    }), "outgoing RTP was not protected");
+    check(waitUntil([&] { return std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp) >= 6; }),
+          "outgoing RTP was not protected");
 
     size_t deliveredToB = 0;
     for (const auto &packet : aNetwork) {
@@ -281,21 +279,20 @@ int main(int argc, char **argv)
 
     // Authentication failure is a packet drop, not a fatal backend failure, and
     // must not consume the packet index or teach an RTP route.
-    const size_t beforeTamper = aNetwork.size();
-    const auto beforeTamperRtp = std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp);
-    const QByteArray freshBytes = makeRtp(111, 10, 9600, AAudio);
-    PRtpPacket fresh;
+    const size_t     beforeTamper    = aNetwork.size();
+    const auto       beforeTamperRtp = std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp);
+    const QByteArray freshBytes      = makeRtp(111, 10, 9600, AAudio);
+    PRtpPacket       fresh;
     fresh.type     = PRtpPacket::Type::Rtp;
     fresh.rawValue = freshBytes;
     check(a.sendRtp(QByteArrayLiteral("audio"), fresh) == GST_FLOW_OK, "fresh SRTP send failed");
-    check(waitUntil([&] {
-        return std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp) > beforeTamperRtp;
-    }), "fresh SRTP packet was not protected");
+    check(waitUntil([&] { return std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp) > beforeTamperRtp; }),
+          "fresh SRTP packet was not protected");
 
     const auto freshIt = std::find_if(aNetwork.cbegin() + std::ptrdiff_t(beforeTamper), aNetwork.cend(), isRtp);
     check(freshIt != aNetwork.cend(), "fresh protected RTP packet missing");
     auto freshProtected = *freshIt;
-    auto tampered = freshProtected;
+    auto tampered       = freshProtected;
     tampered.rawValue[tampered.rawValue.size() - 1]
         = char(quint8(tampered.rawValue.at(tampered.rawValue.size() - 1)) ^ 0x01);
     check(!b.receiveProtectedPacket(tampered), "tampered SRTP was accepted");
@@ -308,8 +305,7 @@ int main(int argc, char **argv)
     // route is a nonfatal media-layer drop. It must not be reported as a
     // cryptographic failure and must not teach the router.
     SrtpAssociation rogueSender;
-    check(rogueSender.configure(associationId, 1, profile, aKey, aSalt, bKey, bSalt),
-          "rogue sender SRTP setup failed");
+    check(rogueSender.configure(associationId, 1, profile, aKey, aSalt, bKey, bSalt), "rogue sender SRTP setup failed");
     PSecureRtpPacket roguePlain;
     roguePlain.associationId = associationId;
     roguePlain.epoch         = 1;
@@ -324,11 +320,9 @@ int main(int argc, char **argv)
 
     // Group RTCP generated from the same RFC 3550 session is protected as SRTCP
     // once. The peer authenticates it before feeding the group session once.
-    check(waitUntil([&] { return a.requestRtcp(100 * GST_MSECOND); }),
-          "shared RTCP scheduler did not become ready");
-    check(waitUntil([&] {
-        return std::any_of(aNetwork.cbegin(), aNetwork.cend(), isRtcp);
-    }), "outgoing group RTCP was not protected");
+    check(waitUntil([&] { return a.requestRtcp(100 * GST_MSECOND); }), "shared RTCP scheduler did not become ready");
+    check(waitUntil([&] { return std::any_of(aNetwork.cbegin(), aNetwork.cend(), isRtcp); }),
+          "outgoing group RTCP was not protected");
 
     const auto rtcpIt = std::find_if(aNetwork.cbegin(), aNetwork.cend(), isRtcp);
     check(rtcpIt != aNetwork.cend(), "protected RTCP packet missing");
@@ -348,19 +342,17 @@ int main(int argc, char **argv)
     // Endpoint membership changes do not recreate the secure association.
     check(a.removeEndpoint(QByteArrayLiteral("video")), "peer A video removal failed");
     check(b.removeEndpoint(QByteArrayLiteral("video")), "peer B video removal failed");
-    check(a.isReady() && b.isReady() && a.epoch() == 2 && b.epoch() == 2,
-          "endpoint removal reset secure association");
+    check(a.isReady() && b.isReady() && a.epoch() == 2 && b.epoch() == 2, "endpoint removal reset secure association");
 
     const size_t beforeFinalAudio = aNetwork.size();
-    const auto beforeFinalRtp = std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp);
-    PRtpPacket finalAudio;
+    const auto   beforeFinalRtp   = std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp);
+    PRtpPacket   finalAudio;
     finalAudio.type     = PRtpPacket::Type::Rtp;
     finalAudio.rawValue = makeRtp(111, 11, 10560, AAudio);
     check(a.sendRtp(QByteArrayLiteral("audio"), finalAudio) == GST_FLOW_OK,
           "surviving audio failed after video removal");
-    check(waitUntil([&] {
-        return std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp) > beforeFinalRtp;
-    }), "surviving audio was not protected after video removal");
+    check(waitUntil([&] { return std::count_if(aNetwork.cbegin(), aNetwork.cend(), isRtp) > beforeFinalRtp; }),
+          "surviving audio was not protected after video removal");
     const auto finalIt = std::find_if(aNetwork.cbegin() + std::ptrdiff_t(beforeFinalAudio), aNetwork.cend(), isRtp);
     check(finalIt != aNetwork.cend(), "final protected RTP packet missing");
     auto finalProtected = *finalIt;

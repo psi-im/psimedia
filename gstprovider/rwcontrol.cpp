@@ -657,7 +657,8 @@ void RwControlRemote::worker_videoKeyframeRequest(quint32 ssrc, quint8 payloadTy
 {
     QPointer<RwControlLocal> local(local_);
     QMetaObject::invokeMethod(
-        local_, [local, ssrc, payloadType]() {
+        local_,
+        [local, ssrc, payloadType]() {
             if (local)
                 emit local->videoKeyframeRequested(ssrc, payloadType);
         },

@@ -168,8 +168,8 @@ GstStructure *payloadInfoToStructure(const PPayloadInfo &info, const QString &me
         if (i.name.startsWith(QLatin1String("rtcp-fb-"))) {
             GValue gv = G_VALUE_INIT;
             g_value_init(&gv, G_TYPE_BOOLEAN);
-            const bool enabled = value.compare(QLatin1String("false"), Qt::CaseInsensitive) != 0
-                && value != QLatin1String("0");
+            const bool enabled
+                = value.compare(QLatin1String("false"), Qt::CaseInsensitive) != 0 && value != QLatin1String("0");
             g_value_set_boolean(&gv, enabled);
             gst_structure_set_value(out, i.name.toLatin1().constData(), &gv);
             g_value_unset(&gv);

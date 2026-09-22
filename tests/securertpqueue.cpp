@@ -59,10 +59,7 @@ struct GstRtpSessionContextTestAccess {
         session.purgeExpiredSecureOutgoingLocked();
     }
 
-    static void changeRouteGeneration(GstRtpSessionContext &session)
-    {
-        session.refreshSecureProducerRoutes();
-    }
+    static void changeRouteGeneration(GstRtpSessionContext &session) { session.refreshSecureProducerRoutes(); }
 };
 
 } // namespace PsiMedia
@@ -83,11 +80,11 @@ int main(int argc, char **argv)
     gst_init(&argc, &argv);
 
     PsiMedia::GstRtpSessionContext session(nullptr, nullptr, nullptr, true);
-    PsiMedia::GstRtpSessionContextTestAccess::enableAudioProducer(
-        session, QByteArrayLiteral("audio-association"), QByteArrayLiteral("audio-endpoint"), 9);
+    PsiMedia::GstRtpSessionContextTestAccess::enableAudioProducer(session, QByteArrayLiteral("audio-association"),
+                                                                  QByteArrayLiteral("audio-endpoint"), 9);
 
     constexpr int PacketBytes = 4096;
-    GstBuffer *source = gst_buffer_new_allocate(nullptr, PacketBytes, nullptr);
+    GstBuffer    *source      = gst_buffer_new_allocate(nullptr, PacketBytes, nullptr);
     check(source != nullptr, "failed to allocate queue test buffer");
 
     // Do not process the Qt event loop: the one scheduled drain stays pending,

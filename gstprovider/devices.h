@@ -44,13 +44,13 @@ public:
     QList<PDevice::Caps> caps;
     // Full GstDevice caps, serialized so range/list-valued modes survive the
     // public PDevice::Caps fixed-tuple compatibility view above.
-    QString              nativeCaps;
+    QString nativeCaps;
 
     void updateFrom(const GstDevice &dev)
     {
-        name      = dev.name;
-        isDefault = dev.isDefault;
-        caps      = dev.caps;
+        name       = dev.name;
+        isDefault  = dev.isDefault;
+        caps       = dev.caps;
         nativeCaps = dev.nativeCaps;
     }
 

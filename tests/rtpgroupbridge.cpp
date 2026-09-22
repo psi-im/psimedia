@@ -26,7 +26,7 @@ void check(bool value, const char *message)
         qFatal("%s", message);
 }
 
-template<typename Predicate> bool waitUntil(Predicate predicate, std::chrono::milliseconds timeout = 2s)
+template <typename Predicate> bool waitUntil(Predicate predicate, std::chrono::milliseconds timeout = 2s)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     do {
@@ -103,10 +103,10 @@ RtpGroupBridge::Endpoint endpoint(const QByteArray &id, const QString &media, co
                                   quint32 incomingSsrc, quint32 localSsrc)
 {
     RtpGroupBridge::Endpoint result;
-    result.id             = id;
-    result.media          = media;
-    result.localPayloads  = { payload };
-    result.remotePayloads = { payload };
+    result.id               = id;
+    result.media            = media;
+    result.localPayloads    = { payload };
+    result.remotePayloads   = { payload };
     result.route.endpointId = id;
     result.route.incomingPayloadTypes.insert(quint8(payload.id));
     result.route.incomingSsrcs.insert(incomingSsrc);
@@ -138,12 +138,12 @@ std::optional<QByteArray> midExtension(const QByteArray &packet, quint8 wantedId
     if (packet.size() - base < 4)
         return {};
     const quint16 profile = get16(packet, base);
-    const int bytes = int(get16(packet, base + 2)) * 4;
+    const int     bytes   = int(get16(packet, base + 2)) * 4;
     if (bytes > packet.size() - base - 4)
         return {};
 
-    int cursor = base + 4;
-    const int end = cursor + bytes;
+    int       cursor = base + 4;
+    const int end    = cursor + bytes;
     if (profile == 0xbede) {
         while (cursor < end) {
             const quint8 header = quint8(packet.at(cursor++));
@@ -201,11 +201,11 @@ int main(int argc, char **argv)
     constexpr quint32 AudioRemote = 0x55667788;
     constexpr quint32 VideoRemote = 0x66778899;
 
-    const auto opus = payload(111, "OPUS", 48000, 2);
-    const auto vp8  = payload(96, "VP8", 90000);
-    auto audio = endpoint(QByteArrayLiteral("audio"), QStringLiteral("audio"), opus, AudioRemote, AudioLocal);
-    auto video = endpoint(QByteArrayLiteral("video"), QStringLiteral("video"), vp8, VideoRemote, VideoLocal);
-    audio.route.mid            = QByteArrayLiteral("audio");
+    const auto opus  = payload(111, "OPUS", 48000, 2);
+    const auto vp8   = payload(96, "VP8", 90000);
+    auto       audio = endpoint(QByteArrayLiteral("audio"), QStringLiteral("audio"), opus, AudioRemote, AudioLocal);
+    auto       video = endpoint(QByteArrayLiteral("video"), QStringLiteral("video"), vp8, VideoRemote, VideoLocal);
+    audio.route.mid  = QByteArrayLiteral("audio");
     audio.route.midExtensionId = 1;
     video.route.mid            = QByteArrayLiteral("video");
     video.route.midExtensionId = 1;
@@ -238,22 +238,23 @@ int main(int argc, char **argv)
     group.setRtcpMinimumInterval(10 * GST_MSECOND);
     check(group.start(), "failed to start shared RTP group");
 
-    const QByteArray audioOut = makeRtp(111, 1, 960, AudioLocal);
-    GstBuffer *audioBuffer = bufferFor(audioOut, 20 * GST_MSECOND);
+    const QByteArray audioOut    = makeRtp(111, 1, 960, AudioLocal);
+    GstBuffer       *audioBuffer = bufferFor(audioOut, 20 * GST_MSECOND);
     check(group.sendRtp(QByteArrayLiteral("audio"), audioBuffer, 0) == GST_FLOW_OK,
           "failed to send audio through shared session");
     gst_buffer_unref(audioBuffer);
 
-    const QByteArray videoOut = makeRtp(96, 1, 3000, VideoLocal);
-    GstBuffer *videoBuffer = bufferFor(videoOut, 33 * GST_MSECOND);
+    const QByteArray videoOut    = makeRtp(96, 1, 3000, VideoLocal);
+    GstBuffer       *videoBuffer = bufferFor(videoOut, 33 * GST_MSECOND);
     check(group.sendRtp(QByteArrayLiteral("video"), videoBuffer, 0) == GST_FLOW_OK,
           "failed to send video through shared session");
     gst_buffer_unref(videoBuffer);
 
     check(waitUntil([&] {
-        return containsRtp(networkPackets, AudioLocal, 111, 1, QByteArrayLiteral("audio"))
-            && containsRtp(networkPackets, VideoLocal, 96, 1, QByteArrayLiteral("video"));
-    }), "shared session did not emit both outgoing RTP streams with negotiated MID");
+              return containsRtp(networkPackets, AudioLocal, 111, 1, QByteArrayLiteral("audio"))
+                  && containsRtp(networkPackets, VideoLocal, 96, 1, QByteArrayLiteral("video"));
+          }),
+          "shared session did not emit both outgoing RTP streams with negotiated MID");
 
     // Exercise different RTP clocks in the same rtpsession. Both remote sources
     // need probation packets before the shared session releases media.
@@ -291,14 +292,13 @@ int main(int argc, char **argv)
           "endpoint removal did not commit a new route revision");
 
     const QByteArray audioAfter = makeRtp(111, 2, 1920, AudioLocal);
-    PRtpPacket audioAfterPacket;
+    PRtpPacket       audioAfterPacket;
     audioAfterPacket.type     = PRtpPacket::Type::Rtp;
     audioAfterPacket.rawValue = audioAfter;
     check(group.sendRtp(QByteArrayLiteral("audio"), audioAfterPacket) == GST_FLOW_OK,
           "surviving audio sender stopped after video removal");
-    check(waitUntil([&] {
-        return containsRtp(networkPackets, AudioLocal, 111, 2, QByteArrayLiteral("audio"));
-    }), "surviving audio RTP was not emitted with MID after video removal");
+    check(waitUntil([&] { return containsRtp(networkPackets, AudioLocal, 111, 2, QByteArrayLiteral("audio")); }),
+          "surviving audio RTP was not emitted with MID after video removal");
 
     PRtpPacket removedVideo;
     removedVideo.type     = PRtpPacket::Type::Rtp;
@@ -309,8 +309,7 @@ int main(int argc, char **argv)
     PRtpPacket unknownIncoming;
     unknownIncoming.type     = PRtpPacket::Type::Rtp;
     unknownIncoming.rawValue = makeRtp(96, 30, 90000, VideoRemote);
-    check(group.receivePacket(unknownIncoming) == GST_FLOW_ERROR,
-          "removed video route still accepted incoming RTP");
+    check(group.receivePacket(unknownIncoming) == GST_FLOW_ERROR, "removed video route still accepted incoming RTP");
 
     check(!runtimeError && !wrongThread, "group bridge runtime/threading regression");
     group.stop();

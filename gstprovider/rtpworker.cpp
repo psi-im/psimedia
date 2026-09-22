@@ -39,10 +39,10 @@
 namespace PsiMedia {
 namespace {
 
-constexpr int OpusPayloadType  = 111;
-constexpr int OpusRtpClockRate = 48000;
-constexpr int Vp8PayloadType   = 96;
-constexpr int Vp8RtpClockRate  = 90000;
+    constexpr int OpusPayloadType  = 111;
+    constexpr int OpusRtpClockRate = 48000;
+    constexpr int Vp8PayloadType   = 96;
+    constexpr int Vp8RtpClockRate  = 90000;
 
 } // namespace
 
@@ -78,8 +78,8 @@ static bool syncPipelineChildrenWithParent(GstElement *pipeline)
         return false;
 
     GstIterator *iterator = gst_bin_iterate_recurse(GST_BIN(pipeline));
-    GValue item = G_VALUE_INIT;
-    bool ok = true;
+    GValue       item     = G_VALUE_INIT;
+    bool         ok       = true;
     while (true) {
         switch (gst_iterator_next(iterator, &item)) {
         case GST_ITERATOR_OK: {
@@ -197,16 +197,16 @@ public:
             for (int n = 0; n < sizes_at; ++n)
                 avg += sizes[n];
             avg /= sizes_at;
-            const qint64 elapsedMs = calltime.elapsed();
-            int bytesPerSec = (calls * avg) / 10;
-            int bps         = bytesPerSec * 10;
-            int kbps        = bps / 1000;
-            calls           = -2;
+            const qint64 elapsedMs   = calltime.elapsed();
+            int          bytesPerSec = (calls * avg) / 10;
+            int          bps         = bytesPerSec * 10;
+            int          kbps        = bps / 1000;
+            calls                    = -2;
             calltime.restart();
             if (frames > 0) {
                 const double fps = elapsedMs > 0 ? (double(frames) * 1000.0 / double(elapsedMs)) : 0.0;
-                qDebug("%s: average packet size=%d, kbps=%d, rtp-fps=%.1f, keyframes=%d",
-                       qPrintable(name), avg, kbps, fps, keyframes);
+                qDebug("%s: average packet size=%d, kbps=%d, rtp-fps=%.1f, keyframes=%d", qPrintable(name), avg, kbps,
+                       fps, keyframes);
             } else {
                 qDebug("%s: average packet size=%d, kbps=%d", qPrintable(name), avg, kbps);
             }
@@ -262,8 +262,8 @@ static GstClockTime samplePresentationAge(GstSample *sample, GstElement *pipelin
     if (!buffer || !GST_CLOCK_TIME_IS_VALID(GST_BUFFER_PTS(buffer)))
         return GST_CLOCK_TIME_NONE;
 
-    GstClockTime sampleRunningTime = GST_BUFFER_PTS(buffer);
-    const GstSegment *segment = gst_sample_get_segment(sample);
+    GstClockTime      sampleRunningTime = GST_BUFFER_PTS(buffer);
+    const GstSegment *segment           = gst_sample_get_segment(sample);
     if (segment && segment->format == GST_FORMAT_TIME)
         sampleRunningTime = gst_segment_to_running_time(segment, GST_FORMAT_TIME, GST_BUFFER_PTS(buffer));
     if (!GST_CLOCK_TIME_IS_VALID(sampleRunningTime))
@@ -368,8 +368,8 @@ void RtpWorker::cleanupSend()
                 qDebug("recv clock reverts to auto");
                 const GstStateChangeReturn setResult = gst_element_set_state(rpipeline, GST_STATE_READY);
                 if (setResult == GST_STATE_CHANGE_ASYNC) {
-                    GstState current = GST_STATE_VOID_PENDING;
-                    GstState pending = GST_STATE_VOID_PENDING;
+                    GstState                   current = GST_STATE_VOID_PENDING;
+                    GstState                   pending = GST_STATE_VOID_PENDING;
                     const GstStateChangeReturn waitResult
                         = gst_element_get_state(rpipeline, &current, &pending, 2 * GST_SECOND);
                     if (waitResult == GST_STATE_CHANGE_ASYNC) {
@@ -648,8 +648,8 @@ void RtpWorker::rtpVideoIn(const PRtpPacket &packet)
         const auto *bytes = reinterpret_cast<const uchar *>(packet.rawValue.constData());
         if ((bytes[0] >> 6) == 2) {
             remoteVideoPayloadType_.store(int(bytes[1] & 0x7f), std::memory_order_release);
-            const quint32 ssrc = (quint32(bytes[8]) << 24) | (quint32(bytes[9]) << 16)
-                | (quint32(bytes[10]) << 8) | quint32(bytes[11]);
+            const quint32 ssrc = (quint32(bytes[8]) << 24) | (quint32(bytes[9]) << 16) | (quint32(bytes[10]) << 8)
+                | quint32(bytes[11]);
             remoteVideoSsrc_.store(ssrc, std::memory_order_release);
         }
     }
@@ -1111,19 +1111,18 @@ GstFlowReturn RtpWorker::packet_ready_rtp_video(GstAppSink *appsink)
     packet.presentationAge = samplePresentationAge(sample, spipeline);
 
 #ifdef RTPWORKER_DEBUG
-    bool frameBoundary = false;
-    bool keyframe = false;
+    bool       frameBoundary = false;
+    bool       keyframe      = false;
     GstMapInfo rtpMap;
     if (gst_buffer_map(buffer, &rtpMap, GST_MAP_READ)) {
         frameBoundary = rtpMap.size >= 2 && (rtpMap.data[1] & 0x80) != 0;
-        keyframe = vp8PacketStartsKeyframe(rtpMap.data, rtpMap.size);
+        keyframe      = vp8PacketStartsKeyframe(rtpMap.data, rtpMap.size);
         gst_buffer_unmap(buffer, &rtpMap);
     }
     videoStats->print_stats(int(gst_buffer_get_size(buffer)), frameBoundary, keyframe);
     if (!firstOutgoingVideoLogged_.exchange(true, std::memory_order_acq_rel)) {
-        const qint64 ageMs = GST_CLOCK_TIME_IS_VALID(packet.presentationAge)
-            ? qint64(packet.presentationAge / GST_MSECOND)
-            : -1;
+        const qint64 ageMs
+            = GST_CLOCK_TIME_IS_VALID(packet.presentationAge) ? qint64(packet.presentationAge / GST_MSECOND) : -1;
         qDebug("first outgoing video RTP: keyframe=%d marker=%d age-ms=%lld", int(keyframe), int(frameBoundary),
                static_cast<long long>(ageMs));
     }
@@ -1159,9 +1158,9 @@ GstPadProbeReturn RtpWorker::video_keyframe_event(GstPad *pad, GstPadProbeInfo *
     // with SSRC metadata. Our decoder sits behind an appsrc boundary, so use
     // event fields when present and fall back to the last validated RTP header
     // that crossed that boundary.
-    guint ssrc = remoteVideoSsrc_.load(std::memory_order_acquire);
+    guint     ssrc              = remoteVideoSsrc_.load(std::memory_order_acquire);
     const int rememberedPayload = remoteVideoPayloadType_.load(std::memory_order_acquire);
-    guint payloadType = rememberedPayload >= 0 ? guint(rememberedPayload) : G_MAXUINT;
+    guint     payloadType       = rememberedPayload >= 0 ? guint(rememberedPayload) : G_MAXUINT;
     gst_structure_get_uint(structure, "ssrc", &ssrc);
     gst_structure_get_uint(structure, "payload", &payloadType);
     if (!ssrc || payloadType > 127)
@@ -1186,8 +1185,8 @@ bool RtpWorker::installVideoKeyframeProbe(GstElement *source)
     GstPad *srcPad = gst_element_get_static_pad(source, "src");
     if (!srcPad)
         return false;
-    const gulong id = gst_pad_add_probe(srcPad, GST_PAD_PROBE_TYPE_EVENT_UPSTREAM,
-                                        cb_video_keyframe_event, this, nullptr);
+    const gulong id
+        = gst_pad_add_probe(srcPad, GST_PAD_PROBE_TYPE_EVENT_UPSTREAM, cb_video_keyframe_event, this, nullptr);
     gst_object_unref(srcPad);
     return id != 0;
 }
@@ -1566,7 +1565,7 @@ bool RtpWorker::startRecv()
         if (!recvbin)
             recvbin = gst_bin_new("recvbin");
 
-        static quint64 audioRecvSourceSerial = 0;
+        static quint64   audioRecvSourceSerial = 0;
         const QByteArray audioRecvSourceName
             = QByteArrayLiteral("psimedia_audio_rtp_recv_") + QByteArray::number(++audioRecvSourceSerial);
         audiortpsrc_mutex.lock();
@@ -1606,7 +1605,7 @@ bool RtpWorker::startRecv()
         if (!recvbin)
             recvbin = gst_bin_new("recvbin");
 
-        static quint64 videoRecvSourceSerial = 0;
+        static quint64   videoRecvSourceSerial = 0;
         const QByteArray videoRecvSourceName
             = QByteArrayLiteral("psimedia_video_rtp_recv_") + QByteArray::number(++videoRecvSourceSerial);
         videortpsrc_mutex.lock();
@@ -1823,7 +1822,7 @@ bool RtpWorker::addAudioRecvChain()
     if (!structure)
         return false;
 
-    static quint64 audioRecvSourceSerial = 0;
+    static quint64   audioRecvSourceSerial = 0;
     const QByteArray sourceName
         = QByteArrayLiteral("psimedia_audio_rtp_recv_") + QByteArray::number(++audioRecvSourceSerial);
     GstElement *source = gst_element_factory_make("appsrc", sourceName.constData());
@@ -1837,14 +1836,14 @@ bool RtpWorker::addAudioRecvChain()
     g_object_set(G_OBJECT(source), "caps", caps, nullptr);
     gst_caps_unref(caps);
 
-    const QString codec = remoteAudioPayloadInfo[opusAt].name.toLower();
-    GstElement *decoder = bins_audiodec_create(codec);
-    GstElement *volume  = gst_element_factory_make("volume", nullptr);
-    GstElement *convert = gst_element_factory_make("audioconvert", nullptr);
-    GstElement *resample = gst_element_factory_make("audioresample", nullptr);
+    const QString codec    = remoteAudioPayloadInfo[opusAt].name.toLower();
+    GstElement   *decoder  = bins_audiodec_create(codec);
+    GstElement   *volume   = gst_element_factory_make("volume", nullptr);
+    GstElement   *convert  = gst_element_factory_make("audioconvert", nullptr);
+    GstElement   *resample = gst_element_factory_make("audioresample", nullptr);
 
     PipelineDeviceContext *newAudioSink = nullptr;
-    GstElement *audioout = nullptr;
+    GstElement            *audioout     = nullptr;
     if (!aout.isEmpty()) {
         newAudioSink
             = PipelineDeviceContext::create(recv_pipelineContext, aout, PDevice::AudioOut, hardwareDeviceMonitor_);
@@ -1891,7 +1890,7 @@ bool RtpWorker::addAudioRecvChain()
     bool linked = false;
     if (newAudioSink) {
         GstPad *srcPad = gst_element_get_static_pad(resample, "src");
-        GstPad *ghost = srcPad ? gst_ghost_pad_new("src", srcPad) : nullptr;
+        GstPad *ghost  = srcPad ? gst_ghost_pad_new("src", srcPad) : nullptr;
         if (srcPad)
             gst_object_unref(srcPad);
         if (ghost && gst_element_add_pad(recvbin, ghost))
@@ -1924,12 +1923,9 @@ bool RtpWorker::addAudioRecvChain()
         return false;
     }
 
-    const bool synced = gst_element_sync_state_with_parent(source)
-        && gst_element_sync_state_with_parent(decoder)
-        && gst_element_sync_state_with_parent(volume)
-        && gst_element_sync_state_with_parent(convert)
-        && gst_element_sync_state_with_parent(resample)
-        && gst_element_sync_state_with_parent(audioout);
+    const bool synced = gst_element_sync_state_with_parent(source) && gst_element_sync_state_with_parent(decoder)
+        && gst_element_sync_state_with_parent(volume) && gst_element_sync_state_with_parent(convert)
+        && gst_element_sync_state_with_parent(resample) && gst_element_sync_state_with_parent(audioout);
     if (!synced) {
         gst_element_set_state(source, GST_STATE_NULL);
         gst_element_set_state(decoder, GST_STATE_NULL);
@@ -1957,7 +1953,7 @@ bool RtpWorker::addAudioRecvChain()
         QMutexLocker locker(&volumeout_mutex);
         volumeout = volume;
     }
-    pd_audiosink = newAudioSink;
+    pd_audiosink                  = newAudioSink;
     actual_remoteAudioPayloadInfo = remoteAudioPayloadInfo;
     return true;
 }
@@ -1990,7 +1986,7 @@ bool RtpWorker::addVideoRecvChain()
     if (!structure)
         return false;
 
-    static quint64 videoRecvSourceSerial = 0;
+    static quint64   videoRecvSourceSerial = 0;
     const QByteArray sourceName
         = QByteArrayLiteral("psimedia_video_rtp_recv_") + QByteArray::number(++videoRecvSourceSerial);
     GstElement *source = gst_element_factory_make("appsrc", sourceName.constData());
@@ -2016,7 +2012,7 @@ bool RtpWorker::addVideoRecvChain()
 
     GstElement *decoder = bins_videodec_create(codec);
     GstElement *convert = gst_element_factory_make("videoconvert", nullptr);
-    GstAppSink *sink = makeVideoPlayAppSink("netvideoplay");
+    GstAppSink *sink    = makeVideoPlayAppSink("netvideoplay");
     if (!decoder || !convert || !sink) {
         if (decoder)
             gst_object_unref(decoder);
@@ -2082,15 +2078,14 @@ bool RtpWorker::addAudioSendChain()
         options.aec = !options.echoProberName.isEmpty();
     }
 
-    auto *newSource = PipelineDeviceContext::create(send_pipelineContext, ain, PDevice::AudioIn,
-                                                    hardwareDeviceMonitor_, options);
+    auto *newSource
+        = PipelineDeviceContext::create(send_pipelineContext, ain, PDevice::AudioIn, hardwareDeviceMonitor_, options);
     if (!newSource)
         return false;
 
     pd_audiosrc = newSource;
     audiosrc    = newSource->element();
-    if (!addAudioChain() || !gst_element_link(audiosrc, sendbin)
-        || !syncPipelineChildrenWithParent(spipeline)) {
+    if (!addAudioChain() || !gst_element_link(audiosrc, sendbin) || !syncPipelineChildrenWithParent(spipeline)) {
         cleanupSend();
         return false;
     }
@@ -2123,19 +2118,18 @@ bool RtpWorker::addVideoSendChain()
 #endif
 
     PipelineDeviceOptions options;
-    options.videoSize = localVideoParams.constFirst().size.isValid() ? localVideoParams.constFirst().size
-                                                                      : QSize(640, 480);
+    options.videoSize
+        = localVideoParams.constFirst().size.isValid() ? localVideoParams.constFirst().size : QSize(640, 480);
     options.fps = localVideoParams.constFirst().fps > 0 ? localVideoParams.constFirst().fps : -1;
 
-    auto *newSource = PipelineDeviceContext::create(send_pipelineContext, vin, PDevice::VideoIn,
-                                                    hardwareDeviceMonitor_, options);
+    auto *newSource
+        = PipelineDeviceContext::create(send_pipelineContext, vin, PDevice::VideoIn, hardwareDeviceMonitor_, options);
     if (!newSource)
         return false;
 
     pd_videosrc = newSource;
     videosrc    = newSource->element();
-    if (!addVideoChain() || !gst_element_link(videosrc, sendbin)
-        || !syncPipelineChildrenWithParent(spipeline)) {
+    if (!addVideoChain() || !gst_element_link(videosrc, sendbin) || !syncPipelineChildrenWithParent(spipeline)) {
         cleanupSend();
         return false;
     }
@@ -2161,8 +2155,8 @@ bool RtpWorker::addVideoSendChain()
         }
     }
 
-    localVideoPayloadInfo = { videoPayload };
-    canTransmitVideo      = true;
+    localVideoPayloadInfo        = { videoPayload };
+    canTransmitVideo             = true;
     actual_localVideoPayloadInfo = localVideoPayloadInfo;
 
 #ifdef RTPWORKER_DEBUG
@@ -2262,9 +2256,9 @@ bool RtpWorker::addVideoChain()
     // TODO: support other codecs. For now, only VP8 is implemented, but honor
     // the size/fps selected by the caller instead of inventing 30 fps.
     const PVideoParams requested = localVideoParams.isEmpty() ? PVideoParams() : localVideoParams.constFirst();
-    QString codec = requested.codec.isEmpty() ? QStringLiteral("vp8") : requested.codec.toLower();
-    QSize   size  = requested.size.isValid() ? requested.size : QSize(640, 480);
-    int     fps   = requested.fps > 0 ? requested.fps : -1;
+    QString            codec     = requested.codec.isEmpty() ? QStringLiteral("vp8") : requested.codec.toLower();
+    QSize              size      = requested.size.isValid() ? requested.size : QSize(640, 480);
+    int                fps       = requested.fps > 0 ? requested.fps : -1;
     if (fileDemux && fps <= 0)
         fps = 30; // keep deterministic legacy pacing for file input
 #ifdef RTPWORKER_DEBUG

@@ -25,11 +25,11 @@ public:
             // data. The destructor is responsible for removing that source.
             auto *remote = new RwControlRemote(context, nullptr, nullptr);
 
-            auto *transmit = new RwControlTransmitMessage;
+            auto *transmit              = new RwControlTransmitMessage;
             transmit->transmit.useAudio = true;
             remote->postMessage(transmit);
 
-            auto *devices = new RwControlUpdateDevicesMessage;
+            auto *devices               = new RwControlUpdateDevicesMessage;
             devices->devices.audioOutId = QStringLiteral("queued-before-destroy");
             remote->postMessage(devices);
 
@@ -40,8 +40,8 @@ public:
         // If its queued source retained a stale callback/data pair, ASan catches
         // the use-after-free here. A marker guarantees that the context really
         // performed a post-destruction dispatch turn.
-        bool markerDispatched = false;
-        GSource *marker = g_idle_source_new();
+        bool     markerDispatched = false;
+        GSource *marker           = g_idle_source_new();
         g_source_set_callback(
             marker,
             [](gpointer data) -> gboolean {

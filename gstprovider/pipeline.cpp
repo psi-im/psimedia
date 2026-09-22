@@ -164,21 +164,22 @@ static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, int p
         selectedMime->clear();
     preferredFps = preferredFps > 0 ? preferredFps : 30;
 
-    GstCaps *bestCaps       = nullptr;
-    double   bestScore      = std::numeric_limits<double>::infinity();
+    GstCaps *bestCaps  = nullptr;
+    double   bestScore = std::numeric_limits<double>::infinity();
     QString  bestMime;
-    int      bestWidth      = 0;
-    int      bestHeight     = 0;
-    int      bestFpsNum     = 0;
-    int      bestFpsDen     = 1;
+    int      bestWidth  = 0;
+    int      bestHeight = 0;
+    int      bestFpsNum = 0;
+    int      bestFpsDen = 1;
 
     // Prefer the complete GstDevice caps. Unlike PDevice::Caps these preserve
     // PipeWire/V4L2 lists and ranges, which are common for webcam modes.
-    GstCaps *nativeCaps = dev->nativeCaps.isEmpty() ? nullptr : gst_caps_from_string(dev->nativeCaps.toUtf8().constData());
+    GstCaps *nativeCaps
+        = dev->nativeCaps.isEmpty() ? nullptr : gst_caps_from_string(dev->nativeCaps.toUtf8().constData());
     if (nativeCaps && !gst_caps_is_empty(nativeCaps) && !gst_caps_is_any(nativeCaps)) {
         for (guint i = 0; i < gst_caps_get_size(nativeCaps); ++i) {
             const GstStructure *source = gst_caps_get_structure(nativeCaps, i);
-            const QString mime = QString::fromLatin1(gst_structure_get_name(source));
+            const QString       mime   = QString::fromLatin1(gst_structure_get_name(source));
             if (videoMimeRank(mime) < 0)
                 continue;
 
@@ -200,12 +201,11 @@ static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, int p
 
             gst_structure_fixate(fixed);
 
-            int width = 0;
+            int width  = 0;
             int height = 0;
             int fpsNum = 0;
             int fpsDen = 1;
-            if (!gst_structure_get_int(fixed, "width", &width)
-                || !gst_structure_get_int(fixed, "height", &height)
+            if (!gst_structure_get_int(fixed, "width", &width) || !gst_structure_get_int(fixed, "height", &height)
                 || !gst_structure_get_fraction(fixed, "framerate", &fpsNum, &fpsDen)) {
                 gst_structure_free(fixed);
                 continue;
@@ -224,11 +224,9 @@ static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, int p
             // make a dynamically created pipewiresrc fail to negotiate when
             // copied verbatim. Use the full caps only for mode selection, then
             // rebuild a minimal fixed filter in normal system memory.
-            GstCaps *candidate = gst_caps_new_simple(mime.toLatin1().constData(),
-                                                     "width", G_TYPE_INT, width,
-                                                     "height", G_TYPE_INT, height,
-                                                     "framerate", GST_TYPE_FRACTION, fpsNum, fpsDen,
-                                                     nullptr);
+            GstCaps *candidate
+                = gst_caps_new_simple(mime.toLatin1().constData(), "width", G_TYPE_INT, width, "height", G_TYPE_INT,
+                                      height, "framerate", GST_TYPE_FRACTION, fpsNum, fpsDen, nullptr);
             gst_structure_free(fixed);
 
             if (bestCaps)
@@ -249,18 +247,18 @@ static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, int p
     // fixed PDevice::Caps list.
     if (!bestCaps) {
         for (const auto &candidate : dev->caps) {
-            const double score = videoCaptureScore(size, preferredFps, candidate.mime, candidate.video.width,
-                                                   candidate.video.height, candidate.video.framerate_numerator,
-                                                   candidate.video.framerate_denominator);
+            const double score
+                = videoCaptureScore(size, preferredFps, candidate.mime, candidate.video.width, candidate.video.height,
+                                    candidate.video.framerate_numerator, candidate.video.framerate_denominator);
             if (score >= bestScore)
                 continue;
 
             if (bestCaps)
                 gst_caps_unref(bestCaps);
-            bestCaps = gst_caps_new_simple(candidate.mime.toLatin1().constData(), "width", G_TYPE_INT,
-                                           candidate.video.width, "height", G_TYPE_INT, candidate.video.height,
-                                           "framerate", GST_TYPE_FRACTION, candidate.video.framerate_numerator,
-                                           candidate.video.framerate_denominator, nullptr);
+            bestCaps   = gst_caps_new_simple(candidate.mime.toLatin1().constData(), "width", G_TYPE_INT,
+                                             candidate.video.width, "height", G_TYPE_INT, candidate.video.height,
+                                             "framerate", GST_TYPE_FRACTION, candidate.video.framerate_numerator,
+                                             candidate.video.framerate_denominator, nullptr);
             bestScore  = score;
             bestMime   = candidate.mime;
             bestWidth  = candidate.video.width;
@@ -279,8 +277,8 @@ static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, int p
         bestHeight = size.height();
         bestFpsNum = preferredFps;
         bestFpsDen = 1;
-        bestCaps = gst_caps_new_simple("video/x-raw", "width", G_TYPE_INT, bestWidth, "height", G_TYPE_INT,
-                                       bestHeight, "framerate", GST_TYPE_FRACTION, bestFpsNum, bestFpsDen, nullptr);
+        bestCaps = gst_caps_new_simple("video/x-raw", "width", G_TYPE_INT, bestWidth, "height", G_TYPE_INT, bestHeight,
+                                       "framerate", GST_TYPE_FRACTION, bestFpsNum, bestFpsDen, nullptr);
     }
 
     if (selectedMime)
@@ -560,7 +558,7 @@ path2::caps="video/x-raw" \
                 if (!setGhostTarget(jpegdec))
                     return failVideoBin();
             } else if (selectedMime == QLatin1String("video/x-h264")) {
-                GstElement *h264parse = gst_element_factory_make("h264parse", nullptr);
+                GstElement *h264parse  = gst_element_factory_make("h264parse", nullptr);
                 GstElement *avdec_h264 = gst_element_factory_make("avdec_h264", nullptr);
                 if (!addVideoElement(h264parse) || !addVideoElement(avdec_h264))
                     return failVideoBin();
@@ -936,10 +934,9 @@ public:
         if (setResult == GST_STATE_CHANGE_FAILURE) {
             qWarning("Pipeline failed to enter NULL during teardown");
         } else if (setResult == GST_STATE_CHANGE_ASYNC) {
-            GstState current = GST_STATE_VOID_PENDING;
-            GstState pending = GST_STATE_VOID_PENDING;
-            const GstStateChangeReturn waitResult
-                = gst_element_get_state(pipeline, &current, &pending, 2 * GST_SECOND);
+            GstState                   current    = GST_STATE_VOID_PENDING;
+            GstState                   pending    = GST_STATE_VOID_PENDING;
+            const GstStateChangeReturn waitResult = gst_element_get_state(pipeline, &current, &pending, 2 * GST_SECOND);
             if (waitResult == GST_STATE_CHANGE_ASYNC) {
                 qWarning("Pipeline teardown timed out after 2s (current=%d pending=%d)", int(current), int(pending));
             } else if (waitResult == GST_STATE_CHANGE_FAILURE) {

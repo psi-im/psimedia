@@ -16,12 +16,12 @@ GstElement *findFactory(GstElement *element, const char *factoryName)
         return nullptr;
 
     GstIterator *iterator = gst_bin_iterate_elements(GST_BIN(element));
-    GValue item = G_VALUE_INIT;
-    GstElement *found = nullptr;
+    GValue       item     = G_VALUE_INIT;
+    GstElement  *found    = nullptr;
     while (gst_iterator_next(iterator, &item) == GST_ITERATOR_OK) {
-        auto *child = GST_ELEMENT(g_value_get_object(&item));
+        auto              *child   = GST_ELEMENT(g_value_get_object(&item));
         GstElementFactory *factory = gst_element_get_factory(child);
-        const gchar *name = factory ? gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory)) : nullptr;
+        const gchar       *name    = factory ? gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory)) : nullptr;
         if (name && qstrcmp(name, factoryName) == 0) {
             found = GST_ELEMENT(gst_object_ref(child));
             g_value_reset(&item);
@@ -40,12 +40,12 @@ bool hasFactory(GstElement *element, const char *factoryName)
         return false;
 
     GstIterator *iterator = gst_bin_iterate_elements(GST_BIN(element));
-    GValue item = G_VALUE_INIT;
-    bool found = false;
+    GValue       item     = G_VALUE_INIT;
+    bool         found    = false;
     while (gst_iterator_next(iterator, &item) == GST_ITERATOR_OK) {
-        auto *child = GST_ELEMENT(g_value_get_object(&item));
+        auto              *child   = GST_ELEMENT(g_value_get_object(&item));
         GstElementFactory *factory = gst_element_get_factory(child);
-        const gchar *name = factory ? gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory)) : nullptr;
+        const gchar       *name    = factory ? gst_plugin_feature_get_name(GST_PLUGIN_FEATURE(factory)) : nullptr;
         if (name && qstrcmp(name, factoryName) == 0) {
             found = true;
             g_value_reset(&item);
@@ -89,9 +89,9 @@ int main(int argc, char **argv)
     if (!filterCaps || gst_caps_get_size(filterCaps) != 1)
         qFatal("Video prep scale caps are missing");
     const GstStructure *filterStructure = gst_caps_get_structure(filterCaps, 0);
-    int parNum = 0;
-    int parDen = 0;
-    const bool squarePar = gst_structure_get_fraction(filterStructure, "pixel-aspect-ratio", &parNum, &parDen)
+    int                 parNum          = 0;
+    int                 parDen          = 0;
+    const bool          squarePar = gst_structure_get_fraction(filterStructure, "pixel-aspect-ratio", &parNum, &parDen)
         && parNum == 1 && parDen == 1;
     gst_caps_unref(filterCaps);
     if (!squarePar)

@@ -33,10 +33,10 @@ public:
     void invalidate(const QByteArray &associationId, quint64 epoch);
     void reset();
 
-    bool                               isReady() const;
-    QByteArray                         associationId() const;
-    quint64                            epoch() const;
-    SecureRtpSessionContext::Error     lastError() const;
+    bool                           isReady() const;
+    QByteArray                     associationId() const;
+    quint64                        epoch() const;
+    SecureRtpSessionContext::Error lastError() const;
 
     bool protect(const PSecureRtpPacket &plain, PSecureRtpPacket *protectedPacket);
     bool unprotect(const PSecureRtpPacket &protectedPacket, PSecureRtpPacket *plain);
@@ -47,7 +47,6 @@ private:
     class Private;
     std::unique_ptr<Private> d;
 };
-
 
 } // namespace PsiMedia
 

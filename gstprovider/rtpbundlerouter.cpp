@@ -7,7 +7,7 @@
 
 namespace PsiMedia {
 namespace {
-constexpr int MaxConfiguredSsrcs = 256;
+    constexpr int MaxConfiguredSsrcs = 256;
 }
 
 quint16 RtpBundleRouter::read16(const QByteArray &data, int offset)
@@ -36,15 +36,15 @@ bool RtpBundleRouter::configure(const QList<Route> &routes)
         return false;
     }
 
-    QHash<QByteArray, int>    endpointRoutes;
-    QHash<QByteArray, int>    midRoutes;
-    QHash<quint8, int>        payloadTypeRoutes;
-    QSet<quint8>              ambiguousPayloadTypes;
-    QHash<quint32, int>       incomingSsrcRoutes;
-    QHash<quint32, int>       localSsrcRoutes;
+    QHash<QByteArray, int>     endpointRoutes;
+    QHash<QByteArray, int>     midRoutes;
+    QHash<quint8, int>         payloadTypeRoutes;
+    QSet<quint8>               ambiguousPayloadTypes;
+    QHash<quint32, int>        incomingSsrcRoutes;
+    QHash<quint32, int>        localSsrcRoutes;
     QHash<quint32, QByteArray> registeredOutgoingSsrcs;
-    QSet<QByteArray>          mids;
-    quint16                   midExtensionId = 0;
+    QSet<QByteArray>           mids;
+    quint16                    midExtensionId = 0;
 
     auto addSsrc = [](QHash<quint32, int> &mapping, quint32 ssrc, int routeIndex) {
         if (!ssrc)
@@ -500,7 +500,7 @@ bool RtpBundleRouter::validateRtcp(const QByteArray &packet) const
     }
 
     const bool valid = offset == packet.size() && offset != 0;
-    lastError_ = valid ? Error::None : Error::MalformedPacket;
+    lastError_       = valid ? Error::None : Error::MalformedPacket;
     return valid;
 }
 

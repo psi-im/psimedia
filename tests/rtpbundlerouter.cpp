@@ -141,7 +141,7 @@ int main(int argc, char **argv)
           "known audio SSRC routed incorrectly");
 
     const quint32 learnedVideo = 0x33333333;
-    auto videoByMid = router.routeIncomingRtp(rtp(learnedVideo, "video", 1, false, VideoPt));
+    auto          videoByMid   = router.routeIncomingRtp(rtp(learnedVideo, "video", 1, false, VideoPt));
     check(videoByMid && videoByMid->endpointId == video.endpointId && router.learnedSsrcCount() == 1,
           "authenticated MID did not route and learn a new SSRC");
     auto videoByLearned = router.routeIncomingRtp(rtp(learnedVideo, {}, 1, false, VideoPt));
@@ -167,9 +167,8 @@ int main(int argc, char **argv)
           "truncated RTP extension accepted");
 
     auto truncatedCsrc = rtp(AudioRemote);
-    truncatedCsrc[0] = char(quint8(truncatedCsrc[0]) | 0x01);
-    check(!router.routeIncomingRtp(truncatedCsrc)
-              && router.lastError() == RtpBundleRouter::Error::MalformedPacket,
+    truncatedCsrc[0]   = char(quint8(truncatedCsrc[0]) | 0x01);
+    check(!router.routeIncomingRtp(truncatedCsrc) && router.lastError() == RtpBundleRouter::Error::MalformedPacket,
           "truncated CSRC list accepted");
 
     check(!router.routeIncomingRtp(paddedRtp(AudioRemote, 0))
@@ -179,26 +178,25 @@ int main(int argc, char **argv)
     check(validPadding && validPadding->endpointId == audio.endpointId, "valid RTP padding rejected");
 
     RtpBundleRouter twoByte;
-    auto twoByteAudio = audio;
-    twoByteAudio.midExtensionId = 16;
+    auto            twoByteAudio = audio;
+    twoByteAudio.midExtensionId  = 16;
     check(twoByte.configure({ twoByteAudio }), "two-byte MID mapping rejected");
     auto twoBytePacket = twoByte.routeIncomingRtp(rtp(0x66666666, "audio", 16, true));
     check(twoBytePacket && twoBytePacket->endpointId == audio.endpointId, "two-byte MID routing failed");
 
     const auto beforeInvalid = router.revision();
-    auto duplicateMid = video;
-    duplicateMid.mid = audio.mid;
-    check(!router.configure({ audio, duplicateMid })
-              && router.lastError() == RtpBundleRouter::Error::InvalidRoutes
+    auto       duplicateMid  = video;
+    duplicateMid.mid         = audio.mid;
+    check(!router.configure({ audio, duplicateMid }) && router.lastError() == RtpBundleRouter::Error::InvalidRoutes
               && router.revision() == beforeInvalid,
           "invalid route table partially committed");
     check(bool(router.routeIncomingRtp(rtp(AudioRemote))), "failed configure destroyed old table");
 
-    auto differentMidId = video;
+    auto differentMidId           = video;
     differentMidId.midExtensionId = 2;
     check(!router.configure({ audio, differentMidId }), "different BUNDLE MID extension ids accepted");
 
-    auto appbitsMid = audio;
+    auto appbitsMid           = audio;
     appbitsMid.midExtensionId = 256;
     check(!router.configure({ appbitsMid }), "RFC 8285 appbits value used as MID element id");
 
@@ -226,7 +224,7 @@ int main(int argc, char **argv)
     check(dynamic.registeredOutgoingSsrcCount() == 1, "removed endpoint retained outgoing SSRC state");
 
     RtpBundleRouter limited;
-    auto noStatic = audio;
+    auto            noStatic = audio;
     noStatic.localSsrcs.clear();
     check(limited.configure({ noStatic }), "outgoing SSRC limit route rejected");
     for (int i = 0; i < RtpBundleRouter::MaxRegisteredOutgoingSsrcs; ++i)
@@ -241,13 +239,11 @@ int main(int argc, char **argv)
     const auto compound = senderReport(AudioRemote) + senderReport(VideoRemote);
     check(router.validateRtcp(compound), "cross-media compound RTCP rejected");
     check(router.validateRtcp(receiverReport(0x77777777, AudioLocal)), "receiver report rejected");
-    check(router.validateRtcp(rtcp(208, 0, QByteArray(4, '\0'))),
-          "structurally valid unknown RTCP block rejected");
+    check(router.validateRtcp(rtcp(208, 0, QByteArray(4, '\0'))), "structurally valid unknown RTCP block rejected");
 
     auto malformedRtcp = senderReport(AudioRemote);
     write16(malformedRtcp, 2, 100);
-    check(!router.validateRtcp(malformedRtcp)
-              && router.lastError() == RtpBundleRouter::Error::MalformedPacket,
+    check(!router.validateRtcp(malformedRtcp) && router.lastError() == RtpBundleRouter::Error::MalformedPacket,
           "invalid RTCP block length accepted");
 
     auto unknownCompound = senderReport(AudioRemote) + rtcp(208, 0, QByteArray(4, '\0')) + senderReport(VideoRemote);

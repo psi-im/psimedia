@@ -40,13 +40,12 @@ int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
 
-    TestVideoContext     context;
+    TestVideoContext         context;
     PsiMedia::GstVideoWidget output(&context);
 
     output.show_frame(QImage(320, 240, QImage::Format_RGB32));
     if (context.lastSize != QSize(320, 240) || context.sizeUpdates != 1) {
-        qCritical() << "first decoded frame did not publish its video size"
-                    << context.lastSize << context.sizeUpdates;
+        qCritical() << "first decoded frame did not publish its video size" << context.lastSize << context.sizeUpdates;
         return 1;
     }
 
@@ -58,13 +57,13 @@ int main(int argc, char **argv)
 
     output.show_frame(QImage(640, 360, QImage::Format_RGB32));
     if (context.lastSize != QSize(640, 360) || context.sizeUpdates != 2) {
-        qCritical() << "resolution change did not publish the new video size"
-                    << context.lastSize << context.sizeUpdates;
+        qCritical() << "resolution change did not publish the new video size" << context.lastSize
+                    << context.sizeUpdates;
         return 3;
     }
 
     {
-        auto *dyingContext = new TestVideoContext;
+        auto                    *dyingContext = new TestVideoContext;
         PsiMedia::GstVideoWidget survivingOutput(dyingContext);
         survivingOutput.show_frame(QImage(160, 120, QImage::Format_RGB32));
         delete dyingContext;

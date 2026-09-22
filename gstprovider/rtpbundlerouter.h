@@ -26,10 +26,10 @@ public:
     static constexpr int MaxRegisteredOutgoingSsrcs = 64;
 
     struct Route {
-        QByteArray   endpointId;
-        QByteArray   mid;
-        quint16      midExtensionId = 0;
-        QSet<quint8> incomingPayloadTypes;
+        QByteArray    endpointId;
+        QByteArray    mid;
+        quint16       midExtensionId = 0;
+        QSet<quint8>  incomingPayloadTypes;
         QSet<quint32> incomingSsrcs;
         QSet<quint32> localSsrcs;
     };
@@ -80,17 +80,17 @@ private:
     std::optional<RoutedRtp> routed(int routeIndex, const QByteArray &packet);
     void                     advanceRevision();
 
-    QList<Route>             routes_;
-    QHash<QByteArray, int>   endpointRoutes_;
-    QHash<QByteArray, int>   midRoutes_;
-    QHash<quint8, int>       payloadTypeRoutes_;
-    QHash<quint32, int>      incomingSsrcRoutes_;
-    QHash<quint32, int>      localSsrcRoutes_;
-    QSet<quint32>            learnedSsrcs_;
+    QList<Route>               routes_;
+    QHash<QByteArray, int>     endpointRoutes_;
+    QHash<QByteArray, int>     midRoutes_;
+    QHash<quint8, int>         payloadTypeRoutes_;
+    QHash<quint32, int>        incomingSsrcRoutes_;
+    QHash<quint32, int>        localSsrcRoutes_;
+    QSet<quint32>              learnedSsrcs_;
     QHash<quint32, QByteArray> registeredOutgoingSsrcs_;
-    quint16                  midExtensionId_ = 0;
-    quint64                  revision_       = 0;
-    mutable Error            lastError_      = Error::None;
+    quint16                    midExtensionId_ = 0;
+    quint64                    revision_       = 0;
+    mutable Error              lastError_      = Error::None;
 };
 
 } // namespace PsiMedia

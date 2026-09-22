@@ -25,123 +25,119 @@
 namespace PsiMedia {
 namespace {
 
-using CapsMap = QHash<int, GstCaps *>;
+    using CapsMap = QHash<int, GstCaps *>;
 
-constexpr int    MaxDeliveriesPerSlice = 32;
-constexpr qint64 MaxDeliverySliceMs     = 4;
+    constexpr int    MaxDeliveriesPerSlice = 32;
+    constexpr qint64 MaxDeliverySliceMs    = 4;
 
-GstPad *requestPad(GstElement *element, const char *name)
-{
+    GstPad *requestPad(GstElement *element, const char *name)
+    {
 #if GST_CHECK_VERSION(1, 20, 0)
-    return gst_element_request_pad_simple(element, name);
+        return gst_element_request_pad_simple(element, name);
 #else
-    return gst_element_get_request_pad(element, name);
+        return gst_element_get_request_pad(element, name);
 #endif
-}
-
-bool linkSourceToPad(GstElement *source, GstPad *sinkPad)
-{
-    GstPad *sourcePad = gst_element_get_static_pad(source, "src");
-    if (!sourcePad)
-        return false;
-    const bool linked = gst_pad_link(sourcePad, sinkPad) == GST_PAD_LINK_OK;
-    gst_object_unref(sourcePad);
-    return linked;
-}
-
-bool linkPadToSink(GstPad *sourcePad, GstElement *sink)
-{
-    GstPad *sinkPad = gst_element_get_static_pad(sink, "sink");
-    if (!sinkPad)
-        return false;
-    const bool linked = gst_pad_link(sourcePad, sinkPad) == GST_PAD_LINK_OK;
-    gst_object_unref(sinkPad);
-    return linked;
-}
-
-void configureAppSrc(GstAppSrc *source, const char *mediaType, bool timestamp)
-{
-    GstCaps *caps = gst_caps_new_empty_simple(mediaType);
-    gst_app_src_set_caps(source, caps);
-    gst_caps_unref(caps);
-    g_object_set(G_OBJECT(source), "is-live", TRUE, "format", GST_FORMAT_TIME, "do-timestamp", timestamp, nullptr);
-}
-
-void configureAppSink(GstAppSink *sink)
-{
-    g_object_set(G_OBJECT(sink), "sync", FALSE, "async", FALSE, nullptr);
-}
-
-void unrefElement(GstElement *element)
-{
-    if (element)
-        gst_object_unref(element);
-}
-
-void unrefCapsMap(CapsMap &capsMap)
-{
-    for (auto caps : std::as_const(capsMap))
-        gst_caps_unref(caps);
-    capsMap.clear();
-}
-
-GstCaps *capsForPayload(const PPayloadInfo &payload, const QString &media)
-{
-    GstStructure *structure = payloadInfoToStructure(payload, media);
-    if (!structure)
-        return nullptr;
-    GstCaps *caps = gst_caps_new_empty();
-    gst_caps_append_structure(caps, structure);
-    return caps;
-}
-
-bool payloadsCompatible(const PPayloadInfo &local, const PPayloadInfo &remote)
-{
-    if (!local.name.isEmpty() && !remote.name.isEmpty()
-        && local.name.compare(remote.name, Qt::CaseInsensitive) != 0)
-        return false;
-    if (local.clockrate >= 0 && remote.clockrate >= 0 && local.clockrate != remote.clockrate)
-        return false;
-    if (local.channels >= 0 && remote.channels >= 0 && local.channels != remote.channels)
-        return false;
-    return true;
-}
-
-PPayloadInfo commonPayload(const PPayloadInfo &primary, const PPayloadInfo *secondary)
-{
-    PPayloadInfo common = primary;
-    if (secondary) {
-        if (common.name.isEmpty())
-            common.name = secondary->name;
-        if (common.clockrate < 0)
-            common.clockrate = secondary->clockrate;
-        if (common.channels < 0)
-            common.channels = secondary->channels;
     }
-    common.ptime = -1;
-    common.maxptime = -1;
 
-    // Codec fmtp is direction-specific and must not leak into rtpsession's
-    // shared PT map. Negotiated RTCP feedback, however, is session metadata:
-    // rtpsession checks for these caps fields before turning a decoder
-    // GstForceKeyUnit request into PLI/FIR.
-    QList<PPayloadInfo::Parameter> feedback;
-    const auto collectFeedback = [&feedback](const PPayloadInfo &payload) {
-        for (const auto &parameter : payload.parameters) {
-            if (!parameter.name.startsWith(QLatin1String("rtcp-fb-")))
-                continue;
-            if (std::none_of(feedback.cbegin(), feedback.cend(), [&](const auto &existing) {
-                    return existing.name == parameter.name;
-                }))
-                feedback.append(parameter);
+    bool linkSourceToPad(GstElement *source, GstPad *sinkPad)
+    {
+        GstPad *sourcePad = gst_element_get_static_pad(source, "src");
+        if (!sourcePad)
+            return false;
+        const bool linked = gst_pad_link(sourcePad, sinkPad) == GST_PAD_LINK_OK;
+        gst_object_unref(sourcePad);
+        return linked;
+    }
+
+    bool linkPadToSink(GstPad *sourcePad, GstElement *sink)
+    {
+        GstPad *sinkPad = gst_element_get_static_pad(sink, "sink");
+        if (!sinkPad)
+            return false;
+        const bool linked = gst_pad_link(sourcePad, sinkPad) == GST_PAD_LINK_OK;
+        gst_object_unref(sinkPad);
+        return linked;
+    }
+
+    void configureAppSrc(GstAppSrc *source, const char *mediaType, bool timestamp)
+    {
+        GstCaps *caps = gst_caps_new_empty_simple(mediaType);
+        gst_app_src_set_caps(source, caps);
+        gst_caps_unref(caps);
+        g_object_set(G_OBJECT(source), "is-live", TRUE, "format", GST_FORMAT_TIME, "do-timestamp", timestamp, nullptr);
+    }
+
+    void configureAppSink(GstAppSink *sink) { g_object_set(G_OBJECT(sink), "sync", FALSE, "async", FALSE, nullptr); }
+
+    void unrefElement(GstElement *element)
+    {
+        if (element)
+            gst_object_unref(element);
+    }
+
+    void unrefCapsMap(CapsMap &capsMap)
+    {
+        for (auto caps : std::as_const(capsMap))
+            gst_caps_unref(caps);
+        capsMap.clear();
+    }
+
+    GstCaps *capsForPayload(const PPayloadInfo &payload, const QString &media)
+    {
+        GstStructure *structure = payloadInfoToStructure(payload, media);
+        if (!structure)
+            return nullptr;
+        GstCaps *caps = gst_caps_new_empty();
+        gst_caps_append_structure(caps, structure);
+        return caps;
+    }
+
+    bool payloadsCompatible(const PPayloadInfo &local, const PPayloadInfo &remote)
+    {
+        if (!local.name.isEmpty() && !remote.name.isEmpty()
+            && local.name.compare(remote.name, Qt::CaseInsensitive) != 0)
+            return false;
+        if (local.clockrate >= 0 && remote.clockrate >= 0 && local.clockrate != remote.clockrate)
+            return false;
+        if (local.channels >= 0 && remote.channels >= 0 && local.channels != remote.channels)
+            return false;
+        return true;
+    }
+
+    PPayloadInfo commonPayload(const PPayloadInfo &primary, const PPayloadInfo *secondary)
+    {
+        PPayloadInfo common = primary;
+        if (secondary) {
+            if (common.name.isEmpty())
+                common.name = secondary->name;
+            if (common.clockrate < 0)
+                common.clockrate = secondary->clockrate;
+            if (common.channels < 0)
+                common.channels = secondary->channels;
         }
-    };
-    collectFeedback(primary);
-    if (secondary)
-        collectFeedback(*secondary);
-    common.parameters = std::move(feedback);
-    return common;
-}
+        common.ptime    = -1;
+        common.maxptime = -1;
+
+        // Codec fmtp is direction-specific and must not leak into rtpsession's
+        // shared PT map. Negotiated RTCP feedback, however, is session metadata:
+        // rtpsession checks for these caps fields before turning a decoder
+        // GstForceKeyUnit request into PLI/FIR.
+        QList<PPayloadInfo::Parameter> feedback;
+        const auto                     collectFeedback = [&feedback](const PPayloadInfo &payload) {
+            for (const auto &parameter : payload.parameters) {
+                if (!parameter.name.startsWith(QLatin1String("rtcp-fb-")))
+                    continue;
+                if (std::none_of(feedback.cbegin(), feedback.cend(),
+                                                     [&](const auto &existing) { return existing.name == parameter.name; }))
+                    feedback.append(parameter);
+            }
+        };
+        collectFeedback(primary);
+        if (secondary)
+            collectFeedback(*secondary);
+        common.parameters = std::move(feedback);
+        return common;
+    }
 
 } // namespace
 
@@ -172,8 +168,8 @@ bool RtpSessionBridge::build()
     GstElement *recvRtpOutput  = gst_element_factory_make("appsink", nullptr);
     GstElement *sendRtcpOutput = gst_element_factory_make("appsink", nullptr);
 
-    if (!pipeline || !session || !sendRtpInput || !recvRtpInput || !recvRtcpInput || !sendRtpOutput
-        || !recvRtpOutput || !sendRtcpOutput) {
+    if (!pipeline || !session || !sendRtpInput || !recvRtpInput || !recvRtcpInput || !sendRtpOutput || !recvRtpOutput
+        || !sendRtcpOutput) {
         unrefElement(sendRtpInput);
         unrefElement(recvRtpInput);
         unrefElement(recvRtcpInput);
@@ -295,8 +291,8 @@ void RtpSessionBridge::cleanup()
     if (pipeline_) {
         const GstStateChangeReturn setResult = gst_element_set_state(pipeline_, GST_STATE_NULL);
         if (setResult == GST_STATE_CHANGE_ASYNC) {
-            GstState current = GST_STATE_VOID_PENDING;
-            GstState pending = GST_STATE_VOID_PENDING;
+            GstState                   current = GST_STATE_VOID_PENDING;
+            GstState                   pending = GST_STATE_VOID_PENDING;
             const GstStateChangeReturn waitResult
                 = gst_element_get_state(pipeline_, &current, &pending, 2 * GST_SECOND);
             if (waitResult == GST_STATE_CHANGE_ASYNC) {
@@ -394,8 +390,7 @@ bool RtpSessionBridge::setPayloadGroups(const QList<PayloadGroup> &groups)
         return same;
     };
 
-    const auto insertCommon = [&](const PPayloadInfo &primary, const PPayloadInfo *secondary,
-                                  const QString &media) {
+    const auto insertCommon = [&](const PPayloadInfo &primary, const PPayloadInfo *secondary, const QString &media) {
         if (secondary && !payloadsCompatible(primary, *secondary))
             return false;
         const PPayloadInfo common = commonPayload(primary, secondary);
@@ -429,8 +424,8 @@ bool RtpSessionBridge::setPayloadGroups(const QList<PayloadGroup> &groups)
         }
 
         for (auto it = localInfo.cbegin(); it != localInfo.cend(); ++it) {
-            const auto remoteIt = remoteInfo.constFind(it.key());
-            const auto *peer = remoteIt == remoteInfo.cend() ? nullptr : &remoteIt.value();
+            const auto  remoteIt = remoteInfo.constFind(it.key());
+            const auto *peer     = remoteIt == remoteInfo.cend() ? nullptr : &remoteIt.value();
             if (!insertCommon(it.value(), peer, group.media))
                 return fail();
         }
@@ -501,10 +496,9 @@ void RtpSessionBridge::stop()
         return;
     const GstStateChangeReturn setResult = gst_element_set_state(pipeline_, GST_STATE_NULL);
     if (setResult == GST_STATE_CHANGE_ASYNC) {
-        GstState current = GST_STATE_VOID_PENDING;
-        GstState pending = GST_STATE_VOID_PENDING;
-        const GstStateChangeReturn waitResult
-            = gst_element_get_state(pipeline_, &current, &pending, 2 * GST_SECOND);
+        GstState                   current    = GST_STATE_VOID_PENDING;
+        GstState                   pending    = GST_STATE_VOID_PENDING;
+        const GstStateChangeReturn waitResult = gst_element_get_state(pipeline_, &current, &pending, 2 * GST_SECOND);
         if (waitResult == GST_STATE_CHANGE_ASYNC) {
             qWarning() << "RTP session bridge teardown timed out after 2s"
                        << "current=" << int(current) << "pending=" << int(pending);
@@ -604,9 +598,8 @@ GstFlowReturn RtpSessionBridge::sendRtp(GstBuffer *buffer, GstClockTime presenta
 
     const GstClockTime now = runningTime();
     if (GST_CLOCK_TIME_IS_VALID(now)) {
-        const GstClockTime mappedPts = GST_CLOCK_TIME_IS_VALID(presentationAge)
-            ? (presentationAge <= now ? now - presentationAge : 0)
-            : now;
+        const GstClockTime mappedPts
+            = GST_CLOCK_TIME_IS_VALID(presentationAge) ? (presentationAge <= now ? now - presentationAge : 0) : now;
         GST_BUFFER_PTS(mapped) = mappedPts;
         GST_BUFFER_DTS(mapped) = mappedPts;
     }
@@ -671,12 +664,10 @@ bool RtpSessionBridge::requestRemoteKeyframe(quint32 ssrc, quint8 payloadType)
     if (!pad)
         return false;
 
-    GstStructure *structure = gst_structure_new("GstForceKeyUnit",
-                                                 "ssrc", G_TYPE_UINT, guint(ssrc),
-                                                 "payload", G_TYPE_UINT, guint(payloadType),
-                                                 "all-headers", G_TYPE_BOOLEAN, TRUE,
-                                                 nullptr);
-    GstEvent *event = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, structure);
+    GstStructure *structure
+        = gst_structure_new("GstForceKeyUnit", "ssrc", G_TYPE_UINT, guint(ssrc), "payload", G_TYPE_UINT,
+                            guint(payloadType), "all-headers", G_TYPE_BOOLEAN, TRUE, nullptr);
+    GstEvent  *event   = gst_event_new_custom(GST_EVENT_CUSTOM_UPSTREAM, structure);
     const bool handled = gst_pad_send_event(pad, event) != FALSE;
     gst_object_unref(pad);
     return handled;

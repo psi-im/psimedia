@@ -85,7 +85,7 @@ GstBuffer *bufferFor(const QByteArray &data)
 
 bool hasSenderReport(const QByteArray &compound)
 {
-    const auto *bytes = reinterpret_cast<const uchar *>(compound.constData());
+    const auto *bytes  = reinterpret_cast<const uchar *>(compound.constData());
     int         offset = 0;
     while (offset + 8 <= compound.size()) {
         const uchar *packet = bytes + offset;
@@ -94,8 +94,8 @@ bool hasSenderReport(const QByteArray &compound)
         const int packetBytes = (int(read16(packet + 2)) + 1) * 4;
         if (packetBytes < 8 || offset + packetBytes > compound.size())
             return false;
-        if (packet[1] == 200 && packetBytes >= 28 && read32(packet + 4) == LocalSsrc
-            && read32(packet + 20) > 0 && read32(packet + 24) > 0)
+        if (packet[1] == 200 && packetBytes >= 28 && read32(packet + 4) == LocalSsrc && read32(packet + 20) > 0
+            && read32(packet + 24) > 0)
             return true;
         offset += packetBytes;
     }
@@ -104,8 +104,8 @@ bool hasSenderReport(const QByteArray &compound)
 
 bool hasPli(const QByteArray &compound)
 {
-    const auto *bytes = reinterpret_cast<const uchar *>(compound.constData());
-    int offset = 0;
+    const auto *bytes  = reinterpret_cast<const uchar *>(compound.constData());
+    int         offset = 0;
     while (offset + 4 <= compound.size()) {
         const uchar *packet = bytes + offset;
         if ((packet[0] >> 6) != 2)
@@ -113,8 +113,7 @@ bool hasPli(const QByteArray &compound)
         const int packetBytes = (int(read16(packet + 2)) + 1) * 4;
         if (packetBytes < 4 || offset + packetBytes > compound.size())
             return false;
-        if (packet[1] == 206 && (packet[0] & 0x1f) == 1 && packetBytes >= 12
-            && read32(packet + 8) == RemoteVideoSsrc)
+        if (packet[1] == 206 && (packet[0] & 0x1f) == 1 && packetBytes >= 12 && read32(packet + 8) == RemoteVideoSsrc)
             return true;
         offset += packetBytes;
     }
@@ -126,19 +125,17 @@ bool hasRemoteSource(PsiMedia::RtpSessionBridge &bridge)
     GstStructure *stats = bridge.sessionStats();
     if (!stats)
         return false;
-    bool found = false;
+    bool          found        = false;
     const GValue *sourcesValue = gst_structure_get_value(stats, "source-stats");
     if (sourcesValue) {
         auto *sources = static_cast<GValueArray *>(g_value_get_boxed(sourcesValue));
         if (sources) {
             for (guint i = 0; i < sources->n_values; ++i) {
-                const auto *source = static_cast<const GstStructure *>(g_value_get_boxed(&sources->values[i]));
-                guint ssrc = 0;
-                guint64 packets = 0;
-                if (source && gst_structure_get_uint(source, "ssrc", &ssrc)
-                    && ssrc == RemoteVideoSsrc
-                    && gst_structure_get_uint64(source, "packets-received", &packets)
-                    && packets > 0) {
+                const auto *source  = static_cast<const GstStructure *>(g_value_get_boxed(&sources->values[i]));
+                guint       ssrc    = 0;
+                guint64     packets = 0;
+                if (source && gst_structure_get_uint(source, "ssrc", &ssrc) && ssrc == RemoteVideoSsrc
+                    && gst_structure_get_uint64(source, "packets-received", &packets) && packets > 0) {
                     found = true;
                     break;
                 }
@@ -149,7 +146,7 @@ bool hasRemoteSource(PsiMedia::RtpSessionBridge &bridge)
     return found;
 }
 
-template<typename Predicate> bool waitUntil(Predicate predicate, std::chrono::milliseconds timeout = 2s)
+template <typename Predicate> bool waitUntil(Predicate predicate, std::chrono::milliseconds timeout = 2s)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     do {
@@ -235,12 +232,12 @@ int main(int argc, char **argv)
     vp8.parameters.append(pli);
 
     std::vector<PsiMedia::PRtpPacket> videoNetwork;
-    PsiMedia::RtpSessionBridge videoBridge(QStringLiteral("video"));
+    PsiMedia::RtpSessionBridge        videoBridge(QStringLiteral("video"));
     if (!videoBridge.isValid() || !videoBridge.setPayloads({ vp8 }, { vp8 })) {
         qCritical() << "failed to configure PLI video bridge";
         return 7;
     }
-    videoBridge.setMediaPacketHandler([](GstBuffer *) {});
+    videoBridge.setMediaPacketHandler([](GstBuffer *) { });
     videoBridge.setNetworkPacketHandler([&](const auto &packet) { videoNetwork.push_back(packet); });
     videoBridge.setRtcpMinimumInterval(10 * GST_MSECOND);
     if (!videoBridge.start()) {

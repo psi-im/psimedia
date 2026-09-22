@@ -13,16 +13,16 @@ namespace {
 
 struct Result {
     PsiMedia::RtpWorker *worker = nullptr;
-    std::atomic_bool started { false };
-    std::atomic_bool updated { false };
-    std::atomic_bool stopped { false };
-    std::atomic_bool failed { false };
-    std::atomic_bool pauseFromCallback { false };
-    std::atomic_bool pausedFromCallback { false };
-    std::atomic_bool pauseVideoFromCallback { false };
-    std::atomic_bool pausedVideoFromCallback { false };
-    std::atomic_int audioPackets { 0 };
-    std::atomic_int videoPackets { 0 };
+    std::atomic_bool     started { false };
+    std::atomic_bool     updated { false };
+    std::atomic_bool     stopped { false };
+    std::atomic_bool     failed { false };
+    std::atomic_bool     pauseFromCallback { false };
+    std::atomic_bool     pausedFromCallback { false };
+    std::atomic_bool     pauseVideoFromCallback { false };
+    std::atomic_bool     pausedVideoFromCallback { false };
+    std::atomic_int      audioPackets { 0 };
+    std::atomic_int      videoPackets { 0 };
     std::atomic<quint32> firstAudioSsrc { 0 };
     std::atomic<quint32> lastAudioSsrc { 0 };
 };
@@ -48,8 +48,8 @@ quint32 rtpSsrc(GstBuffer *buffer)
         return 0;
     quint32 ssrc = 0;
     if (map.size >= 12) {
-        ssrc = (quint32(map.data[8]) << 24) | (quint32(map.data[9]) << 16)
-            | (quint32(map.data[10]) << 8) | quint32(map.data[11]);
+        ssrc = (quint32(map.data[8]) << 24) | (quint32(map.data[9]) << 16) | (quint32(map.data[10]) << 8)
+            | quint32(map.data[11]);
     }
     gst_buffer_unmap(buffer, &map);
     return ssrc;
@@ -83,17 +83,17 @@ int main(int argc, char **argv)
     auto *context = g_main_context_default();
 
     PsiMedia::RtpWorker worker(context, nullptr);
-    Result result;
-    result.worker = &worker;
-    worker.app = &result;
-    worker.cb_started = [](void *p) { static_cast<Result *>(p)->started = true; };
-    worker.cb_updated = [](void *p) { static_cast<Result *>(p)->updated = true; };
-    worker.cb_stopped = [](void *p) { static_cast<Result *>(p)->stopped = true; };
-    worker.cb_error = [](void *p) { static_cast<Result *>(p)->failed = true; };
+    Result              result;
+    result.worker         = &worker;
+    worker.app            = &result;
+    worker.cb_started     = [](void *p) { static_cast<Result *>(p)->started = true; };
+    worker.cb_updated     = [](void *p) { static_cast<Result *>(p)->updated = true; };
+    worker.cb_stopped     = [](void *p) { static_cast<Result *>(p)->stopped = true; };
+    worker.cb_error       = [](void *p) { static_cast<Result *>(p)->failed = true; };
     worker.cb_rtpAudioOut = [](const PsiMedia::RtpWorker::EncodedRtpPacket &packet, void *p) {
-        auto &r = *static_cast<Result *>(p);
-        const quint32 ssrc = rtpSsrc(packet.buffer);
-        quint32 expected = 0;
+        auto         &r        = *static_cast<Result *>(p);
+        const quint32 ssrc     = rtpSsrc(packet.buffer);
+        quint32       expected = 0;
         r.firstAudioSsrc.compare_exchange_strong(expected, ssrc);
         r.lastAudioSsrc.store(ssrc, std::memory_order_release);
         r.audioPackets.fetch_add(1, std::memory_order_release);
@@ -120,7 +120,12 @@ int main(int argc, char **argv)
     worker.localAudioParams = { opusParams() };
     worker.setInputDevices(audioSource, QString(), QString(), QByteArray(), false);
     worker.start();
-    if (!spinUntil(context, [&] { return result.started.load(std::memory_order_acquire) || result.failed.load(std::memory_order_acquire); }) || result.failed.load(std::memory_order_acquire))
+    if (!spinUntil(context,
+                   [&] {
+                       return result.started.load(std::memory_order_acquire)
+                           || result.failed.load(std::memory_order_acquire);
+                   })
+        || result.failed.load(std::memory_order_acquire))
         qFatal("Could not establish audio-first sender");
 
     worker.transmitAudio();
@@ -137,9 +142,9 @@ int main(int argc, char **argv)
         qFatal("RTP callback deadlocked while pausing audio");
     const int audioPacketsBeforeResume = result.audioPackets.load(std::memory_order_acquire);
     worker.transmitAudio();
-    if (!spinUntil(context, [&] {
-            return result.audioPackets.load(std::memory_order_acquire) >= audioPacketsBeforeResume + 5;
-        }, 5000))
+    if (!spinUntil(
+            context,
+            [&] { return result.audioPackets.load(std::memory_order_acquire) >= audioPacketsBeforeResume + 5; }, 5000))
         qFatal("Audio sender did not resume after callback pause");
 
     // Preserve a transmit request made before the second media branch exists:
@@ -152,14 +157,23 @@ int main(int argc, char **argv)
     worker.localVideoParams = { vp8Params() };
     result.updated.store(false, std::memory_order_release);
     worker.update();
-    if (!spinUntil(context, [&] { return result.updated.load(std::memory_order_acquire) || result.failed.load(std::memory_order_acquire); }, 15000) || result.failed.load(std::memory_order_acquire))
+    if (!spinUntil(
+            context,
+            [&] {
+                return result.updated.load(std::memory_order_acquire) || result.failed.load(std::memory_order_acquire);
+            },
+            15000)
+        || result.failed.load(std::memory_order_acquire))
         qFatal("Could not hot-add video to active audio sender");
 
     const int audioPacketsAtUpdate = result.audioPackets.load(std::memory_order_acquire);
-    if (!spinUntil(context, [&] {
-            return result.videoPackets.load(std::memory_order_acquire) >= 5
-                && result.audioPackets.load(std::memory_order_acquire) >= audioPacketsAtUpdate + 5;
-        }, 10000)) {
+    if (!spinUntil(
+            context,
+            [&] {
+                return result.videoPackets.load(std::memory_order_acquire) >= 5
+                    && result.audioPackets.load(std::memory_order_acquire) >= audioPacketsAtUpdate + 5;
+            },
+            10000)) {
         qFatal("Hot-added video/audio sender did not continue producing RTP");
     }
 
@@ -173,9 +187,9 @@ int main(int argc, char **argv)
         qFatal("RTP callback deadlocked while pausing video");
     const int videoPacketsBeforeResume = result.videoPackets.load(std::memory_order_acquire);
     worker.transmitVideo();
-    if (!spinUntil(context, [&] {
-            return result.videoPackets.load(std::memory_order_acquire) >= videoPacketsBeforeResume + 3;
-        }, 5000))
+    if (!spinUntil(
+            context,
+            [&] { return result.videoPackets.load(std::memory_order_acquire) >= videoPacketsBeforeResume + 3; }, 5000))
         qFatal("Video sender did not resume after callback pause");
 
     worker.stop();
@@ -188,13 +202,13 @@ int main(int argc, char **argv)
     // or tearing down the already-running audio sender.
     {
         PsiMedia::RtpWorker delayedWorker(context, nullptr);
-        Result delayed;
-        delayed.worker = &delayedWorker;
-        delayedWorker.app = &delayed;
-        delayedWorker.cb_started = [](void *p) { static_cast<Result *>(p)->started = true; };
-        delayedWorker.cb_updated = [](void *p) { static_cast<Result *>(p)->updated = true; };
-        delayedWorker.cb_stopped = [](void *p) { static_cast<Result *>(p)->stopped = true; };
-        delayedWorker.cb_error = [](void *p) { static_cast<Result *>(p)->failed = true; };
+        Result              delayed;
+        delayed.worker               = &delayedWorker;
+        delayedWorker.app            = &delayed;
+        delayedWorker.cb_started     = [](void *p) { static_cast<Result *>(p)->started = true; };
+        delayedWorker.cb_updated     = [](void *p) { static_cast<Result *>(p)->updated = true; };
+        delayedWorker.cb_stopped     = [](void *p) { static_cast<Result *>(p)->stopped = true; };
+        delayedWorker.cb_error       = [](void *p) { static_cast<Result *>(p)->failed = true; };
         delayedWorker.cb_rtpAudioOut = [](const PsiMedia::RtpWorker::EncodedRtpPacket &, void *p) {
             static_cast<Result *>(p)->audioPackets.fetch_add(1, std::memory_order_release);
         };
@@ -202,10 +216,13 @@ int main(int argc, char **argv)
         delayedWorker.localAudioParams = { opusParams() };
         delayedWorker.setInputDevices(audioSource, QString(), QString(), QByteArray(), false);
         delayedWorker.start();
-        if (!spinUntil(context, [&] {
-                return delayed.started.load(std::memory_order_acquire)
-                    || delayed.failed.load(std::memory_order_acquire);
-            }, 10000)
+        if (!spinUntil(
+                context,
+                [&] {
+                    return delayed.started.load(std::memory_order_acquire)
+                        || delayed.failed.load(std::memory_order_acquire);
+                },
+                10000)
             || delayed.failed.load(std::memory_order_acquire)) {
             qFatal("Could not establish delayed-video audio sender");
         }
@@ -215,24 +232,28 @@ int main(int argc, char **argv)
             qFatal("Delayed-video setup produced no audio RTP");
 
         delayedWorker.transmitVideo();
-        delayedWorker.setInputDevices(audioSource, QStringLiteral("appsrc is-live=true format=time"),
-                                      QString(), QByteArray(), false);
-        delayedWorker.localVideoParams = { vp8Params() };
+        delayedWorker.setInputDevices(audioSource, QStringLiteral("appsrc is-live=true format=time"), QString(),
+                                      QByteArray(), false);
+        delayedWorker.localVideoParams    = { vp8Params() };
         const int audioBeforeDelayedVideo = delayed.audioPackets.load(std::memory_order_acquire);
         delayed.updated.store(false, std::memory_order_release);
         delayedWorker.update();
-        if (!spinUntil(context, [&] {
-                return delayed.updated.load(std::memory_order_acquire)
-                    || delayed.failed.load(std::memory_order_acquire);
-            }, 2000)
+        if (!spinUntil(
+                context,
+                [&] {
+                    return delayed.updated.load(std::memory_order_acquire)
+                        || delayed.failed.load(std::memory_order_acquire);
+                },
+                2000)
             || delayed.failed.load(std::memory_order_acquire)) {
             qFatal("Hot-added delayed video waited for first caps or failed");
         }
         if (delayedWorker.localVideoPayloadInfo.isEmpty() || !delayedWorker.canTransmitVideo)
             qFatal("Delayed video payload negotiation was not committed");
-        if (!spinUntil(context, [&] {
-                return delayed.audioPackets.load(std::memory_order_acquire) >= audioBeforeDelayedVideo + 5;
-            }, 5000)) {
+        if (!spinUntil(
+                context,
+                [&] { return delayed.audioPackets.load(std::memory_order_acquire) >= audioBeforeDelayedVideo + 5; },
+                5000)) {
             qFatal("Delayed video hot-add interrupted the running audio sender");
         }
 

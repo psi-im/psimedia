@@ -26,140 +26,140 @@
 namespace PsiMedia {
 namespace {
 
-using Error = SecureRtpSessionContext::Error;
+    using Error = SecureRtpSessionContext::Error;
 
-class SecureBuffer {
-public:
-    SecureBuffer() = default;
-    ~SecureBuffer() { clear(); }
+    class SecureBuffer {
+    public:
+        SecureBuffer() = default;
+        ~SecureBuffer() { clear(); }
 
-    SecureBuffer(const SecureBuffer &)            = delete;
-    SecureBuffer &operator=(const SecureBuffer &) = delete;
+        SecureBuffer(const SecureBuffer &)            = delete;
+        SecureBuffer &operator=(const SecureBuffer &) = delete;
 
-    SecureBuffer(SecureBuffer &&other) noexcept : bytes_(std::move(other.bytes_)) { other.bytes_.clear(); }
-    SecureBuffer &operator=(SecureBuffer &&other) noexcept
-    {
-        if (this != &other) {
-            clear();
-            bytes_ = std::move(other.bytes_);
-            other.bytes_.clear();
+        SecureBuffer(SecureBuffer &&other) noexcept : bytes_(std::move(other.bytes_)) { other.bytes_.clear(); }
+        SecureBuffer &operator=(SecureBuffer &&other) noexcept
+        {
+            if (this != &other) {
+                clear();
+                bytes_ = std::move(other.bytes_);
+                other.bytes_.clear();
+            }
+            return *this;
         }
-        return *this;
-    }
 
-    void assign(const QByteArray &key, const QByteArray &salt)
-    {
-        clear();
-        bytes_.resize(size_t(key.size() + salt.size()));
-        if (!key.isEmpty())
-            std::memcpy(bytes_.data(), key.constData(), size_t(key.size()));
-        if (!salt.isEmpty())
-            std::memcpy(bytes_.data() + key.size(), salt.constData(), size_t(salt.size()));
-    }
+        void assign(const QByteArray &key, const QByteArray &salt)
+        {
+            clear();
+            bytes_.resize(size_t(key.size() + salt.size()));
+            if (!key.isEmpty())
+                std::memcpy(bytes_.data(), key.constData(), size_t(key.size()));
+            if (!salt.isEmpty())
+                std::memcpy(bytes_.data() + key.size(), salt.constData(), size_t(salt.size()));
+        }
 
-    bool equals(const QByteArray &key, const QByteArray &salt) const
-    {
-        if (bytes_.size() != size_t(key.size() + salt.size()))
-            return false;
-        if (!key.isEmpty() && std::memcmp(bytes_.data(), key.constData(), size_t(key.size())) != 0)
-            return false;
-        return salt.isEmpty()
-            || std::memcmp(bytes_.data() + key.size(), salt.constData(), size_t(salt.size())) == 0;
-    }
+        bool equals(const QByteArray &key, const QByteArray &salt) const
+        {
+            if (bytes_.size() != size_t(key.size() + salt.size()))
+                return false;
+            if (!key.isEmpty() && std::memcmp(bytes_.data(), key.constData(), size_t(key.size())) != 0)
+                return false;
+            return salt.isEmpty()
+                || std::memcmp(bytes_.data() + key.size(), salt.constData(), size_t(salt.size())) == 0;
+        }
 
-    unsigned char *data() { return bytes_.empty() ? nullptr : bytes_.data(); }
-    bool           empty() const { return bytes_.empty(); }
+        unsigned char *data() { return bytes_.empty() ? nullptr : bytes_.data(); }
+        bool           empty() const { return bytes_.empty(); }
 
-    void clear()
-    {
-        volatile unsigned char *p = bytes_.empty() ? nullptr : bytes_.data();
-        for (size_t i = 0; i < bytes_.size(); ++i)
-            p[i] = 0;
-        bytes_.clear();
-        bytes_.shrink_to_fit();
-    }
+        void clear()
+        {
+            volatile unsigned char *p = bytes_.empty() ? nullptr : bytes_.data();
+            for (size_t i = 0; i < bytes_.size(); ++i)
+                p[i] = 0;
+            bytes_.clear();
+            bytes_.shrink_to_fit();
+        }
 
-private:
-    std::vector<unsigned char> bytes_;
-};
+    private:
+        std::vector<unsigned char> bytes_;
+    };
 
 #ifdef PSIMEDIA_HAVE_SRTP
-struct Profile {
-    const char    *name;
-    srtp_profile_t id;
-    int            keySize;
-    int            saltSize;
-};
+    struct Profile {
+        const char    *name;
+        srtp_profile_t id;
+        int            keySize;
+        int            saltSize;
+    };
 
-const Profile Profiles[] = {
-    { "SRTP_AES128_CM_HMAC_SHA1_80", srtp_profile_aes128_cm_sha1_80, 16, 14 },
-    { "SRTP_AES128_CM_HMAC_SHA1_32", srtp_profile_aes128_cm_sha1_32, 16, 14 },
-    { "SRTP_AEAD_AES_128_GCM", srtp_profile_aead_aes_128_gcm, 16, 12 },
-    { "SRTP_AEAD_AES_256_GCM", srtp_profile_aead_aes_256_gcm, 32, 12 },
-};
+    const Profile Profiles[] = {
+        { "SRTP_AES128_CM_HMAC_SHA1_80", srtp_profile_aes128_cm_sha1_80, 16, 14 },
+        { "SRTP_AES128_CM_HMAC_SHA1_32", srtp_profile_aes128_cm_sha1_32, 16, 14 },
+        { "SRTP_AEAD_AES_128_GCM", srtp_profile_aead_aes_128_gcm, 16, 12 },
+        { "SRTP_AEAD_AES_256_GCM", srtp_profile_aead_aes_256_gcm, 32, 12 },
+    };
 
-const Profile *findProfile(const QString &name)
-{
-    for (const auto &profile : Profiles) {
-        if (name == QLatin1String(profile.name))
-            return &profile;
-    }
-    return nullptr;
-}
-
-bool initializeLibrary()
-{
-    static std::once_flag once;
-    static bool           ready = false;
-    std::call_once(once, [] { ready = srtp_init() == srtp_err_status_ok; });
-    // libSRTP initialization is process-global. Do not call srtp_shutdown()
-    // from a plugin: another loaded provider/library may share the same DSO.
-    return ready;
-}
-
-srtp_t createContext(const Profile &profile, SecureBuffer &material, bool sending)
-{
-    srtp_policy_t policy {};
-    if (srtp_crypto_policy_set_from_profile_for_rtp(&policy.rtp, profile.id) != srtp_err_status_ok
-        || srtp_crypto_policy_set_from_profile_for_rtcp(&policy.rtcp, profile.id) != srtp_err_status_ok)
-        return nullptr;
-
-    policy.key             = material.data();
-    policy.ssrc.type       = sending ? ssrc_any_outbound : ssrc_any_inbound;
-    policy.window_size     = 128;
-    policy.allow_repeat_tx = 0;
-
-    srtp_t context = nullptr;
-    if (srtp_create(&context, &policy) != srtp_err_status_ok) {
-        if (context)
-            srtp_dealloc(context);
+    const Profile *findProfile(const QString &name)
+    {
+        for (const auto &profile : Profiles) {
+            if (name == QLatin1String(profile.name))
+                return &profile;
+        }
         return nullptr;
     }
-    return context;
-}
 
-Error mapStatus(srtp_err_status_t status)
-{
-    switch (status) {
-    case srtp_err_status_auth_fail:
-    case srtp_err_status_nonce_bad:
-        return Error::Authentication;
-    case srtp_err_status_replay_fail:
-    case srtp_err_status_replay_old:
-    case srtp_err_status_pkt_idx_old:
-        return Error::Replay;
-    case srtp_err_status_key_expired:
-        return Error::KeyExpired;
-    case srtp_err_status_pkt_idx_adv:
-        return Error::IndexLimit;
-    case srtp_err_status_bad_param:
-    case srtp_err_status_bad_mki:
-    case srtp_err_status_parse_err:
-        return Error::InvalidPacket;
-    default:
-        return Error::LibraryFailure;
+    bool initializeLibrary()
+    {
+        static std::once_flag once;
+        static bool           ready = false;
+        std::call_once(once, [] { ready = srtp_init() == srtp_err_status_ok; });
+        // libSRTP initialization is process-global. Do not call srtp_shutdown()
+        // from a plugin: another loaded provider/library may share the same DSO.
+        return ready;
     }
-}
+
+    srtp_t createContext(const Profile &profile, SecureBuffer &material, bool sending)
+    {
+        srtp_policy_t policy {};
+        if (srtp_crypto_policy_set_from_profile_for_rtp(&policy.rtp, profile.id) != srtp_err_status_ok
+            || srtp_crypto_policy_set_from_profile_for_rtcp(&policy.rtcp, profile.id) != srtp_err_status_ok)
+            return nullptr;
+
+        policy.key             = material.data();
+        policy.ssrc.type       = sending ? ssrc_any_outbound : ssrc_any_inbound;
+        policy.window_size     = 128;
+        policy.allow_repeat_tx = 0;
+
+        srtp_t context = nullptr;
+        if (srtp_create(&context, &policy) != srtp_err_status_ok) {
+            if (context)
+                srtp_dealloc(context);
+            return nullptr;
+        }
+        return context;
+    }
+
+    Error mapStatus(srtp_err_status_t status)
+    {
+        switch (status) {
+        case srtp_err_status_auth_fail:
+        case srtp_err_status_nonce_bad:
+            return Error::Authentication;
+        case srtp_err_status_replay_fail:
+        case srtp_err_status_replay_old:
+        case srtp_err_status_pkt_idx_old:
+            return Error::Replay;
+        case srtp_err_status_key_expired:
+            return Error::KeyExpired;
+        case srtp_err_status_pkt_idx_adv:
+            return Error::IndexLimit;
+        case srtp_err_status_bad_param:
+        case srtp_err_status_bad_mki:
+        case srtp_err_status_parse_err:
+            return Error::InvalidPacket;
+        default:
+            return Error::LibraryFailure;
+        }
+    }
 #endif
 
 } // namespace
@@ -221,8 +221,8 @@ QStringList SrtpAssociation::supportedProfiles()
         return result;
 
     for (const auto &profile : Profiles) {
-        QByteArray zeroKey(profile.keySize, char(0));
-        QByteArray zeroSalt(profile.saltSize, char(0));
+        QByteArray   zeroKey(profile.keySize, char(0));
+        QByteArray   zeroSalt(profile.saltSize, char(0));
         SecureBuffer material;
         material.assign(zeroKey, zeroSalt);
         auto context = createContext(profile, material, true);
@@ -268,9 +268,8 @@ bool SrtpAssociation::configure(const QByteArray &associationId, quint64 epoch, 
         return false;
     }
 
-    const bool sameMaterial
-        = sameAssociation && d->profile == profileName && d->local.equals(localMasterKey, localMasterSalt)
-        && d->remote.equals(remoteMasterKey, remoteMasterSalt);
+    const bool sameMaterial = sameAssociation && d->profile == profileName
+        && d->local.equals(localMasterKey, localMasterSalt) && d->remote.equals(remoteMasterKey, remoteMasterSalt);
     if (sameMaterial) {
         d->epoch = epoch;
         d->error = Error::None;
@@ -375,9 +374,9 @@ bool SrtpAssociation::process(const PSecureRtpPacket &input, PSecureRtpPacket *o
     }
 
 #ifdef PSIMEDIA_HAVE_SRTP
-    const bool rtp = input.type == PRtpPacket::Type::Rtp;
-    const bool rtcp = input.type == PRtpPacket::Type::Rtcp;
-    const int minimum = rtp ? 12 : 8;
+    const bool    rtp     = input.type == PRtpPacket::Type::Rtp;
+    const bool    rtcp    = input.type == PRtpPacket::Type::Rtcp;
+    const int     minimum = rtp ? 12 : 8;
     constexpr int Trailer = SRTP_MAX_TRAILER_LEN + 4;
 
     QByteArray bytes = input.rawValue;
@@ -387,9 +386,8 @@ bool SrtpAssociation::process(const PSecureRtpPacket &input, PSecureRtpPacket *o
         return false;
     }
 
-    const quint32 ssrc
-        = qFromBigEndian<quint32>(reinterpret_cast<const uchar *>(bytes.constData()) + (rtp ? 8 : 4));
-    auto &streams = sending ? d->sent : d->received;
+    const quint32 ssrc    = qFromBigEndian<quint32>(reinterpret_cast<const uchar *>(bytes.constData()) + (rtp ? 8 : 4));
+    auto         &streams = sending ? d->sent : d->received;
     if (!streams.contains(ssrc) && streams.size() >= 64) {
         d->error = Error::StreamLimit;
         return false;
@@ -399,12 +397,10 @@ bool SrtpAssociation::process(const PSecureRtpPacket &input, PSecureRtpPacket *o
     if (sending)
         bytes.resize(length + Trailer);
 
-    auto context = sending ? d->sender : d->receiver;
-    const auto status
-        = sending ? (rtp ? srtp_protect(context, bytes.data(), &length)
-                         : srtp_protect_rtcp(context, bytes.data(), &length))
-                  : (rtp ? srtp_unprotect(context, bytes.data(), &length)
-                         : srtp_unprotect_rtcp(context, bytes.data(), &length));
+    auto       context = sending ? d->sender : d->receiver;
+    const auto status  = sending
+         ? (rtp ? srtp_protect(context, bytes.data(), &length) : srtp_protect_rtcp(context, bytes.data(), &length))
+         : (rtp ? srtp_unprotect(context, bytes.data(), &length) : srtp_unprotect_rtcp(context, bytes.data(), &length));
 
     if (status != srtp_err_status_ok) {
         if (!streams.contains(ssrc))
@@ -439,6 +435,5 @@ bool SrtpAssociation::unprotect(const PSecureRtpPacket &protectedPacket, PSecure
 {
     return process(protectedPacket, plain, false);
 }
-
 
 } // namespace PsiMedia

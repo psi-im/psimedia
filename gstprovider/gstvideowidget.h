@@ -36,7 +36,7 @@ class GstVideoWidget : public QObject {
 
 public:
     VideoWidgetContext *context;
-    QPointer<QObject>    contextObject;
+    QPointer<QObject>   contextObject;
     QImage              curImage;
 
     explicit GstVideoWidget(VideoWidgetContext *_context, QObject *parent = nullptr);

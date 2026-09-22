@@ -61,16 +61,14 @@ void SecureRtpGroup::clearEndpoints()
     bridge_.clear();
 }
 
-
 bool SecureRtpGroup::activate(const QByteArray &associationId, quint64 epoch, const QString &profile,
                               const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
                               const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt)
 {
     if (!ownerThread("activate"))
         return false;
-    const bool configured
-        = crypto_.configure(associationId, epoch, profile, localMasterKey, localMasterSalt, remoteMasterKey,
-                            remoteMasterSalt);
+    const bool configured = crypto_.configure(associationId, epoch, profile, localMasterKey, localMasterSalt,
+                                              remoteMasterKey, remoteMasterSalt);
     if (configured)
         mediaError_ = SecureRtpSessionContext::Error::None;
     return configured;
@@ -106,10 +104,7 @@ void SecureRtpGroup::setRuntimeErrorHandler(RuntimeErrorHandler handler)
     runtimeErrorHandler_ = std::move(handler);
 }
 
-bool SecureRtpGroup::start()
-{
-    return ownerThread("start") && crypto_.isReady() && bridge_.start();
-}
+bool SecureRtpGroup::start() { return ownerThread("start") && crypto_.isReady() && bridge_.start(); }
 
 void SecureRtpGroup::stop()
 {

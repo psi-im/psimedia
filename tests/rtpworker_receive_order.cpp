@@ -56,18 +56,18 @@ int main(int argc, char **argv)
     auto *context = g_main_context_default();
 
     PsiMedia::RtpWorker worker(context, nullptr);
-    Result result;
-    worker.app = &result;
+    Result              result;
+    worker.app        = &result;
     worker.cb_started = [](void *p) { static_cast<Result *>(p)->started = true; };
     worker.cb_updated = [](void *p) { static_cast<Result *>(p)->updated = true; };
     worker.cb_stopped = [](void *p) { static_cast<Result *>(p)->stopped = true; };
-    worker.cb_error = [](void *p) { static_cast<Result *>(p)->failed = true; };
+    worker.cb_error   = [](void *p) { static_cast<Result *>(p)->failed = true; };
 
     // Reproduce the Conversations ordering that exposed the bug: video is
     // negotiated first and starts the receive graph before audio arrives.
     PsiMedia::PVideoParams video;
-    video.codec = QStringLiteral("vp8");
-    worker.localVideoParams = { video };
+    video.codec                   = QStringLiteral("vp8");
+    worker.localVideoParams       = { video };
     worker.remoteVideoPayloadInfo = { vp8Payload() };
     worker.start();
 
@@ -79,13 +79,13 @@ int main(int argc, char **argv)
     // Audio arrives second. It must be grafted onto the active recvbin rather
     // than silently discarded merely because video already owns the graph.
     PsiMedia::PAudioParams audio;
-    audio.codec      = QStringLiteral("opus");
-    audio.sampleRate = 48000;
-    audio.sampleSize = 16;
-    audio.channels   = 2;
-    worker.localAudioParams = { audio };
+    audio.codec                   = QStringLiteral("opus");
+    audio.sampleRate              = 48000;
+    audio.sampleSize              = 16;
+    audio.channels                = 2;
+    worker.localAudioParams       = { audio };
     worker.remoteAudioPayloadInfo = { opusPayload() };
-    result.updated = false;
+    result.updated                = false;
     worker.update();
 
     if (!spinUntil(context, [&] { return result.updated || result.failed; }) || result.failed)

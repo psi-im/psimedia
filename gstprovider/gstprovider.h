@@ -49,8 +49,8 @@ public:
     RtpSessionContext    *createRtpSession() override;
     AudioRecorderContext *createAudioRecorder() override;
 
-    QStringList               supportedSecureRtpProfiles() const override;
-    SecureRtpSessionContext  *createSecureRtpSession() override;
+    QStringList              supportedSecureRtpProfiles() const override;
+    SecureRtpSessionContext *createSecureRtpSession() override;
 };
 
 }

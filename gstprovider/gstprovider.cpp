@@ -26,8 +26,8 @@
 #include "gstfeaturescontext.h"
 #include "gstprovider.h"
 #include "gstrtpsessioncontext.h"
-#include "securertpcontext.h"
 #include "gstthread.h"
+#include "securertpcontext.h"
 
 #include <QtPlugin>
 

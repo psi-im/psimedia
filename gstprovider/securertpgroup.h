@@ -48,9 +48,9 @@ public:
                   const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt);
     void invalidate(const QByteArray &associationId, quint64 epoch);
 
-    bool       isReady() const { return crypto_.isReady(); }
-    QByteArray associationId() const { return crypto_.associationId(); }
-    quint64    epoch() const { return crypto_.epoch(); }
+    bool                           isReady() const { return crypto_.isReady(); }
+    QByteArray                     associationId() const { return crypto_.associationId(); }
+    quint64                        epoch() const { return crypto_.epoch(); }
     SecureRtpSessionContext::Error lastError() const
     {
         return mediaError_ == SecureRtpSessionContext::Error::None ? crypto_.lastError() : mediaError_;
@@ -71,8 +71,8 @@ public:
     // fatal crypto failures. lastError() distinguishes the reason.
     bool receiveProtectedPacket(const PSecureRtpPacket &packet);
 
-    bool          requestRtcp(guint64 maxDelay = 0) { return bridge_.requestRtcp(maxDelay); }
-    bool          requestRemoteKeyframe(quint32 ssrc, quint8 payloadType)
+    bool requestRtcp(guint64 maxDelay = 0) { return bridge_.requestRtcp(maxDelay); }
+    bool requestRemoteKeyframe(quint32 ssrc, quint8 payloadType)
     {
         return bridge_.requestRemoteKeyframe(ssrc, payloadType);
     }
@@ -81,15 +81,15 @@ public:
     GstStructure *sessionStats() const { return bridge_.sessionStats(); }
 
 private:
-    bool ownerThread(const char *operation) const;
-    void protectOutgoing(const PRtpPacket &packet);
-    void reportCryptoFailure(SecureRtpSessionContext::Error error);
+    bool        ownerThread(const char *operation) const;
+    void        protectOutgoing(const PRtpPacket &packet);
+    void        reportCryptoFailure(SecureRtpSessionContext::Error error);
     static bool fatalCryptoError(SecureRtpSessionContext::Error error);
 
-    SrtpAssociation       crypto_;
-    RtpGroupBridge        bridge_;
-    ProtectedPacketHandler protectedPacketHandler_;
-    RuntimeErrorHandler    runtimeErrorHandler_;
+    SrtpAssociation                crypto_;
+    RtpGroupBridge                 bridge_;
+    ProtectedPacketHandler         protectedPacketHandler_;
+    RuntimeErrorHandler            runtimeErrorHandler_;
     SecureRtpSessionContext::Error mediaError_ = SecureRtpSessionContext::Error::None;
 };
 

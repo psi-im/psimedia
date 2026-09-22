@@ -14,44 +14,44 @@
 namespace PsiMedia {
 namespace {
 
-enum class InputSourceMode {
-    None,
-    Live,
-    File,
-    Data,
-};
+    enum class InputSourceMode {
+        None,
+        Live,
+        File,
+        Data,
+    };
 
-struct InputSourceIdentity {
-    InputSourceMode mode = InputSourceMode::None;
-    QString         audioInput;
-    QString         videoInput;
-    QString         fileName;
-    QByteArray      fileData;
+    struct InputSourceIdentity {
+        InputSourceMode mode = InputSourceMode::None;
+        QString         audioInput;
+        QString         videoInput;
+        QString         fileName;
+        QByteArray      fileData;
 
-    bool operator!=(const InputSourceIdentity &other) const
+        bool operator!=(const InputSourceIdentity &other) const
+        {
+            return mode != other.mode || audioInput != other.audioInput || videoInput != other.videoInput
+                || fileName != other.fileName || fileData != other.fileData;
+        }
+    };
+
+    InputSourceIdentity inputSourceIdentity(const QString &audioInput, const QString &videoInput,
+                                            const QString &fileName, const QByteArray &fileData)
     {
-        return mode != other.mode || audioInput != other.audioInput || videoInput != other.videoInput
-            || fileName != other.fileName || fileData != other.fileData;
+        InputSourceIdentity result;
+        result.audioInput = audioInput;
+        result.videoInput = videoInput;
+        result.fileName   = fileName;
+        result.fileData   = fileData;
+
+        if (!fileData.isEmpty())
+            result.mode = InputSourceMode::Data;
+        else if (!fileName.isEmpty())
+            result.mode = InputSourceMode::File;
+        else if (!audioInput.isEmpty() || !videoInput.isEmpty())
+            result.mode = InputSourceMode::Live;
+        return result;
     }
-};
-
-InputSourceIdentity inputSourceIdentity(const QString &audioInput, const QString &videoInput, const QString &fileName,
-                                        const QByteArray &fileData)
-{
-    InputSourceIdentity result;
-    result.audioInput = audioInput;
-    result.videoInput = videoInput;
-    result.fileName   = fileName;
-    result.fileData   = fileData;
-
-    if (!fileData.isEmpty())
-        result.mode = InputSourceMode::Data;
-    else if (!fileName.isEmpty())
-        result.mode = InputSourceMode::File;
-    else if (!audioInput.isEmpty() || !videoInput.isEmpty())
-        result.mode = InputSourceMode::Live;
-    return result;
-}
 
 } // namespace
 

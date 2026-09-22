@@ -26,8 +26,8 @@
 #include "gstrecorder.h"
 #include "gstrtpchannel.h"
 #include "rtpsessionbridge.h"
-#include "securertpgroup.h"
 #include "rwcontrol.h"
+#include "securertpgroup.h"
 
 #include <QMutex>
 #include <QQueue>
@@ -106,43 +106,43 @@ public:
     void setVideoPreviewWidget(VideoWidgetContext *widget) override;
 #endif
 
-    void                setRecorder(QIODevice *recordDevice) override;
-    void                stopRecording() override;
-    void                setLocalAudioPreferences(const QList<PAudioParams> &params) override;
-    void                setLocalVideoPreferences(const QList<PVideoParams> &params) override;
-    void                setMaximumSendingBitrate(int kbps) override;
-    void                setRemoteAudioPreferences(const QList<PPayloadInfo> &info) override;
-    void                setRemoteVideoPreferences(const QList<PPayloadInfo> &info) override;
-    void                start() override;
-    void                updatePreferences() override;
-    void                transmitAudio() override;
-    void                transmitVideo() override;
-    void                pauseAudio() override;
-    void                pauseVideo() override;
-    void                stop() override;
-    QList<PPayloadInfo> localAudioPayloadInfo() const override;
-    QList<PPayloadInfo> localVideoPayloadInfo() const override;
-    QList<PPayloadInfo> remoteAudioPayloadInfo() const override;
-    QList<PPayloadInfo> remoteVideoPayloadInfo() const override;
-    QList<PAudioParams> audioParams() const override;
-    QList<PVideoParams> videoParams() const override;
-    bool                canTransmitAudio() const override;
-    bool                canTransmitVideo() const override;
-    int                 outputVolume() const override;
-    void                setOutputVolume(int level) override;
-    int                 inputVolume() const override;
-    void                setInputVolume(int level) override;
+    void                     setRecorder(QIODevice *recordDevice) override;
+    void                     stopRecording() override;
+    void                     setLocalAudioPreferences(const QList<PAudioParams> &params) override;
+    void                     setLocalVideoPreferences(const QList<PVideoParams> &params) override;
+    void                     setMaximumSendingBitrate(int kbps) override;
+    void                     setRemoteAudioPreferences(const QList<PPayloadInfo> &info) override;
+    void                     setRemoteVideoPreferences(const QList<PPayloadInfo> &info) override;
+    void                     start() override;
+    void                     updatePreferences() override;
+    void                     transmitAudio() override;
+    void                     transmitVideo() override;
+    void                     pauseAudio() override;
+    void                     pauseVideo() override;
+    void                     stop() override;
+    QList<PPayloadInfo>      localAudioPayloadInfo() const override;
+    QList<PPayloadInfo>      localVideoPayloadInfo() const override;
+    QList<PPayloadInfo>      remoteAudioPayloadInfo() const override;
+    QList<PPayloadInfo>      remoteVideoPayloadInfo() const override;
+    QList<PAudioParams>      audioParams() const override;
+    QList<PVideoParams>      videoParams() const override;
+    bool                     canTransmitAudio() const override;
+    bool                     canTransmitVideo() const override;
+    int                      outputVolume() const override;
+    void                     setOutputVolume(int level) override;
+    int                      inputVolume() const override;
+    void                     setInputVolume(int level) override;
     RtpSessionContext::Error errorCode() const override;
-    RtpChannelContext  *audioRtpChannel() override;
-    RtpChannelContext  *videoRtpChannel() override;
-    void                dumpPipeline(std::function<void(const QStringList &)> callback) override;
+    RtpChannelContext       *audioRtpChannel() override;
+    RtpChannelContext       *videoRtpChannel() override;
+    void                     dumpPipeline(std::function<void(const QStringList &)> callback) override;
 
     // Internal secure-session implementation used by GstSecureRtpSessionContext.
-    bool secureConfigureEndpoints(const QList<PSecureRtpEndpoint> &endpoints);
-    bool secureConfigureAssociation(const QByteArray &associationId, quint64 epoch, const QString &profile,
-                                    const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
-                                    const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt);
-    void secureInvalidateAssociation(const QByteArray &associationId, quint64 epoch);
+    bool    secureConfigureEndpoints(const QList<PSecureRtpEndpoint> &endpoints);
+    bool    secureConfigureAssociation(const QByteArray &associationId, quint64 epoch, const QString &profile,
+                                       const QByteArray &localMasterKey, const QByteArray &localMasterSalt,
+                                       const QByteArray &remoteMasterKey, const QByteArray &remoteMasterSalt);
+    void    secureInvalidateAssociation(const QByteArray &associationId, quint64 epoch);
     bool    secureAssociationReady(const QByteArray &associationId) const;
     quint64 secureAssociationEpoch(const QByteArray &associationId) const;
     SecureRtpSessionContext::Error secureLastError(const QByteArray &associationId) const;
@@ -194,13 +194,13 @@ private:
     };
 
     struct SecureOutgoingPacket {
-        quint64 routeGeneration = 0;
-        QByteArray associationId;
-        QByteArray endpointId;
-        quint64 epoch = 0;
-        std::shared_ptr<GstBuffer> buffer;
-        GstClockTime presentationAge = GST_CLOCK_TIME_NONE;
-        std::chrono::steady_clock::time_point enqueuedAt = std::chrono::steady_clock::now();
+        quint64                               routeGeneration = 0;
+        QByteArray                            associationId;
+        QByteArray                            endpointId;
+        quint64                               epoch = 0;
+        std::shared_ptr<GstBuffer>            buffer;
+        GstClockTime                          presentationAge = GST_CLOCK_TIME_NONE;
+        std::chrono::steady_clock::time_point enqueuedAt      = std::chrono::steady_clock::now();
 
         quint64 byteSize() const { return buffer ? quint64(gst_buffer_get_size(buffer.get())) : 0; }
     };
@@ -211,14 +211,14 @@ private:
     static constexpr int     MaxSecureOutgoingDrain   = 64;
     static constexpr qint64  MaxSecureOutgoingDrainMs = 5;
 
-    bool configureRtpBridges();
-    bool configureSecureGroups();
-    bool configureSecureGroup(const QByteArray &associationId);
-    bool maybeStartSecureGroup(const QByteArray &associationId);
-    SecureGroupState *ensureSecureGroup(const QByteArray &associationId);
-    SecureGroupState *findSecureGroup(const QByteArray &associationId);
+    bool                    configureRtpBridges();
+    bool                    configureSecureGroups();
+    bool                    configureSecureGroup(const QByteArray &associationId);
+    bool                    maybeStartSecureGroup(const QByteArray &associationId);
+    SecureGroupState       *ensureSecureGroup(const QByteArray &associationId);
+    SecureGroupState       *findSecureGroup(const QByteArray &associationId);
     const SecureGroupState *findSecureGroup(const QByteArray &associationId) const;
-    void stopRtpBridges();
+    void                    stopRtpBridges();
 
     void refreshSecureProducerRoutes();
     void enqueueSecureOutgoing(bool audio, const RtpWorker::EncodedRtpPacket &packet);
@@ -236,20 +236,20 @@ private:
     // note: this is executed from a different thread
     void control_recordData(const QByteArray &packet);
 
-    bool                                 secureMode_ = false;
-    std::map<QByteArray, SecureGroupState> secureGroups_;
-    QList<PSecureRtpEndpoint>            secureEndpoints_;
-    bool                                 securePayloadsReady_ = false;
+    bool                                            secureMode_ = false;
+    std::map<QByteArray, SecureGroupState>          secureGroups_;
+    QList<PSecureRtpEndpoint>                       secureEndpoints_;
+    bool                                            securePayloadsReady_ = false;
     SecureRtpSessionContext::ProtectedPacketHandler secureProtectedPacketHandler_;
-    SecureRtpSessionContext::RuntimeErrorHandler secureRuntimeErrorHandler_;
+    SecureRtpSessionContext::RuntimeErrorHandler    secureRuntimeErrorHandler_;
 
-    mutable QMutex                       secureOutgoingMutex_;
-    QQueue<SecureOutgoingPacket>         secureOutgoingQueue_;
-    quint64                              secureOutgoingBytes_ = 0;
-    quint64                              secureRouteGeneration_ = 1;
-    bool                                 secureOutgoingScheduled_ = false;
-    SecureProducerRoute                  audioSecureProducer_;
-    SecureProducerRoute                  videoSecureProducer_;
+    mutable QMutex               secureOutgoingMutex_;
+    QQueue<SecureOutgoingPacket> secureOutgoingQueue_;
+    quint64                      secureOutgoingBytes_     = 0;
+    quint64                      secureRouteGeneration_   = 1;
+    bool                         secureOutgoingScheduled_ = false;
+    SecureProducerRoute          audioSecureProducer_;
+    SecureProducerRoute          videoSecureProducer_;
 };
 
 class GstSecureRtpSessionContext final : public GstRtpSessionContext, public SecureRtpSessionContext {

@@ -81,21 +81,21 @@ PSecureRtpPacket packet(const QByteArray &id, quint64 epoch, PRtpPacket::Type ty
 }
 
 struct Pair {
-    QByteArray       id = QByteArrayLiteral("test-association");
-    QByteArray       aKey;
-    QByteArray       aSalt;
-    QByteArray       bKey;
-    QByteArray       bSalt;
-    SrtpAssociation  a;
-    SrtpAssociation  b;
+    QByteArray      id = QByteArrayLiteral("test-association");
+    QByteArray      aKey;
+    QByteArray      aSalt;
+    QByteArray      bKey;
+    QByteArray      bSalt;
+    SrtpAssociation a;
+    SrtpAssociation b;
 
     Pair(const QString &profile, quint64 epoch = 1)
     {
         const auto sizes = sizesFor(profile);
-        aKey  = QByteArray(sizes.key, char(0x11));
-        aSalt = QByteArray(sizes.salt, char(0x22));
-        bKey  = QByteArray(sizes.key, char(0x33));
-        bSalt = QByteArray(sizes.salt, char(0x44));
+        aKey             = QByteArray(sizes.key, char(0x11));
+        aSalt            = QByteArray(sizes.salt, char(0x22));
+        bKey             = QByteArray(sizes.key, char(0x33));
+        bSalt            = QByteArray(sizes.salt, char(0x44));
 
         require(a.configure(id, epoch, profile, aKey, aSalt, bKey, bSalt), "sender configure failed");
         require(b.configure(id, epoch, profile, bKey, bSalt, aKey, aSalt), "receiver configure failed");
@@ -106,7 +106,7 @@ void testProfileRoundTrips(const QString &profile)
 {
     Pair pair(profile);
 
-    const auto rtp = packet(pair.id, 1, PRtpPacket::Type::Rtp, rtpPacket(1, 0x11223344));
+    const auto       rtp = packet(pair.id, 1, PRtpPacket::Type::Rtp, rtpPacket(1, 0x11223344));
     PSecureRtpPacket protectedRtp;
     PSecureRtpPacket plainRtp;
     require(pair.a.protect(rtp, &protectedRtp), "RTP protect failed");
@@ -115,7 +115,7 @@ void testProfileRoundTrips(const QString &profile)
     require(plainRtp.rawValue == rtp.rawValue, "RTP round trip mismatch");
     require(plainRtp.associationId == pair.id && plainRtp.epoch == 1, "RTP metadata mismatch");
 
-    const auto rtcp = packet(pair.id, 1, PRtpPacket::Type::Rtcp, rtcpPacket(0x11223344));
+    const auto       rtcp = packet(pair.id, 1, PRtpPacket::Type::Rtcp, rtcpPacket(0x11223344));
     PSecureRtpPacket protectedRtcp;
     PSecureRtpPacket plainRtcp;
     require(pair.a.protect(rtcp, &protectedRtcp), "RTCP protect failed");
@@ -125,7 +125,7 @@ void testProfileRoundTrips(const QString &profile)
 
 void testReplayAndEpoch(const QString &profile)
 {
-    Pair pair(profile);
+    Pair       pair(profile);
     const auto original = packet(pair.id, 1, PRtpPacket::Type::Rtp, rtpPacket(7, 0x55667788));
 
     PSecureRtpPacket encrypted;
@@ -143,8 +143,7 @@ void testReplayAndEpoch(const QString &profile)
             "receiver identical-key reactivation failed");
     encrypted.epoch = 2;
     require(!pair.b.unprotect(encrypted, &plain), "replay window reset across identical-key reactivation");
-    require(pair.b.lastError() == SecureRtpSessionContext::Error::Replay,
-            "reactivated replay error not reported");
+    require(pair.b.lastError() == SecureRtpSessionContext::Error::Replay, "reactivated replay error not reported");
 
     pair.b.invalidate(pair.id, 1);
     require(pair.b.isReady() && pair.b.epoch() == 2, "stale invalidation killed current association");
@@ -154,13 +153,13 @@ void testReplayAndEpoch(const QString &profile)
 
 void testTamper(const QString &profile)
 {
-    Pair pair(profile);
+    Pair       pair(profile);
     const auto original = packet(pair.id, 1, PRtpPacket::Type::Rtp, rtpPacket(19, 0x10203040));
 
     PSecureRtpPacket encrypted;
     PSecureRtpPacket plain;
     require(pair.a.protect(original, &encrypted), "tamper test protect failed");
-    const int last = encrypted.rawValue.size() - 1;
+    const int last           = encrypted.rawValue.size() - 1;
     encrypted.rawValue[last] = char(quint8(encrypted.rawValue[last]) ^ 0x01);
     require(!pair.b.unprotect(encrypted, &plain), "tampered packet was accepted");
     require(pair.b.lastError() == SecureRtpSessionContext::Error::Authentication,
@@ -169,15 +168,15 @@ void testTamper(const QString &profile)
 
 void testStalePacketAndInvalidReconfigure(const QString &profile)
 {
-    Pair pair(profile, 3);
-    auto stale = packet(pair.id, 2, PRtpPacket::Type::Rtp, rtpPacket(2, 0x0a0b0c0d));
+    Pair             pair(profile, 3);
+    auto             stale = packet(pair.id, 2, PRtpPacket::Type::Rtp, rtpPacket(2, 0x0a0b0c0d));
     PSecureRtpPacket output;
     require(!pair.a.protect(stale, &output), "stale epoch packet was accepted");
     require(pair.a.lastError() == SecureRtpSessionContext::Error::StaleEpoch, "stale epoch error not reported");
     require(pair.a.isReady(), "stale packet invalidated current association");
 
     QByteArray conflictingKey = pair.aKey;
-    conflictingKey[0] = char(quint8(conflictingKey[0]) ^ 0x01);
+    conflictingKey[0]         = char(quint8(conflictingKey[0]) ^ 0x01);
     require(!pair.a.configure(pair.id, 3, profile, conflictingKey, pair.aSalt, pair.bKey, pair.bSalt),
             "same-epoch key replacement succeeded");
     require(pair.a.lastError() == SecureRtpSessionContext::Error::StaleEpoch,
@@ -194,7 +193,7 @@ void testStalePacketAndInvalidReconfigure(const QString &profile)
 
 void testStreamLimit(const QString &profile)
 {
-    Pair pair(profile);
+    Pair             pair(profile);
     PSecureRtpPacket output;
     for (quint32 i = 0; i < 64; ++i) {
         const auto p = packet(pair.id, 1, PRtpPacket::Type::Rtp, rtpPacket(1, 0x10000000u + i));
