@@ -545,6 +545,11 @@ GstFlowReturn RtpWorker::cb_packet_ready_rtp_video(GstAppSink *appsink, gpointer
     return static_cast<RtpWorker *>(data)->packet_ready_rtp_video(appsink);
 }
 
+GstPadProbeReturn RtpWorker::cb_video_keyframe_event(GstPad *pad, GstPadProbeInfo *info, gpointer data)
+{
+    return static_cast<RtpWorker *>(data)->video_keyframe_event(pad, info);
+}
+
 GstFlowReturn RtpWorker::cb_packet_ready_preroll_stub(GstAppSink *appsink, gpointer data)
 {
     Q_UNUSED(appsink)
@@ -888,6 +893,52 @@ GstFlowReturn RtpWorker::packet_ready_rtp_video(GstAppSink *appsink)
 
     gst_sample_unref(sample);
     return GST_FLOW_OK;
+}
+
+GstPadProbeReturn RtpWorker::video_keyframe_event(GstPad *pad, GstPadProbeInfo *info)
+{
+    Q_UNUSED(pad)
+    if (!info || !(GST_PAD_PROBE_INFO_TYPE(info) & GST_PAD_PROBE_TYPE_EVENT_UPSTREAM))
+        return GST_PAD_PROBE_OK;
+
+    GstEvent *event = GST_PAD_PROBE_INFO_EVENT(info);
+    if (!event || GST_EVENT_TYPE(event) != GST_EVENT_CUSTOM_UPSTREAM)
+        return GST_PAD_PROBE_OK;
+
+    const GstStructure *structure = gst_event_get_structure(event);
+    if (!structure || !gst_structure_has_name(structure, "GstForceKeyUnit"))
+        return GST_PAD_PROBE_OK;
+
+    guint ssrc = 0;
+    guint payloadType = 0;
+    if (!gst_structure_get_uint(structure, "ssrc", &ssrc)
+        || !gst_structure_get_uint(structure, "payload", &payloadType)
+        || !ssrc || payloadType > 127)
+        return GST_PAD_PROBE_OK;
+
+#ifdef RTPWORKER_DEBUG
+    qDebug("video decoder requested keyframe: ssrc=%u payload=%u", ssrc, payloadType);
+#endif
+    if (cb_videoKeyframeRequest)
+        cb_videoKeyframeRequest(quint32(ssrc), quint8(payloadType), app);
+
+    // appsrc is the media/network boundary. We consumed the request by
+    // forwarding it to the owning RTP session, so do not let the event die at
+    // appsrc and report an unhandled upstream event.
+    return GST_PAD_PROBE_DROP;
+}
+
+bool RtpWorker::installVideoKeyframeProbe(GstElement *source)
+{
+    if (!source)
+        return false;
+    GstPad *srcPad = gst_element_get_static_pad(source, "src");
+    if (!srcPad)
+        return false;
+    const gulong id = gst_pad_add_probe(srcPad, GST_PAD_PROBE_TYPE_EVENT_UPSTREAM,
+                                        cb_video_keyframe_event, this, nullptr);
+    gst_object_unref(srcPad);
+    return id != 0;
 }
 
 gboolean RtpWorker::fileReady()
@@ -1304,6 +1355,8 @@ bool RtpWorker::startRecv()
         gst_caps_append_structure(caps, cs);
         g_object_set(G_OBJECT(videortpsrc), "caps", caps, nullptr);
         gst_caps_unref(caps);
+        if (!installVideoKeyframeProbe(videortpsrc))
+            goto fail1;
 
         // FIXME: what if we don't have a name and just id?
         //   it's okay, for now we only really support vp8 which
@@ -1518,6 +1571,10 @@ bool RtpWorker::addVideoRecvChain()
     gst_caps_append_structure(caps, structure);
     g_object_set(G_OBJECT(source), "caps", caps, nullptr);
     gst_caps_unref(caps);
+    if (!installVideoKeyframeProbe(source)) {
+        gst_object_unref(source);
+        return false;
+    }
 
     QString codec = remoteVideoPayloadInfo[vp8At].name;
     if (codec == QLatin1String("H263-1998"))
