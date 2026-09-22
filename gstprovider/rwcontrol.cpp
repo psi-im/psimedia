@@ -154,13 +154,18 @@ RwControlLocal::RwControlLocal(GstMainLoop *thread, DeviceMonitor *hardwareDevic
 
 RwControlLocal::~RwControlLocal()
 {
-    // delete RwControlRemote, block until done
+    // Delete RwControlRemote on its GLib owner context. Keep the lifetime
+    // synchronization strict, but make a stalled teardown observable instead
+    // of silently freezing the UI with no indication of the blocked layer.
     QMutexLocker locker(&m);
     timer = g_timeout_source_new(0);
     g_source_set_callback(timer, cb_doDestroyRemote, this, nullptr);
     g_source_attach(timer, thread_->mainContext());
     g_source_unref(timer);
-    w.wait(&m);
+    while (remote_) {
+        if (!w.wait(&m, 2000))
+            qWarning("Still waiting for remote media worker teardown after 2s");
+    }
 
     qDeleteAll(in);
 }
