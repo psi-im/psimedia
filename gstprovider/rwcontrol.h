@@ -391,6 +391,7 @@ private:
     bool processMessage(RwControlMessage *msg);
 
     friend class RwControlLocal;
+    friend class RwControlRemoteLifecycleTest;
     void postMessage(RwControlMessage *msg);
     void rtpAudioIn(const PRtpPacket &packet);
     void rtpVideoIn(const PRtpPacket &packet);
