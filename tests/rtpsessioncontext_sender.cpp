@@ -685,6 +685,12 @@ int main(int argc, char **argv)
         return 16;
     }
 
+    const QString audioReceiveBeforeVideo = receiveAppSrcName(videoSession.get());
+    if (audioReceiveBeforeVideo.isEmpty()) {
+        qCritical() << "Audio-first session did not create its receive appsrc";
+        return 16;
+    }
+
     PsiMedia::PVideoParams localVideo;
     localVideo.codec = QStringLiteral("vp8");
     localVideo.size  = QSize(320, 240);
@@ -720,6 +726,13 @@ int main(int argc, char **argv)
     videoUpdateTimer.stop();
     if (videoUpdateFailed || videoUpdateTimedOut) {
         qCritical() << "Adding video to the running audio receive graph failed";
+        return 16;
+    }
+
+    const QString audioReceiveAfterVideo = receiveAppSrcName(videoSession.get());
+    if (audioReceiveAfterVideo != audioReceiveBeforeVideo) {
+        qCritical() << "Late video negotiation rebuilt the live audio receive graph"
+                    << audioReceiveBeforeVideo << audioReceiveAfterVideo;
         return 16;
     }
 
