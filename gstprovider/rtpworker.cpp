@@ -21,7 +21,6 @@
 #include "rtpworker.h"
 
 #include <QDir>
-#include <QDebug>
 #include <QElapsedTimer>
 #include <QStringList>
 #include <cstring>
@@ -444,26 +443,8 @@ void RtpWorker::rtpAudioIn(const PRtpPacket &packet)
 void RtpWorker::rtpVideoIn(const PRtpPacket &packet)
 {
     QMutexLocker locker(&videortpsrc_mutex);
-    if (packet.type != PRtpPacket::Type::Rtp)
-        return;
-
-    const bool trace = qEnvironmentVariableIsSet("PSIMEDIA_TRACE_SECURE_RTP");
-    static int tracedVideoPackets = 0;
-    if (!videortpsrc) {
-        if (trace && tracedVideoPackets++ < 4)
-            qInfo() << "PSIMEDIA_TRACE video-appsrc missing bytes=" << packet.rawValue.size();
-        return;
-    }
-
-    GstBuffer *buffer = makeGstBuffer(packet);
-    if (!buffer) {
-        if (trace && tracedVideoPackets++ < 4)
-            qInfo() << "PSIMEDIA_TRACE video-appsrc buffer-allocation-failed";
-        return;
-    }
-    const auto result = gst_app_src_push_buffer(GST_APP_SRC(videortpsrc), buffer);
-    if (trace && tracedVideoPackets++ < 4)
-        qInfo() << "PSIMEDIA_TRACE video-appsrc push=" << int(result) << "bytes=" << packet.rawValue.size();
+    if (packet.type == PRtpPacket::Type::Rtp && videortpsrc)
+        gst_app_src_push_buffer((GstAppSrc *)videortpsrc, makeGstBuffer(packet));
 }
 
 void RtpWorker::setOutputVolume(int level)
