@@ -63,7 +63,18 @@ int main(int argc, char **argv)
         return 3;
     }
 
-    qInfo() << "decoded video size publication regression passed";
+    {
+        auto *dyingContext = new TestVideoContext;
+        PsiMedia::GstVideoWidget survivingOutput(dyingContext);
+        survivingOutput.show_frame(QImage(160, 120, QImage::Format_RGB32));
+        delete dyingContext;
+
+        // Backend teardown can outlive the UI VideoWidgetContext. Clearing the
+        // last frame must be a no-op instead of dereferencing the dead context.
+        survivingOutput.show_frame(QImage());
+    }
+
+    qInfo() << "decoded video size/lifetime regression passed";
     return 0;
 }
 
