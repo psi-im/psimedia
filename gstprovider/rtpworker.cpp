@@ -72,6 +72,66 @@ static const char *state_to_str(GstState state)
     }
 }
 
+static bool syncPipelineChildrenWithParent(GstElement *pipeline)
+{
+    if (!pipeline || !GST_IS_BIN(pipeline))
+        return false;
+
+    GstIterator *iterator = gst_bin_iterate_recurse(GST_BIN(pipeline));
+    GValue item = G_VALUE_INIT;
+    bool ok = true;
+    while (true) {
+        switch (gst_iterator_next(iterator, &item)) {
+        case GST_ITERATOR_OK: {
+            auto *element = GST_ELEMENT(g_value_get_object(&item));
+            if (element && !gst_element_sync_state_with_parent(element))
+                ok = false;
+            g_value_reset(&item);
+            break;
+        }
+        case GST_ITERATOR_RESYNC:
+            gst_iterator_resync(iterator);
+            break;
+        case GST_ITERATOR_DONE:
+            g_value_unset(&item);
+            gst_iterator_free(iterator);
+            return ok;
+        case GST_ITERATOR_ERROR:
+        default:
+            g_value_unset(&item);
+            gst_iterator_free(iterator);
+            return false;
+        }
+    }
+}
+
+static bool waitForCurrentCaps(GstElement *element, int timeoutMs)
+{
+    if (!element)
+        return false;
+
+    GstPad *pad = gst_element_get_static_pad(element, "src");
+    if (!pad)
+        return false;
+
+    QElapsedTimer timer;
+    timer.start();
+    bool ready = false;
+    do {
+        GstCaps *caps = gst_pad_get_current_caps(pad);
+        if (caps) {
+            ready = !gst_caps_is_empty(caps);
+            gst_caps_unref(caps);
+            if (ready)
+                break;
+        }
+        g_usleep(5 * 1000);
+    } while (timer.elapsed() < timeoutMs);
+
+    gst_object_unref(pad);
+    return ready;
+}
+
 class Stats {
 public:
     QString       name;
@@ -1078,9 +1138,10 @@ bool RtpWorker::setupSendRecv()
     //   - remote payloadinfo indicates desire to receive (we need this
     //     to support vp8)
     //   - once sending or receiving is started, topology changes are
-    //     generally rejected. The negotiated audio/video receive transition is
-    //     the supported exception: the second media branch may be added in
-    //     place while the first keeps running. Removal remains unsupported.
+    //     generally rejected. The negotiated audio/video additive transition is
+    //     supported in both directions for live send and receive: the second
+    //     media branch is grafted in place while the first keeps running.
+    //     Removal and source replacement still rebuild/reject as appropriate.
     //   - once sending or receiving is started, codecs can't be changed
     //     (changes will be rejected).  one exception: remote  vp8
     //     config can be updated.
@@ -1092,14 +1153,15 @@ bool RtpWorker::setupSendRecv()
             if (!startSend())
                 return false;
         }
-    } else {
-        // TODO: support adding/removing audio/video to existing session
-        /*if((localAudioParams.isEmpty() != actual_localAudioPayloadInfo.isEmpty()) || (localVideoParams.isEmpty() !=
-        actual_videoPayloadInfo.isEmpty()))
-        {
-            error = RtpSessionContext::ErrorGeneric;
-            return false;
-        }*/
+    } else if (!fileDemux) {
+        if (!localAudioParams.isEmpty() && !ain.isEmpty() && !pd_audiosrc) {
+            if (!addAudioSendChain())
+                return false;
+        }
+        if (!localVideoParams.isEmpty() && !vin.isEmpty() && !pd_videosrc) {
+            if (!addVideoSendChain())
+                return false;
+        }
     }
 
     if (!recvbin) {
@@ -1907,6 +1969,97 @@ bool RtpWorker::addVideoRecvChain()
         videortpsrc = source;
     }
     actual_remoteVideoPayloadInfo = remoteVideoPayloadInfo;
+    return true;
+}
+
+bool RtpWorker::addAudioSendChain()
+{
+    if (!sendbin || !send_in_use || fileDemux || pd_audiosrc || ain.isEmpty() || localAudioParams.isEmpty())
+        return false;
+
+#ifdef RTPWORKER_DEBUG
+    qDebug("adding audio send to active pipeline");
+#endif
+
+    PipelineDeviceOptions options;
+    if (pd_audiosink != nullptr) {
+        options     = pd_audiosink->options();
+        options.aec = !options.echoProberName.isEmpty();
+    }
+
+    auto *newSource = PipelineDeviceContext::create(send_pipelineContext, ain, PDevice::AudioIn,
+                                                    hardwareDeviceMonitor_, options);
+    if (!newSource)
+        return false;
+
+    pd_audiosrc = newSource;
+    audiosrc    = newSource->element();
+    if (!addAudioChain() || !gst_element_link(audiosrc, sendbin)
+        || !syncPipelineChildrenWithParent(spipeline)) {
+        cleanupSend();
+        return false;
+    }
+
+    pd_audiosrc->activate();
+    if (!waitForCurrentCaps(audiortppay, 3000)) {
+        cleanupSend();
+        return false;
+    }
+
+    localAudioPayloadInfo.clear();
+    localVideoPayloadInfo.clear();
+    if (!getCaps()) {
+        cleanupSend();
+        return false;
+    }
+
+    actual_localAudioPayloadInfo = localAudioPayloadInfo;
+    actual_localVideoPayloadInfo = localVideoPayloadInfo;
+    return true;
+}
+
+bool RtpWorker::addVideoSendChain()
+{
+    if (!sendbin || !send_in_use || fileDemux || pd_videosrc || vin.isEmpty() || localVideoParams.isEmpty())
+        return false;
+
+#ifdef RTPWORKER_DEBUG
+    qDebug("adding video send to active pipeline");
+#endif
+
+    PipelineDeviceOptions options;
+    options.videoSize = localVideoParams.constFirst().size.isValid() ? localVideoParams.constFirst().size
+                                                                      : QSize(640, 480);
+    options.fps = localVideoParams.constFirst().fps > 0 ? localVideoParams.constFirst().fps : -1;
+
+    auto *newSource = PipelineDeviceContext::create(send_pipelineContext, vin, PDevice::VideoIn,
+                                                    hardwareDeviceMonitor_, options);
+    if (!newSource)
+        return false;
+
+    pd_videosrc = newSource;
+    videosrc    = newSource->element();
+    if (!addVideoChain() || !gst_element_link(videosrc, sendbin)
+        || !syncPipelineChildrenWithParent(spipeline)) {
+        cleanupSend();
+        return false;
+    }
+
+    pd_videosrc->activate();
+    if (!waitForCurrentCaps(videortppay, 5000)) {
+        cleanupSend();
+        return false;
+    }
+
+    localAudioPayloadInfo.clear();
+    localVideoPayloadInfo.clear();
+    if (!getCaps()) {
+        cleanupSend();
+        return false;
+    }
+
+    actual_localAudioPayloadInfo = localAudioPayloadInfo;
+    actual_localVideoPayloadInfo = localVideoPayloadInfo;
     return true;
 }
 
