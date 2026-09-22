@@ -66,6 +66,35 @@ bool isExpectedRtpPacket(const PsiMedia::PRtpPacket &packet)
     return (bytes[0] >> 6) == 2 && (bytes[1] & 0x7f) == NegotiatedPayloadType;
 }
 
+bool waitForPayloadPacket(PsiMedia::RtpChannelContext *channel, int payloadType,
+                          PsiMedia::RtpSessionContext *session, int timeoutMs = 10000)
+{
+    bool failed = false;
+    const auto errorConnection = QObject::connect(
+        session->qobject(), SIGNAL(error()), QCoreApplication::instance(), SLOT(quit()), Qt::DirectConnection);
+    Q_UNUSED(errorConnection);
+
+    QElapsedTimer timer;
+    timer.start();
+    while (!failed && timer.elapsed() < timeoutMs) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        while (channel->packetsAvailable() > 0) {
+            const auto packet = channel->read();
+            if (packet.type != PsiMedia::PRtpPacket::Type::Rtp || packet.rawValue.size() < 2)
+                continue;
+            const auto *bytes = reinterpret_cast<const uchar *>(packet.rawValue.constData());
+            if ((bytes[0] >> 6) == 2 && (bytes[1] & 0x7f) == payloadType) {
+                QObject::disconnect(errorConnection);
+                return true;
+            }
+        }
+        QThread::msleep(5);
+    }
+
+    QObject::disconnect(errorConnection);
+    return false;
+}
+
 QList<PsiMedia::PRtpPacket> waitForRtpPackets(PsiMedia::GstRtpChannel *audioChannel,
                                                     PsiMedia::GstRtpSessionContext *session, int count = 6,
                                                     int timeoutMs = 10000)
@@ -552,6 +581,89 @@ int main(int argc, char **argv)
         qCritical() << "Timed out stopping production RTP session";
         return 15;
     }
+
+    // Synthetic video capture has no DeviceMonitor hardware metadata. It must
+    // still be usable as a raw GStreamer source for headless calls/tests.
+    std::unique_ptr<PsiMedia::RtpSessionContext> videoSession(provider.createRtpSession());
+    auto *videoGstSession = qobject_cast<PsiMedia::GstRtpSessionContext *>(videoSession->qobject());
+    auto *videoChannel = videoSession->videoRtpChannel();
+    if (!videoGstSession || !videoChannel) {
+        qCritical() << "Provider did not create the synthetic video test session";
+        return 16;
+    }
+
+    PsiMedia::PVideoParams localVideo;
+    localVideo.codec = QStringLiteral("vp8");
+    localVideo.size  = QSize(320, 240);
+    localVideo.fps   = 15;
+    videoSession->setLocalVideoPreferences({ localVideo });
+
+    PsiMedia::PPayloadInfo remoteVp8;
+    remoteVp8.id        = 96;
+    remoteVp8.name      = QStringLiteral("VP8");
+    remoteVp8.clockrate = 90000;
+    videoSession->setRemoteVideoPreferences({ remoteVp8 });
+    videoChannel->setEnabled(true);
+
+    bool       videoStartFailed   = false;
+    bool       videoStartTimedOut = false;
+    QEventLoop videoStartLoop;
+    QTimer     videoStartTimer;
+    videoStartTimer.setSingleShot(true);
+    QObject::connect(&videoStartTimer, &QTimer::timeout, &videoStartLoop, [&]() {
+        videoStartTimedOut = true;
+        videoStartLoop.quit();
+    });
+    QObject::connect(videoGstSession, &PsiMedia::GstRtpSessionContext::started, &videoStartLoop,
+                     &QEventLoop::quit);
+    QObject::connect(videoGstSession, &PsiMedia::GstRtpSessionContext::error, &videoStartLoop, [&]() {
+        videoStartFailed = true;
+        videoStartLoop.quit();
+    });
+
+    videoStartTimer.start(10000);
+    videoSession->start();
+    videoStartLoop.exec();
+    videoStartTimer.stop();
+    if (videoStartFailed || videoStartTimedOut) {
+        qCritical() << "Synthetic video test session did not start";
+        return 16;
+    }
+
+    videoSession->setVideoInputDevice(QStringLiteral("videotestsrc is-live=true pattern=ball"));
+    if (!waitForControlBarrier(videoSession.get())) {
+        qCritical() << "Timed out attaching synthetic video input";
+        return 16;
+    }
+    videoSession->transmitVideo();
+    if (!waitForPayloadPacket(videoChannel, 96, videoSession.get())) {
+        qCritical() << "Synthetic video input did not produce VP8 RTP";
+        return 16;
+    }
+
+    videoSession->pauseVideo();
+    videoSession->setVideoInputDevice(QString());
+    waitForControlBarrier(videoSession.get());
+
+    bool       videoStopTimedOut = false;
+    QEventLoop videoStopLoop;
+    QTimer     videoStopTimer;
+    videoStopTimer.setSingleShot(true);
+    QObject::connect(&videoStopTimer, &QTimer::timeout, &videoStopLoop, [&]() {
+        videoStopTimedOut = true;
+        videoStopLoop.quit();
+    });
+    QObject::connect(videoGstSession, &PsiMedia::GstRtpSessionContext::stopped, &videoStopLoop,
+                     &QEventLoop::quit);
+    videoStopTimer.start(10000);
+    videoSession->stop();
+    videoStopLoop.exec();
+    videoStopTimer.stop();
+    if (videoStopTimedOut) {
+        qCritical() << "Timed out stopping synthetic video test session";
+        return 16;
+    }
+    videoSession.reset();
 
     // A bridge can fail after PLAYING even when the legacy media worker is
     // otherwise healthy. Verify that a real GstBus error reaches the provider
