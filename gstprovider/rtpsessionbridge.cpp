@@ -293,8 +293,21 @@ void RtpSessionBridge::cleanup()
     }
 
     if (pipeline_) {
-        gst_element_set_state(pipeline_, GST_STATE_NULL);
-        gst_element_get_state(pipeline_, nullptr, nullptr, GST_CLOCK_TIME_NONE);
+        const GstStateChangeReturn setResult = gst_element_set_state(pipeline_, GST_STATE_NULL);
+        if (setResult == GST_STATE_CHANGE_ASYNC) {
+            GstState current = GST_STATE_VOID_PENDING;
+            GstState pending = GST_STATE_VOID_PENDING;
+            const GstStateChangeReturn waitResult
+                = gst_element_get_state(pipeline_, &current, &pending, 2 * GST_SECOND);
+            if (waitResult == GST_STATE_CHANGE_ASYNC) {
+                qWarning() << "RTP session bridge teardown timed out after 2s"
+                           << "current=" << int(current) << "pending=" << int(pending);
+            } else if (waitResult == GST_STATE_CHANGE_FAILURE) {
+                qWarning() << "RTP session bridge teardown failed while waiting for NULL";
+            }
+        } else if (setResult == GST_STATE_CHANGE_FAILURE) {
+            qWarning() << "RTP session bridge failed to enter NULL during teardown";
+        }
     }
 
     if (session_) {
@@ -486,8 +499,21 @@ void RtpSessionBridge::stop()
     disableDeliveries();
     if (!pipeline_ || !wasRunning)
         return;
-    gst_element_set_state(pipeline_, GST_STATE_NULL);
-    gst_element_get_state(pipeline_, nullptr, nullptr, GST_CLOCK_TIME_NONE);
+    const GstStateChangeReturn setResult = gst_element_set_state(pipeline_, GST_STATE_NULL);
+    if (setResult == GST_STATE_CHANGE_ASYNC) {
+        GstState current = GST_STATE_VOID_PENDING;
+        GstState pending = GST_STATE_VOID_PENDING;
+        const GstStateChangeReturn waitResult
+            = gst_element_get_state(pipeline_, &current, &pending, 2 * GST_SECOND);
+        if (waitResult == GST_STATE_CHANGE_ASYNC) {
+            qWarning() << "RTP session bridge teardown timed out after 2s"
+                       << "current=" << int(current) << "pending=" << int(pending);
+        } else if (waitResult == GST_STATE_CHANGE_FAILURE) {
+            qWarning() << "RTP session bridge teardown failed while waiting for NULL";
+        }
+    } else if (setResult == GST_STATE_CHANGE_FAILURE) {
+        qWarning() << "RTP session bridge failed to enter NULL during teardown";
+    }
 }
 
 void RtpSessionBridge::scheduleBusPoll(quint64 generation)
