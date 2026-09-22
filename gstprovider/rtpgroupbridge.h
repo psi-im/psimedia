@@ -71,6 +71,10 @@ public:
     GstFlowReturn receivePacket(const PRtpPacket &packet);
 
     bool          requestRtcp(guint64 maxDelay = 0) { return session_.requestRtcp(maxDelay); }
+    bool          requestRemoteKeyframe(quint32 ssrc, quint8 payloadType)
+    {
+        return session_.requestRemoteKeyframe(ssrc, payloadType);
+    }
     void          setRtcpMinimumInterval(guint64 interval) { session_.setRtcpMinimumInterval(interval); }
     quint64       receivedRtcpPackets() const { return session_.receivedRtcpPackets(); }
     GstStructure *sessionStats() const { return session_.sessionStats(); }
