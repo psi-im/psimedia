@@ -169,6 +169,7 @@ private slots:
     void control_outputFrame(const QImage &img);
     void control_audioOutputIntensityChanged(int intensity);
     void control_audioInputIntensityChanged(int intensity);
+    void control_videoKeyframeRequested(quint32 ssrc, quint8 payloadType);
     void control_rtpBridgeError();
     void recorder_stopped();
 
