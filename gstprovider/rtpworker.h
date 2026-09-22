@@ -206,6 +206,7 @@ private:
     bool        setupSendRecv();
     bool        startSend();
     bool        startRecv();
+    bool        addAudioRecvChain();
     bool        addVideoRecvChain();
     bool        addAudioChain();
     bool        addVideoChain();
