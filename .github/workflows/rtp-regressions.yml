@@ -4,11 +4,15 @@ on:
   push:
     branches:
       - 'jingle/**'
+      - 'ai/jingle/**'
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  PSI_SRTP_REF: 1ae835b8496ae71ec966c2e6a613844e991aa4f7
 
 concurrency:
   group: psimedia-rtp-${{ github.event.pull_request.number || github.ref }}
@@ -20,6 +24,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: ${{ env.PSI_SRTP_REF }}
+          path: _psi
+          fetch-depth: 1
+
       - name: Install Qt and GStreamer dependencies
         shell: bash
         run: |
@@ -27,10 +39,12 @@ jobs:
           sudo apt-get install -y \
             cmake \
             ninja-build \
+            qtbase5-dev \
             qt6-base-dev \
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-bad1.0-dev \
+            libsrtp2-dev \
             gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good \
             gstreamer1.0-plugins-bad \
@@ -53,3 +67,287 @@ jobs:
         env:
           GST_DEBUG_NO_COLOR: '1'
         run: ctest --test-dir build --output-on-failure --no-tests=error -j1
+
+      - name: Configure secure RTP regressions with ASan
+        shell: bash
+        run: |
+          cmake -S . -B build-asan -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS='-fsanitize=address -fno-omit-frame-pointer' \
+            -DCMAKE_CXX_FLAGS='-fsanitize=address -fno-omit-frame-pointer' \
+            -DCMAKE_EXE_LINKER_FLAGS='-fsanitize=address' \
+            -DCMAKE_SHARED_LINKER_FLAGS='-fsanitize=address' \
+            -DQT_DEFAULT_MAJOR_VERSION=6 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=OFF \
+            -DPSIMEDIA_BUILD_TESTS=ON \
+            -DPSIMEDIA_ENABLE_SRTP=ON
+
+      - name: Build secure RTP regressions with ASan
+        run: cmake --build build-asan --parallel 2
+
+      - name: Test secure RTP regressions with ASan
+        env:
+          ASAN_OPTIONS: abort_on_error=1:detect_leaks=0:strict_string_checks=1
+          GST_DEBUG_NO_COLOR: '1'
+        run: ctest --test-dir build-asan --output-on-failure --no-tests=error -j1
+
+      - name: Configure provider without SRTP
+        shell: bash
+        run: |
+          cmake -S . -B build-no-srtp -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DQT_DEFAULT_MAJOR_VERSION=6 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=OFF \
+            -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPSIMEDIA_ENABLE_SRTP=OFF
+
+      - name: Build provider without SRTP
+        run: cmake --build build-no-srtp --parallel 2
+
+      - name: Configure as CMake subproject
+        shell: bash
+        run: |
+          mkdir -p _subproject
+          cat > _subproject/CMakeLists.txt <<'EOF'
+          cmake_minimum_required(VERSION 3.16)
+          project(psimedia_subproject_smoke LANGUAGES CXX)
+          set(QT_DEFAULT_MAJOR_VERSION 6 CACHE STRING "" FORCE)
+          set(BUILD_DEMO OFF CACHE BOOL "" FORCE)
+          set(BUILD_PSIPLUGIN OFF CACHE BOOL "" FORCE)
+          set(PSIMEDIA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+          set(PSIMEDIA_ENABLE_SRTP ON CACHE BOOL "" FORCE)
+          add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/.." psimedia)
+          EOF
+          cmake -S _subproject -B build-subproject -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build as CMake subproject
+        run: cmake --build build-subproject --parallel 2
+
+      - name: Configure with Psi plugin API
+        shell: bash
+        run: |
+          cmake -S . -B build-psi-plugin -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DQT_DEFAULT_MAJOR_VERSION=6 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=ON \
+            -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPLUGINS_ROOT_DIR="$GITHUB_WORKSPACE/_psi/plugins"
+
+      - name: Build with Psi plugin API
+        run: cmake --build build-psi-plugin --parallel 2
+
+      - name: Configure Qt5 compatibility
+        shell: bash
+        run: |
+          cmake -S . -B build-qt5 -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DQT_DEFAULT_MAJOR_VERSION=${{ matrix.qt_major }} \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=OFF \
+            -DPSIMEDIA_BUILD_TESTS=OFF
+
+      - name: Build Qt5 compatibility
+        run: cmake --build build-qt5 --parallel 2
+
+  windows-qt5-srtp-plugin:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: ${{ env.PSI_SRTP_REF }}
+          path: _psi
+          fetch-depth: 1
+
+      - name: Set up MSYS2 secure-media dependencies
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-qt5-base
+            mingw-w64-x86_64-gstreamer
+            mingw-w64-x86_64-gst-plugins-base
+            mingw-w64-x86_64-gst-plugins-good
+            mingw-w64-x86_64-gst-plugins-bad
+            mingw-w64-x86_64-opus
+            mingw-w64-x86_64-libsrtp
+
+      - name: Configure secure Psi media plugin
+        shell: msys2 {0}
+        env:
+          GSTREAMER_1_0_ROOT_X86_64: /mingw64
+        run: |
+          cmake -S . -B build-windows -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage" \
+            -DQT_DEFAULT_MAJOR_VERSION=5 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=ON \
+            -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPSIMEDIA_ENABLE_SRTP=ON \
+            -DPLUGINS_ROOT_DIR="$PWD/_psi/plugins"
+
+      - name: Build and install secure Psi media plugin
+        shell: msys2 {0}
+        run: |
+          cmake --build build-windows --parallel 2
+          cmake --install build-windows
+
+      - name: Verify packaged SRTP runtime dependency
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          plugin=$(find stage -type f \( -iname 'mediaplugin.dll' -o -iname 'libmediaplugin.dll' \) -print -quit)
+          test -n "$plugin"
+          objdump -p "$plugin" > plugin-dependencies.txt
+          cat plugin-dependencies.txt
+          grep -Eiq 'DLL Name: .*srtp.*\.dll' plugin-dependencies.txt
+
+  macos-qt6-srtp:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: ${{ env.PSI_SRTP_REF }}
+          path: _psi
+          fetch-depth: 1
+
+      - name: Install Qt, GStreamer and libSRTP
+        run: brew install cmake ninja qt gstreamer srtp pkgconf
+
+      - name: Configure secure Psi media plugin
+        shell: bash
+        run: |
+          cmake -S . -B build-macos -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage" \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" \
+            -DQT_DEFAULT_MAJOR_VERSION=6 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=ON \
+            -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPSIMEDIA_ENABLE_SRTP=ON \
+            -DPLUGINS_ROOT_DIR="$PWD/_psi/plugins"
+
+      - name: Build and install secure Psi media plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build-macos --parallel 2
+          cmake --install build-macos
+
+      - name: Verify installed macOS SRTP runtime link
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin=$(find stage -type f -name '*mediaplugin*.dylib' -print -quit)
+          test -n "$plugin"
+          echo "MACOS_MEDIA_PLUGIN=$plugin"
+          otool -L "$plugin" | tee plugin-dependencies.txt
+          grep -Eiq 'srtp' plugin-dependencies.txt
+
+  ubuntu-deb-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            release: '24.04'
+            qt_major: '5'
+            qt_dev: qtbase5-dev
+          - runner: ubuntu-26.04
+            release: '26.04'
+            qt_major: '6'
+            qt_dev: qt6-base-dev
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: ${{ env.PSI_SRTP_REF }}
+          path: _psi
+          fetch-depth: 1
+
+      - name: Install Debian package build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config dpkg-dev fakeroot file \
+            "${{ matrix.qt_dev }}" libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libgstreamer-plugins-bad1.0-dev libsrtp2-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
+
+      - name: Configure Debian package
+        run: |
+          cmake -S . -B build-deb -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DQT_DEFAULT_MAJOR_VERSION=${{ matrix.qt_major }} \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=ON \
+            -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPSIMEDIA_ENABLE_SRTP=ON \
+            -DPSIMEDIA_BUILD_DEB_PACKAGE=ON \
+            -DPLUGINS_ROOT_DIR="$GITHUB_WORKSPACE/_psi/plugins"
+
+      - name: Build and inspect Debian package
+        run: |
+          set -euo pipefail
+          cmake --build build-deb --parallel 2
+          mkdir -p artifacts
+          cpack --config build-deb/CPackConfig.cmake -G DEB -B artifacts
+          pkg=$(find artifacts -maxdepth 1 -type f -name '*.deb' -print -quit)
+          test -n "$pkg"
+          dpkg-deb -I "$pkg"
+          dpkg-deb -c "$pkg"
+          depends=$(dpkg-deb -f "$pkg" Depends)
+          echo "DEB_DEPENDS=$depends"
+          echo "$depends" | grep -i libsrtp
+          dpkg-deb -c "$pkg" | grep '/psi/plugins/' | grep 'mediaplugin'
+
+      - name: Install package in clean Ubuntu fixture
+        env:
+          UBUNTU_RELEASE: ${{ matrix.release }}
+        run: |
+          set -euo pipefail
+          pkg=$(find artifacts -maxdepth 1 -type f -name '*.deb' -print -quit)
+          cp "$pkg" artifacts/psimedia-test.deb
+          cat > artifacts/verify-package.sh <<'EOF'
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y /artifacts/psimedia-test.deb
+          plugin=$(dpkg -L psi-plugin-psimedia | grep '/psi/plugins/' | grep 'mediaplugin' | head -n1)
+          test -n "$plugin"
+          ldd "$plugin"
+          ldd "$plugin" | grep -i srtp
+          EOF
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/artifacts:/artifacts:ro" \
+            "ubuntu:$UBUNTU_RELEASE" \
+            bash /artifacts/verify-package.sh
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: psimedia-${{ matrix.runner }}-qt${{ matrix.qt_major }}-deb
+          path: artifacts/*.deb
+          if-no-files-found: error
+          retention-days: 14
