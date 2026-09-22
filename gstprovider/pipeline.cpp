@@ -404,7 +404,7 @@ private:
             gst_object_unref(GST_OBJECT(pad));
         } else if (type == PDevice::VideoIn) {
 
-            auto device = deviceMonitor->device(id);
+            auto device = deviceMonitor ? deviceMonitor->device(id) : nullptr;
             if (!device) {
                 // Synthetic/custom GStreamer sources (for example videotestsrc)
                 // do not have hardware DeviceMonitor metadata. Accept a raw-video
