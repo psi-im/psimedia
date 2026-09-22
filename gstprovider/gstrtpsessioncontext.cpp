@@ -325,6 +325,8 @@ void GstRtpSessionContext::start()
     connect(control, SIGNAL(outputFrame(const QImage &)), SLOT(control_outputFrame(const QImage &)));
     connect(control, SIGNAL(audioOutputIntensityChanged(int)), SLOT(control_audioOutputIntensityChanged(int)));
     connect(control, SIGNAL(audioInputIntensityChanged(int)), SLOT(control_audioInputIntensityChanged(int)));
+    connect(control, SIGNAL(videoKeyframeRequested(quint32,quint8)),
+            SLOT(control_videoKeyframeRequested(quint32,quint8)));
 
     control->app            = this;
     control->cb_rtpAudioOut = cb_control_rtpAudioOut;
@@ -1048,6 +1050,56 @@ void GstRtpSessionContext::control_audioOutputIntensityChanged(int intensity)
 void GstRtpSessionContext::control_audioInputIntensityChanged(int intensity)
 {
     emit audioInputIntensityChanged(intensity);
+}
+
+void GstRtpSessionContext::control_videoKeyframeRequested(quint32 ssrc, quint8 payloadType)
+{
+    if (!ssrc || payloadType > 127 || terminalError || isStopping)
+        return;
+
+    if (!secureMode_) {
+        videoBridge.requestRemoteKeyframe(ssrc, payloadType);
+        return;
+    }
+
+    SecureGroupState *exact = nullptr;
+    SecureGroupState *fallback = nullptr;
+    bool fallbackAmbiguous = false;
+
+    for (auto &[associationId, state] : secureGroups_) {
+        Q_UNUSED(associationId)
+        if (!state.started || !state.group || !state.group->isReady())
+            continue;
+
+        for (const auto &endpoint : state.endpoints) {
+            if (endpoint.media != QLatin1String("video") || !endpoint.incomingPayloadTypes.contains(int(payloadType)))
+                continue;
+
+            if (!endpoint.incomingSsrcs.isEmpty() && endpoint.incomingSsrcs.contains(ssrc)) {
+                if (exact && exact != &state)
+                    return;
+                exact = &state;
+                continue;
+            }
+
+            if (endpoint.incomingSsrcs.isEmpty()) {
+                if (fallback && fallback != &state)
+                    fallbackAmbiguous = true;
+                else
+                    fallback = &state;
+            }
+        }
+    }
+
+    SecureGroupState *target = exact ? exact : (!fallbackAmbiguous ? fallback : nullptr);
+    if (!target || !target->group)
+        return;
+
+#ifdef RTPWORKER_DEBUG
+    qDebug() << "requesting remote video keyframe through RTP group"
+             << "ssrc=" << ssrc << "pt=" << payloadType;
+#endif
+    target->group->requestRemoteKeyframe(ssrc, payloadType);
 }
 
 void GstRtpSessionContext::control_rtpBridgeError()
