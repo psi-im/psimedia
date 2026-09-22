@@ -11,7 +11,6 @@
 #include "gstrtpchannel.h"
 #include "gstrtpsessioncontext.h"
 
-#include <QApplication>
 #include <QCoreApplication>
 #include <QDebug>
 #include <QElapsedTimer>
@@ -19,8 +18,6 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QMetaObject>
-#include <QPainter>
-#include <QWidget>
 #include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QThread>
@@ -52,26 +49,6 @@ struct RtpSessionBridgeTestAccess {
 } // namespace PsiMedia
 
 namespace {
-
-class TestVideoContext final : public QObject, public PsiMedia::VideoWidgetContext {
-    Q_OBJECT
-public:
-    QObject *qobject() override { return this; }
-    QWidget *qwidget() override { return &widget; }
-    void setVideoSize(const QSize &size) override
-    {
-        lastSize = size;
-        ++sizeUpdates;
-    }
-
-    QWidget widget;
-    QSize lastSize;
-    int sizeUpdates = 0;
-
-signals:
-    void resized(const QSize &newSize);
-    void paintEvent(QPainter *p);
-};
 
 constexpr int NegotiatedPayloadType = 109;
 constexpr int RawSampleRate         = 44100;
@@ -257,7 +234,8 @@ bool waitForControlBarrier(PsiMedia::RtpSessionContext *session, int timeoutMs =
 }
 
 
-QString receiveAppSrcName(PsiMedia::RtpSessionContext *session, int timeoutMs = 5000)
+QString receiveAppSrcName(PsiMedia::RtpSessionContext *session, const QString &media = QStringLiteral("audio"),
+                          int timeoutMs = 5000)
 {
     QString    dotPath;
     QEventLoop loop;
@@ -291,7 +269,8 @@ QString receiveAppSrcName(PsiMedia::RtpSessionContext *session, int timeoutMs = 
     if (!file.open(QIODevice::ReadOnly))
         return {};
     const QString dot = QString::fromUtf8(file.readAll());
-    const auto match = QRegularExpression(QStringLiteral("psimedia_audio_rtp_recv_\\d+")).match(dot);
+    const auto pattern = QStringLiteral("psimedia_%1_rtp_recv_\\d+").arg(media);
+    const auto match = QRegularExpression(pattern).match(dot);
     return match.hasMatch() ? match.captured(0) : QString();
 }
 
@@ -395,7 +374,7 @@ bool createFiniteOpusFile(const QString &path)
 
 int main(int argc, char **argv)
 {
-    QApplication app(argc, argv);
+    QCoreApplication app(argc, argv);
 
     // GStreamer reads GST_DEBUG_DUMP_DOT_DIR during initialization on older
     // 1.24.x builds. Set it before GstProvider triggers gst_init().
@@ -604,27 +583,20 @@ int main(int argc, char **argv)
         return 15;
     }
 
-    // Synthetic video capture has no DeviceMonitor hardware metadata. It must
-    // still be usable as a raw GStreamer source for headless calls/tests.
-    // Keep the widget context alive longer than the media session even on an
-    // early failure return: the session destructor clears its output widget.
-    TestVideoContext decodedVideo;
+    // Reproduce the Jingle adapter ordering: audio starts the receive graph,
+    // then video is negotiated on the already-running session. The regression
+    // checks the topology invariant directly; end-to-end VP8 decoding is covered
+    // by the live Prosody A/V BUNDLE integration job.
     std::unique_ptr<PsiMedia::RtpSessionContext> videoSession(provider.createRtpSession());
     auto *videoGstSession = qobject_cast<PsiMedia::GstRtpSessionContext *>(videoSession->qobject());
-    auto *videoChannel = videoSession->videoRtpChannel();
-    if (!videoGstSession || !videoChannel) {
-        qCritical() << "Provider did not create the synthetic video test session";
+    if (!videoGstSession) {
+        qCritical() << "Provider did not create the late-video test session";
         return 16;
     }
 
-    // Reproduce the Jingle adapter ordering: audio is negotiated first and
-    // starts the receive graph; video is negotiated only after that session is
-    // already running.
     videoSession->setLocalAudioPreferences({ rawAudio });
     videoSession->setRemoteAudioPreferences({ remoteOpus });
     videoSession->audioRtpChannel()->setEnabled(true);
-
-    videoSession->setVideoOutputWidget(&decodedVideo);
 
     bool       videoStartFailed   = false;
     bool       videoStartTimedOut = false;
@@ -647,13 +619,17 @@ int main(int argc, char **argv)
     videoStartLoop.exec();
     videoStartTimer.stop();
     if (videoStartFailed || videoStartTimedOut) {
-        qCritical() << "Synthetic video test session did not start";
+        qCritical() << "Audio-first late-video test session did not start";
         return 16;
     }
 
     const QString audioReceiveBeforeVideo = receiveAppSrcName(videoSession.get());
     if (audioReceiveBeforeVideo.isEmpty()) {
         qCritical() << "Audio-first session did not create its receive appsrc";
+        return 16;
+    }
+    if (!receiveAppSrcName(videoSession.get(), QStringLiteral("video")).isEmpty()) {
+        qCritical() << "Video receive appsrc existed before video negotiation";
         return 16;
     }
 
@@ -668,7 +644,6 @@ int main(int argc, char **argv)
     remoteVp8.name      = QStringLiteral("VP8");
     remoteVp8.clockrate = 90000;
     videoSession->setRemoteVideoPreferences({ remoteVp8 });
-    videoChannel->setEnabled(true);
 
     bool       videoUpdateFailed   = false;
     bool       videoUpdateTimedOut = false;
@@ -696,55 +671,25 @@ int main(int argc, char **argv)
     }
 
     const QString audioReceiveAfterVideo = receiveAppSrcName(videoSession.get());
+    const QString videoReceiveAfterVideo = receiveAppSrcName(videoSession.get(), QStringLiteral("video"));
     if (audioReceiveAfterVideo != audioReceiveBeforeVideo) {
         qCritical() << "Late video negotiation rebuilt the live audio receive graph"
                     << audioReceiveBeforeVideo << audioReceiveAfterVideo;
         return 16;
     }
-
-    videoSession->setVideoInputDevice(QStringLiteral("videotestsrc is-live=true pattern=ball"));
-    if (!waitForControlBarrier(videoSession.get())) {
-        qCritical() << "Timed out attaching synthetic video input";
-        return 16;
-    }
-    videoSession->transmitVideo();
-
-    // Reflect the produced VP8 stream continuously instead of sampling one
-    // arbitrary frame. A single observed frame is not guaranteed to be a
-    // keyframe, while a real RTP receiver remains attached until the decoder
-    // sees a usable keyframe.
-    constexpr quint32 RemoteVideoSsrc = 0x24681357;
-    int reflectedPackets = 0;
-    QElapsedTimer decodedTimer;
-    decodedTimer.start();
-    while (!decodedVideo.sizeUpdates && decodedTimer.elapsed() < 10000) {
-        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
-        while (videoChannel->packetsAvailable() > 0) {
-            auto packet = videoChannel->read();
-            if (packet.type != PsiMedia::PRtpPacket::Type::Rtp || packet.rawValue.size() < 12)
-                continue;
-            auto *bytes = reinterpret_cast<uchar *>(packet.rawValue.data());
-            if ((bytes[0] >> 6) != 2 || (bytes[1] & 0x7f) != 96)
-                continue;
-            bytes[8]  = uchar(RemoteVideoSsrc >> 24);
-            bytes[9]  = uchar(RemoteVideoSsrc >> 16);
-            bytes[10] = uchar(RemoteVideoSsrc >> 8);
-            bytes[11] = uchar(RemoteVideoSsrc);
-            videoChannel->write(packet);
-            ++reflectedPackets;
-        }
-        if (!decodedVideo.sizeUpdates)
-            QThread::msleep(5);
-    }
-    if (!decodedVideo.sizeUpdates || decodedVideo.lastSize.isEmpty()) {
-        qCritical() << "Production receive path did not decode reflected VP8 RTP"
-                    << reflectedPackets << decodedVideo.sizeUpdates << decodedVideo.lastSize;
+    if (videoReceiveAfterVideo.isEmpty()) {
+        qCritical() << "Late video negotiation did not add the video receive appsrc";
         return 16;
     }
 
-    videoSession->pauseVideo();
-    videoSession->setVideoInputDevice(QString());
-    waitForControlBarrier(videoSession.get());
+    const auto negotiatedVideo = videoSession->remoteVideoPayloadInfo();
+    if (negotiatedVideo.size() != 1
+        || negotiatedVideo.constFirst().id != remoteVp8.id
+        || negotiatedVideo.constFirst().name.compare(QStringLiteral("VP8"), Qt::CaseInsensitive) != 0
+        || negotiatedVideo.constFirst().clockrate != remoteVp8.clockrate) {
+        qCritical() << "Late video negotiation did not commit VP8 receive status";
+        return 16;
+    }
 
     bool       videoStopTimedOut = false;
     QEventLoop videoStopLoop;
@@ -761,7 +706,7 @@ int main(int argc, char **argv)
     videoStopLoop.exec();
     videoStopTimer.stop();
     if (videoStopTimedOut) {
-        qCritical() << "Timed out stopping synthetic video test session";
+        qCritical() << "Timed out stopping late-video test session";
         return 16;
     }
     videoSession.reset();
@@ -840,4 +785,3 @@ int main(int argc, char **argv)
     return 0;
 }
 
-#include "rtpsessioncontext_sender.moc"
