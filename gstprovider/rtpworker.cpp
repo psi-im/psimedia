@@ -132,6 +132,27 @@ static bool waitForCurrentCaps(GstElement *element, int timeoutMs)
     return ready;
 }
 
+#ifdef RTPWORKER_DEBUG
+static void logElementSrcCaps(const char *label, GstElement *element)
+{
+    if (!element)
+        return;
+    GstPad *pad = gst_element_get_static_pad(element, "src");
+    if (!pad)
+        return;
+    GstCaps *caps = gst_pad_get_current_caps(pad);
+    if (caps) {
+        gchar *text = gst_caps_to_string(caps);
+        qDebug("%s: [%s]", label, text ? text : "");
+        g_free(text);
+        gst_caps_unref(caps);
+    } else {
+        qDebug("%s: [no current caps]", label);
+    }
+    gst_object_unref(pad);
+}
+#endif
+
 class Stats {
 public:
     QString       name;
@@ -1407,6 +1428,8 @@ bool RtpWorker::startSend()
 
 #ifdef RTPWORKER_DEBUG
         qDebug("state changed");
+        if (videosrc)
+            logElementSrcCaps("VideoIn negotiated caps", videosrc);
 
         qDebug("Dumping send pipeline");
         dump_pipeline(spipeline);
@@ -2058,6 +2081,9 @@ bool RtpWorker::addVideoSendChain()
         cleanupSend();
         return false;
     }
+#ifdef RTPWORKER_DEBUG
+    logElementSrcCaps("VideoIn negotiated caps", videosrc);
+#endif
 
     localAudioPayloadInfo.clear();
     localVideoPayloadInfo.clear();
