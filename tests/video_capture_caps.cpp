@@ -70,6 +70,13 @@ int main(int argc, char **argv)
                    "video/x-raw,width=(int)800,height=(int)600,framerate=(fraction)20/1"),
                QStringLiteral("video/x-raw"), 800, 600, 20, 1);
 
+    // With aspect-preserving downstream scaling, a smooth 16:9 source is still
+    // preferable to an exact 4:3 mode stuck at 5 fps.
+    expectMode(QStringLiteral(
+                   "video/x-raw,width=(int)640,height=(int)480,framerate=(fraction)5/1;"
+                   "video/x-raw,width=(int)1280,height=(int)720,framerate=(fraction)30/1"),
+               QStringLiteral("video/x-raw"), 1280, 720, 30, 1);
+
     qInfo("Video capture caps selection regression passed");
     return 0;
 }
