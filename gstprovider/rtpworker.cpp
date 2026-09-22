@@ -2305,6 +2305,8 @@ bool RtpWorker::addVideoChain()
     GstElement *playqueue        = gst_element_factory_make("queue", "queue_play");
     GstElement *videoconvertplay = gst_element_factory_make("videoconvert", nullptr);
     GstAppSink *appVideoSink     = makeVideoPlayAppSink("sourcevideoplay");
+    if (!fileDemux)
+        g_object_set(G_OBJECT(appVideoSink), "sync", FALSE, "async", FALSE, nullptr);
 
     GstAppSinkCallbacks sinkPreviewCb;
     sinkPreviewCb.new_sample  = cb_show_frame_preview;
@@ -2322,7 +2324,7 @@ bool RtpWorker::addVideoChain()
     GstElement *videortpsink = gst_element_factory_make("appsink", nullptr); // was apprtpsink
     auto        appRtpSink   = GST_APP_SINK(videortpsink);
     if (!fileDemux)
-        g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, nullptr);
+        g_object_set(G_OBJECT(appRtpSink), "sync", FALSE, "async", FALSE, nullptr);
 
     GstAppSinkCallbacks sinkCb;
     sinkCb.new_sample  = cb_packet_ready_rtp_video;
