@@ -211,6 +211,125 @@ jobs:
           cat plugin-dependencies.txt
           grep -Eiq 'DLL Name: .*srtp.*\.dll' plugin-dependencies.txt
 
+  ubuntu-deb-package:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-24.04
+          - ubuntu-26.04
+    runs-on: \${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: e80d262ec72ca247197f183e148b2919ea4d1f55
+          path: _psi
+          fetch-depth: 1
+
+      - name: Install Debian package build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            pkg-config \
+            dpkg-dev \
+            fakeroot \
+            file \
+            qtbase5-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libgstreamer-plugins-bad1.0-dev \
+            libsrtp2-dev \
+            gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad
+
+      - name: Configure Debian package
+        shell: bash
+        run: |
+          cmake -S . -B build-deb -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DQT_DEFAULT_MAJOR_VERSION=5 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=ON \
+            -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPSIMEDIA_ENABLE_SRTP=ON \
+            -DPSIMEDIA_BUILD_DEB_PACKAGE=ON \
+            -DPLUGINS_ROOT_DIR="$GITHUB_WORKSPACE/_psi/plugins"
+
+      - name: Build Debian package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build-deb --parallel 2
+          mkdir -p artifacts
+          cpack --config build-deb/CPackConfig.cmake -G DEB -B artifacts
+          pkg=$(find artifacts -maxdepth 1 -type f -name '*.deb' -print -quit)
+          test -n "$pkg"
+          dpkg-deb -I "$pkg"
+          dpkg-deb -c "$pkg"
+          depends=$(dpkg-deb -f "$pkg" Depends)
+          echo "DEB_DEPENDS=$depends"
+          grep -Eiq '(^|, )[[:space:]]*libsrtp[^,]*' <<< "$depends"
+          dpkg-deb -c "$pkg" | grep -E '/usr/lib.*/psi/plugins/.*mediaplugin.*\.so    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt, GStreamer and libSRTP
+        run: brew install cmake ninja qt gstreamer srtp pkgconf
+
+      - name: Configure secure provider
+        shell: bash
+        run: |
+          cmake -S . -B build-macos -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" \
+            -DQT_DEFAULT_MAJOR_VERSION=6 \
+            -DBUILD_DEMO=OFF \
+            -DBUILD_PSIPLUGIN=OFF \
+            -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPSIMEDIA_ENABLE_SRTP=ON
+
+      - name: Build secure provider
+        run: cmake --build build-macos --parallel 2
+
+
+      - name: Install package in clean Ubuntu fixture
+        shell: bash
+        env:
+          UBUNTU_RELEASE: \${{ matrix.runner == 'ubuntu-24.04' && '24.04' || '26.04' }}
+        run: |
+          set -euo pipefail
+          pkg=$(find artifacts -maxdepth 1 -type f -name '*.deb' -print -quit)
+          cp "$pkg" artifacts/psimedia-test.deb
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/artifacts:/artifacts:ro" \
+            "ubuntu:$UBUNTU_RELEASE" \
+            bash -ec '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y /artifacts/psimedia-test.deb
+              plugin=$(dpkg -L psi-plugin-psimedia | grep -E "/psi/plugins/.*mediaplugin.*\.so$" | head -n1)
+              test -n "$plugin"
+              ldd "$plugin"
+              ldd "$plugin" | grep -i srtp
+            '
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: psimedia-\${{ matrix.runner }}-deb
+          path: artifacts/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
   macos-qt6-srtp:
     runs-on: macos-15
     steps:
