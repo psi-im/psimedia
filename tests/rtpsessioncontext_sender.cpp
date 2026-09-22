@@ -89,32 +89,38 @@ bool isExpectedRtpPacket(const PsiMedia::PRtpPacket &packet)
     return (bytes[0] >> 6) == 2 && (bytes[1] & 0x7f) == NegotiatedPayloadType;
 }
 
-QList<PsiMedia::PRtpPacket> waitForPayloadPackets(PsiMedia::RtpChannelContext *channel, int payloadType,
-                                                    PsiMedia::GstRtpSessionContext *session, int count = 24,
-                                                    int timeoutMs = 10000)
+QList<PsiMedia::PRtpPacket> waitForPayloadFrame(PsiMedia::RtpChannelContext *channel, int payloadType,
+                                                  PsiMedia::GstRtpSessionContext *session,
+                                                  int timeoutMs = 10000)
 {
     QList<PsiMedia::PRtpPacket> packets;
     bool failed = false;
+    bool markerSeen = false;
     const auto errorConnection = QObject::connect(
         session, &PsiMedia::GstRtpSessionContext::error, [&]() { failed = true; });
 
     QElapsedTimer timer;
     timer.start();
-    while (!failed && packets.size() < count && timer.elapsed() < timeoutMs) {
+    while (!failed && !markerSeen && packets.size() < 256 && timer.elapsed() < timeoutMs) {
         QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
-        while (channel->packetsAvailable() > 0 && packets.size() < count) {
+        while (channel->packetsAvailable() > 0 && packets.size() < 256) {
             const auto packet = channel->read();
             if (packet.type != PsiMedia::PRtpPacket::Type::Rtp || packet.rawValue.size() < 12)
                 continue;
             const auto *bytes = reinterpret_cast<const uchar *>(packet.rawValue.constData());
-            if ((bytes[0] >> 6) == 2 && (bytes[1] & 0x7f) == payloadType)
-                packets.append(packet);
+            if ((bytes[0] >> 6) != 2 || (bytes[1] & 0x7f) != payloadType)
+                continue;
+            packets.append(packet);
+            if (bytes[1] & 0x80) {
+                markerSeen = true;
+                break;
+            }
         }
-        if (packets.size() < count)
+        if (!markerSeen)
             QThread::msleep(5);
     }
     QObject::disconnect(errorConnection);
-    return packets;
+    return markerSeen ? packets : QList<PsiMedia::PRtpPacket>();
 }
 
 bool waitForPayloadPacket(PsiMedia::RtpChannelContext *channel, int payloadType,
@@ -721,9 +727,9 @@ int main(int argc, char **argv)
         return 16;
     }
     videoSession->transmitVideo();
-    const auto videoPackets = waitForPayloadPackets(videoChannel, 96, videoGstSession);
-    if (videoPackets.size() < 8) {
-        qCritical() << "Synthetic video input did not produce enough VP8 RTP" << videoPackets.size();
+    const auto videoPackets = waitForPayloadFrame(videoChannel, 96, videoGstSession);
+    if (videoPackets.isEmpty()) {
+        qCritical() << "Synthetic video input did not produce one complete VP8 RTP frame";
         return 16;
     }
 
