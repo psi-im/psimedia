@@ -198,6 +198,7 @@ private:
     bool        setupSendRecv();
     bool        startSend();
     bool        startRecv();
+    bool        addVideoRecvChain();
     bool        addAudioChain();
     bool        addVideoChain();
     bool        getCaps();
