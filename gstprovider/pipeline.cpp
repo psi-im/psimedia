@@ -353,42 +353,77 @@ path2::caps="video/x-raw" \
             qDebug("VideoIn selected capture mime=%s", qPrintable(selectedMime));
 #endif
 
-            gst_bin_add(GST_BIN(bin), deviceElement);
+            const auto failVideoBin = [&]() -> GstElement * {
+                if (capsfilter) {
+                    gst_caps_unref(capsfilter);
+                    capsfilter = nullptr;
+                }
+                gst_object_unref(bin);
+                return nullptr;
+            };
+            const auto addVideoElement = [bin](GstElement *element) {
+                if (!element)
+                    return false;
+                if (gst_bin_add(GST_BIN(bin), element))
+                    return true;
+                gst_object_unref(element);
+                return false;
+            };
 
-            GstPad *binPad
-                = gst_ghost_pad_new_no_target_from_template("src", gst_static_pad_template_get(&videosrcbin_template));
-            gst_element_add_pad(bin, binPad);
+            if (!gst_bin_add(GST_BIN(bin), deviceElement)) {
+                gst_object_unref(deviceElement);
+                return failVideoBin();
+            }
+
+            GstPadTemplate *srcTemplate = gst_static_pad_template_get(&videosrcbin_template);
+            GstPad *binPad = srcTemplate ? gst_ghost_pad_new_no_target_from_template("src", srcTemplate) : nullptr;
+            if (srcTemplate)
+                gst_object_unref(srcTemplate);
+            if (!binPad || !gst_element_add_pad(bin, binPad)) {
+                if (binPad)
+                    gst_object_unref(binPad);
+                return failVideoBin();
+            }
+
+            const auto setGhostTarget = [binPad](GstElement *element) {
+                GstPad *srcPad = element ? gst_element_get_static_pad(element, "src") : nullptr;
+                if (!srcPad)
+                    return false;
+                const bool ok = gst_ghost_pad_set_target(GST_GHOST_PAD(binPad), srcPad);
+                gst_object_unref(srcPad);
+                return ok;
+            };
 
             QList<GstElement *> toLink;
             // Decoder topology must match the caps we selected above, not any
             // format the camera happens to advertise as an alternative.
             if (selectedMime == QLatin1String("video/x-raw")) {
                 GstElement *videoconvert = gst_element_factory_make("videoconvert", nullptr);
-                Q_ASSERT(gst_bin_add(GST_BIN(bin), videoconvert));
+                if (!addVideoElement(videoconvert))
+                    return failVideoBin();
                 toLink.append(videoconvert);
-                GstPad *srcPad = gst_element_get_static_pad(videoconvert, "src");
-                Q_ASSERT(gst_ghost_pad_set_target(GST_GHOST_PAD(binPad), srcPad));
-                gst_object_unref(srcPad);
+                if (!setGhostTarget(videoconvert))
+                    return failVideoBin();
             } else if (selectedMime == QLatin1String("image/jpeg")) {
                 GstElement *jpegdec = gst_element_factory_make("jpegdec", nullptr);
-                Q_ASSERT(gst_bin_add(GST_BIN(bin), jpegdec));
+                if (!addVideoElement(jpegdec))
+                    return failVideoBin();
                 toLink.append(jpegdec);
-                GstPad *srcPad = gst_element_get_static_pad(jpegdec, "src");
-                Q_ASSERT(gst_ghost_pad_set_target(GST_GHOST_PAD(binPad), srcPad));
-                gst_object_unref(srcPad);
+                if (!setGhostTarget(jpegdec))
+                    return failVideoBin();
             } else if (selectedMime == QLatin1String("video/x-h264")) {
                 GstElement *h264parse = gst_element_factory_make("h264parse", nullptr);
-                gst_bin_add(GST_BIN(bin), h264parse);
-                toLink.append(h264parse);
                 GstElement *avdec_h264 = gst_element_factory_make("avdec_h264", nullptr);
-                gst_bin_add(GST_BIN(bin), avdec_h264);
+                if (!addVideoElement(h264parse) || !addVideoElement(avdec_h264))
+                    return failVideoBin();
+                toLink.append(h264parse);
                 toLink.append(avdec_h264);
-                GstPad *srcPad = gst_element_get_static_pad(avdec_h264, "src");
-                gst_ghost_pad_set_target(GST_GHOST_PAD(binPad), srcPad);
-                gst_object_unref(srcPad);
+                if (!setGhostTarget(avdec_h264))
+                    return failVideoBin();
             } else {
                 GstElement *decodebin = gst_element_factory_make("decodebin", nullptr);
-                gst_bin_add(GST_BIN(bin), decodebin);
+                if (!addVideoElement(decodebin))
+                    return failVideoBin();
                 toLink.append(decodebin);
 
                 g_signal_connect(G_OBJECT(decodebin), "pad-added", G_CALLBACK(videosrcbin_pad_added), binPad);
@@ -401,16 +436,20 @@ path2::caps="video/x-raw" \
             //                                                      nullptr);
             //             gst_bin_add(GST_BIN(bin), switchbin);
 
+            bool sourceLinked = false;
             if (capsfilter) {
-                Q_ASSERT(gst_element_link_filtered(deviceElement, toLink[0], capsfilter));
+                sourceLinked = gst_element_link_filtered(deviceElement, toLink[0], capsfilter);
                 gst_caps_unref(capsfilter);
+                capsfilter = nullptr;
             } else {
-                gst_element_link(deviceElement, toLink[0]);
+                sourceLinked = gst_element_link(deviceElement, toLink[0]);
             }
-            if (toLink.size() > 1) {
-                for (int i = 1; i < toLink.size(); i++) {
-                    Q_ASSERT(gst_element_link(toLink[i - 1], toLink[i]));
-                }
+            if (!sourceLinked)
+                return failVideoBin();
+
+            for (int i = 1; i < toLink.size(); ++i) {
+                if (!gst_element_link(toLink[i - 1], toLink[i]))
+                    return failVideoBin();
             }
         } else // AudioOut
         {
