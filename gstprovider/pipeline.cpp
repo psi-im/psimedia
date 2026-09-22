@@ -27,6 +27,8 @@
 #include <gst/gst.h>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <ranges>
 
 // FIXME: this file is heavily commented out and a mess, mainly because
@@ -115,66 +117,168 @@ static GstCaps *filter_for_capture_size(const QSize &size)
                                                size.height(), nullptr),
                              gst_structure_new("image/jpeg", "width", G_TYPE_INT, size.width(), "height", G_TYPE_INT,
                                                size.height(), nullptr),
-                             gst_structure_new("video/h264", "width", G_TYPE_INT, size.width(), "height", G_TYPE_INT,
+                             gst_structure_new("video/x-h264", "width", G_TYPE_INT, size.width(), "height", G_TYPE_INT,
                                                size.height(), nullptr),
                              nullptr);
 }
 
-static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, QString *selectedMime)
+static int videoMimeRank(const QString &mime)
 {
-    static std::array mime_prioriry { QLatin1String { "video/x-raw" }, QLatin1String { "image/jpeg" },
-                                      QLatin1String("video/h264") };
-    namespace views   = std::ranges::views;
-    auto desiredScore = double(size.width()) * size.height();
-    auto capsScore    = [&desiredScore](const auto &c) { // less is better
-        auto it = std::find(mime_prioriry.begin(), mime_prioriry.end(), c.mime);
-        return std::abs(double(c.video.width) * c.video.height - desiredScore)
-            + (it == mime_prioriry.end() ? mime_prioriry.size()
-                                         : std::distance(mime_prioriry.begin(), mime_prioriry.end()));
-    };
+    if (mime == QLatin1String("video/x-raw"))
+        return 0;
+    if (mime == QLatin1String("image/jpeg"))
+        return 1;
+    if (mime == QLatin1String("video/x-h264"))
+        return 2;
+    return -1;
+}
 
+static double videoCaptureScore(const QSize &desiredSize, int preferredFps, const QString &mime, int width, int height,
+                                int fpsNumerator, int fpsDenominator)
+{
+    if (width <= 0 || height <= 0 || fpsNumerator <= 0 || fpsDenominator <= 0)
+        return std::numeric_limits<double>::infinity();
+
+    const double desiredAspect = double(desiredSize.width()) / double(desiredSize.height());
+    const double actualAspect  = double(width) / double(height);
+    const double aspectError   = std::abs(actualAspect / desiredAspect - 1.0);
+    const double widthError    = std::abs(double(width - desiredSize.width())) / double(desiredSize.width());
+    const double heightError   = std::abs(double(height - desiredSize.height())) / double(desiredSize.height());
+    const double fps           = double(fpsNumerator) / double(fpsDenominator);
+    const double fpsError      = std::abs(fps - preferredFps) / double(preferredFps);
+    const int    mimeRank      = videoMimeRank(mime);
+
+    if (mimeRank < 0)
+        return std::numeric_limits<double>::infinity();
+
+    // Aspect ratio is the strongest constraint: do not trade distortion for
+    // nominal resolution. Smooth capture comes next, then size. MIME is only a
+    // tie breaker, preferring raw to avoid an unnecessary decode.
+    return aspectError * 1000.0 + fpsError * 100.0 + (widthError + heightError) * 10.0 + mimeRank * 0.01;
+}
+
+static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, int preferredFps, QString *selectedMime)
+{
     if (selectedMime)
         selectedMime->clear();
+    preferredFps = preferredFps > 0 ? preferredFps : 30;
 
-    const auto frameRate = [](const PDevice::Caps &c) {
-        return c.video.framerate_denominator > 0
-            ? double(c.video.framerate_numerator) / c.video.framerate_denominator
-            : 0.0;
-    };
+    GstCaps *bestCaps       = nullptr;
+    double   bestScore      = std::numeric_limits<double>::infinity();
+    QString  bestMime;
+    int      bestWidth      = 0;
+    int      bestHeight     = 0;
+    int      bestFpsNum     = 0;
+    int      bestFpsDen     = 1;
 
-    std::vector<std::pair<double, PDevice::Caps>> srcCaps;
-    std::ranges::copy(
-        dev->caps
-            | views::filter([](auto const &c) {
-                  return c.video.framerate_denominator > 0 && c.video.framerate_numerator > 0;
-              })
-            | views::transform([&](auto const &c) { return std::make_pair(capsScore(c), c); }),
-        std::back_inserter(srcCaps));
-    std::ranges::sort(srcCaps, [&](const auto &a, const auto &b) {
-        if (a.first != b.first)
-            return a.first < b.first;
-        // For equally suitable resolutions/formats prefer the higher native
-        // rate, but never discard a perfectly valid 15/17/20 fps camera.
-        return frameRate(a.second) > frameRate(b.second);
-    });
+    // Prefer the complete GstDevice caps. Unlike PDevice::Caps these preserve
+    // PipeWire/V4L2 lists and ranges, which are common for webcam modes.
+    GstCaps *nativeCaps = dev->nativeCaps.isEmpty() ? nullptr : gst_caps_from_string(dev->nativeCaps.toUtf8().constData());
+    if (nativeCaps && !gst_caps_is_empty(nativeCaps) && !gst_caps_is_any(nativeCaps)) {
+        for (guint i = 0; i < gst_caps_get_size(nativeCaps); ++i) {
+            const GstStructure *source = gst_caps_get_structure(nativeCaps, i);
+            const QString mime = QString::fromLatin1(gst_structure_get_name(source));
+            if (videoMimeRank(mime) < 0)
+                continue;
 
-    if (srcCaps.empty()) {
-        // PipeWire/V4L2 device caps are frequently expressed as ranges rather
-        // than fixed width/height/framerate tuples, so DeviceMonitor may have
-        // no fixed PDevice::Caps to rank. Prefer raw video in that case. A
-        // decodebin here can make a raw pipewiresrc negotiate through encoded
-        // alternatives and, with malformed driver ranges, fail caps probing.
-        if (selectedMime)
-            *selectedMime = QStringLiteral("video/x-raw");
-        return gst_caps_new_empty_simple("video/x-raw");
+            GstStructure *fixed = gst_structure_copy(source);
+            if (gst_structure_has_field(fixed, "width"))
+                gst_structure_fixate_field_nearest_int(fixed, "width", size.width());
+            else
+                gst_structure_set(fixed, "width", G_TYPE_INT, size.width(), nullptr);
+
+            if (gst_structure_has_field(fixed, "height"))
+                gst_structure_fixate_field_nearest_int(fixed, "height", size.height());
+            else
+                gst_structure_set(fixed, "height", G_TYPE_INT, size.height(), nullptr);
+
+            if (gst_structure_has_field(fixed, "framerate"))
+                gst_structure_fixate_field_nearest_fraction(fixed, "framerate", preferredFps, 1);
+            else
+                gst_structure_set(fixed, "framerate", GST_TYPE_FRACTION, preferredFps, 1, nullptr);
+
+            gst_structure_fixate(fixed);
+
+            int width = 0;
+            int height = 0;
+            int fpsNum = 0;
+            int fpsDen = 1;
+            if (!gst_structure_get_int(fixed, "width", &width)
+                || !gst_structure_get_int(fixed, "height", &height)
+                || !gst_structure_get_fraction(fixed, "framerate", &fpsNum, &fpsDen)) {
+                gst_structure_free(fixed);
+                continue;
+            }
+
+            const double score = videoCaptureScore(size, preferredFps, mime, width, height, fpsNum, fpsDen);
+            if (score >= bestScore) {
+                gst_structure_free(fixed);
+                continue;
+            }
+
+            GstCaps *candidate = gst_caps_new_empty();
+            GstCapsFeatures *features = gst_caps_features_copy(gst_caps_get_features(nativeCaps, i));
+            gst_caps_append_structure_full(candidate, fixed, features);
+
+            if (bestCaps)
+                gst_caps_unref(bestCaps);
+            bestCaps   = candidate;
+            bestScore  = score;
+            bestMime   = mime;
+            bestWidth  = width;
+            bestHeight = height;
+            bestFpsNum = fpsNum;
+            bestFpsDen = fpsDen;
+        }
+    }
+    if (nativeCaps)
+        gst_caps_unref(nativeCaps);
+
+    // Compatibility fallback for platform monitors that only expose the legacy
+    // fixed PDevice::Caps list.
+    if (!bestCaps) {
+        for (const auto &candidate : dev->caps) {
+            const double score = videoCaptureScore(size, preferredFps, candidate.mime, candidate.video.width,
+                                                   candidate.video.height, candidate.video.framerate_numerator,
+                                                   candidate.video.framerate_denominator);
+            if (score >= bestScore)
+                continue;
+
+            if (bestCaps)
+                gst_caps_unref(bestCaps);
+            bestCaps = gst_caps_new_simple(candidate.mime.toLatin1().constData(), "width", G_TYPE_INT,
+                                           candidate.video.width, "height", G_TYPE_INT, candidate.video.height,
+                                           "framerate", GST_TYPE_FRACTION, candidate.video.framerate_numerator,
+                                           candidate.video.framerate_denominator, nullptr);
+            bestScore  = score;
+            bestMime   = candidate.mime;
+            bestWidth  = candidate.video.width;
+            bestHeight = candidate.video.height;
+            bestFpsNum = candidate.video.framerate_numerator;
+            bestFpsDen = candidate.video.framerate_denominator;
+        }
     }
 
-    auto const &selected = srcCaps[0].second;
+    if (!bestCaps) {
+        // Last-resort source negotiation. Keep it raw, but still request the
+        // intended call geometry/cadence rather than accepting an arbitrary
+        // low-fps default from PipeWire.
+        bestMime   = QStringLiteral("video/x-raw");
+        bestWidth  = size.width();
+        bestHeight = size.height();
+        bestFpsNum = preferredFps;
+        bestFpsDen = 1;
+        bestCaps = gst_caps_new_simple("video/x-raw", "width", G_TYPE_INT, bestWidth, "height", G_TYPE_INT,
+                                       bestHeight, "framerate", GST_TYPE_FRACTION, bestFpsNum, bestFpsDen, nullptr);
+    }
+
     if (selectedMime)
-        *selectedMime = selected.mime;
-    return gst_caps_new_simple(selected.mime.toLatin1().constData(), "width", G_TYPE_INT, selected.video.width,
-                               "height", G_TYPE_INT, selected.video.height, "framerate", GST_TYPE_FRACTION,
-                               selected.video.framerate_numerator, selected.video.framerate_denominator, nullptr);
+        *selectedMime = bestMime;
+#ifdef PIPELINE_DEBUG
+    qDebug("VideoIn selected capture mode=%s %dx%d @ %d/%d", qPrintable(bestMime), bestWidth, bestHeight, bestFpsNum,
+           bestFpsDen);
+#endif
+    return bestCaps;
 }
 
 static GstElement *make_webrtcdsp_filter()
@@ -338,7 +442,8 @@ path2::caps="video/x-raw" \
                 capsfilter   = filter_for_capture_size(captureSize);
                 selectedMime = QStringLiteral("video/x-raw");
             } else if (options.videoSize.isValid()) {
-                capsfilter = filter_for_desired_size(device, options.videoSize, &selectedMime);
+                capsfilter = filter_for_desired_size(device, options.videoSize, options.fps > 0 ? options.fps : 30,
+                                                     &selectedMime);
             }
 
             if (selectedMime.isEmpty()) {
@@ -360,10 +465,6 @@ path2::caps="video/x-raw" \
                         selectedMime = QStringLiteral("video/x-h264");
                 }
             }
-
-#ifdef PIPELINE_DEBUG
-            qDebug("VideoIn selected capture mime=%s", qPrintable(selectedMime));
-#endif
 
             const auto failVideoBin = [&]() -> GstElement * {
                 if (capsfilter) {
