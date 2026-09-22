@@ -331,6 +331,7 @@ void RtpWorker::cleanupSend()
     rtpvideoout_mutex.lock();
     rtpvideoout = false;
     rtpvideoout_mutex.unlock();
+    firstOutgoingVideoLogged_.store(false, std::memory_order_release);
 
     if (sendbin) {
         if (shared_clock && send_clock_is_shared) {
@@ -1036,6 +1037,13 @@ GstFlowReturn RtpWorker::packet_ready_rtp_video(GstAppSink *appsink)
         gst_buffer_unmap(buffer, &rtpMap);
     }
     videoStats->print_stats(int(gst_buffer_get_size(buffer)), frameBoundary, keyframe);
+    if (!firstOutgoingVideoLogged_.exchange(true, std::memory_order_acq_rel)) {
+        const qint64 ageMs = GST_CLOCK_TIME_IS_VALID(packet.presentationAge)
+            ? qint64(packet.presentationAge / GST_MSECOND)
+            : -1;
+        qDebug("first outgoing video RTP: keyframe=%d marker=%d age-ms=%lld", int(keyframe), int(frameBoundary),
+               static_cast<long long>(ageMs));
+    }
 #endif
 
     {
