@@ -111,6 +111,10 @@ int main(int argc, char **argv)
     if (!originalAudioSsrc)
         qFatal("Audio-first sender exposed no RTP SSRC");
 
+    // Preserve a transmit request made before the second media branch exists:
+    // the hot-added branch must begin forwarding RTP without another toggle.
+    worker.transmitVideo();
+
     // This used to call cleanupSend() merely because videoInput changed from
     // empty to non-empty, rebuilding audio and delaying video startup.
     worker.setInputDevices(audioSource, videoSource, QString(), QByteArray(), false);
@@ -120,7 +124,6 @@ int main(int argc, char **argv)
     if (!spinUntil(context, [&] { return result.updated || result.failed; }, 15000) || result.failed)
         qFatal("Could not hot-add video to active audio sender");
 
-    worker.transmitVideo();
     const int audioPacketsAtUpdate = result.audioPackets;
     if (!spinUntil(context, [&] {
             return result.videoPackets >= 5 && result.audioPackets >= audioPacketsAtUpdate + 5;
