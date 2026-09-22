@@ -461,8 +461,24 @@ path2::caps="video/x-raw" \
                 capsfilter   = filter_for_capture_size(captureSize);
                 selectedMime = QStringLiteral("video/x-raw");
             } else if (options.videoSize.isValid()) {
-                capsfilter = filter_for_desired_size(device, options.videoSize, options.fps > 0 ? options.fps : 30,
-                                                     &selectedMime);
+                // PipeWire devices frequently expose only range-valued caps.
+                // The legacy fixed PDevice::Caps view is then empty. Feeding a
+                // fixated discovery mode back into pipewiresrc proved brittle
+                // with real cameras: the source stayed PLAYING with no current
+                // caps or buffers. Preserve the previously working behavior for
+                // that case and let PipeWire choose a concrete raw mode; the
+                // downstream video-prep chain still scales it to the call size.
+                if (id.startsWith(QLatin1String("pipewiresrc")) && device->caps.isEmpty()
+                    && device->nativeCaps.contains(QLatin1String("video/x-raw"))) {
+                    capsfilter   = gst_caps_new_empty_simple("video/x-raw");
+                    selectedMime = QStringLiteral("video/x-raw");
+#ifdef PIPELINE_DEBUG
+                    qDebug("VideoIn PipeWire range-only caps: leaving source mode unfixed");
+#endif
+                } else {
+                    capsfilter = filter_for_desired_size(device, options.videoSize, options.fps > 0 ? options.fps : 30,
+                                                         &selectedMime);
+                }
             }
 
             if (selectedMime.isEmpty()) {
