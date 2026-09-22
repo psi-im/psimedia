@@ -259,6 +259,13 @@ if(PSIMEDIA_BUILD_TESTS)
     add_test(NAME psimedia_rtpchannel COMMAND psimedia_rtpchannel_test)
     set_tests_properties(psimedia_rtpchannel PROPERTIES TIMEOUT 10)
 
+    add_executable(psimedia_gstvideowidget_size_test ${ABS_GST_PARENT_DIR}/tests/gstvideowidget_size.cpp)
+    target_link_libraries(psimedia_gstvideowidget_size_test PRIVATE ${PROVIDERLIB})
+    add_test(NAME psimedia_gstvideowidget_size COMMAND psimedia_gstvideowidget_size_test)
+    set_tests_properties(psimedia_gstvideowidget_size PROPERTIES
+                         TIMEOUT 10
+                         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     add_executable(psimedia_rtpsessioncontext_sender_test ${ABS_GST_PARENT_DIR}/tests/rtpsessioncontext_sender.cpp)
     target_link_libraries(psimedia_rtpsessioncontext_sender_test PRIVATE ${PROVIDERLIB})
     add_test(NAME psimedia_rtpsessioncontext_sender COMMAND psimedia_rtpsessioncontext_sender_test)
