@@ -208,12 +208,14 @@ static bool video_codec_get_recv_elements(const QString &name, GstElement **dec,
 
 GstElement *bins_videoprep_create(const QSize &size, int fps, bool is_live)
 {
-    Q_UNUSED(is_live);
     GstElement *bin = gst_bin_new("videoprepbin");
 
     GstElement *videorate  = nullptr;
     GstElement *ratefilter = nullptr;
-    if (fps != -1) {
+    // For live sources an unspecified FPS means "preserve source timestamps".
+    // Only insert videorate when the caller explicitly requests a cadence (or
+    // for legacy file input, where RtpWorker supplies one).
+    if (fps > 0) {
         videorate = gst_element_factory_make("videorate", nullptr);
 
         ratefilter = gst_element_factory_make("capsfilter", nullptr);
