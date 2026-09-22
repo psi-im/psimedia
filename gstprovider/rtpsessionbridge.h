@@ -152,6 +152,13 @@ public:
     /** Request an early RTCP report/feedback packet within maxDelay ns. Owner thread only. */
     bool requestRtcp(guint64 maxDelay = 0);
 
+    /**
+     * Forward a decoder keyframe request to this RTP session. If the negotiated
+     * PT caps contain rtcp-fb-nack-pli, rtpsession schedules a PLI for @ssrc.
+     * Owner thread only.
+     */
+    bool requestRemoteKeyframe(quint32 ssrc, quint8 payloadType);
+
     quint64 receivedRtcpPackets() const { return receivedRtcpPackets_.load(); }
 
     /**
