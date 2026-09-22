@@ -19,6 +19,8 @@ struct Result {
     std::atomic_bool failed { false };
     std::atomic_bool pauseFromCallback { false };
     std::atomic_bool pausedFromCallback { false };
+    std::atomic_bool pauseVideoFromCallback { false };
+    std::atomic_bool pausedVideoFromCallback { false };
     std::atomic_int audioPackets { 0 };
     std::atomic_int videoPackets { 0 };
     std::atomic<quint32> firstAudioSsrc { 0 };
@@ -104,7 +106,12 @@ int main(int argc, char **argv)
         }
     };
     worker.cb_rtpVideoOut = [](const PsiMedia::RtpWorker::EncodedRtpPacket &, void *p) {
-        static_cast<Result *>(p)->videoPackets.fetch_add(1, std::memory_order_release);
+        auto &r = *static_cast<Result *>(p);
+        r.videoPackets.fetch_add(1, std::memory_order_release);
+        if (r.pauseVideoFromCallback.exchange(false, std::memory_order_acq_rel)) {
+            r.worker->pauseVideo();
+            r.pausedVideoFromCallback.store(true, std::memory_order_release);
+        }
     };
 
     const QString audioSource = QStringLiteral("audiotestsrc is-live=true wave=sine");
@@ -160,6 +167,16 @@ int main(int argc, char **argv)
         qFatal("Hot-added video negotiation was not committed");
     if (result.lastAudioSsrc.load(std::memory_order_acquire) != originalAudioSsrc)
         qFatal("Adding video rebuilt the live audio sender");
+
+    result.pauseVideoFromCallback.store(true, std::memory_order_release);
+    if (!spinUntil(context, [&] { return result.pausedVideoFromCallback.load(std::memory_order_acquire); }, 5000))
+        qFatal("RTP callback deadlocked while pausing video");
+    const int videoPacketsBeforeResume = result.videoPackets.load(std::memory_order_acquire);
+    worker.transmitVideo();
+    if (!spinUntil(context, [&] {
+            return result.videoPackets.load(std::memory_order_acquire) >= videoPacketsBeforeResume + 3;
+        }, 5000))
+        qFatal("Video sender did not resume after callback pause");
 
     worker.stop();
     if (!spinUntil(context, [&] { return result.stopped.load(std::memory_order_acquire); }))
