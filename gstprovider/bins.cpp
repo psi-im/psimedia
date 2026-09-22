@@ -236,9 +236,15 @@ GstElement *bins_videoprep_create(const QSize &size, int fps, bool is_live)
         videoscale  = gst_element_factory_make("videoscale", nullptr);
         scalefilter = gst_element_factory_make("capsfilter", nullptr);
 
+        // Keep the source display aspect ratio even when the capture device
+        // cannot provide the exact call canvas. videoscale will letterbox
+        // rather than stretch, and square PAR makes the encoded geometry
+        // unambiguous to remote VP8 decoders.
+        g_object_set(G_OBJECT(videoscale), "add-borders", TRUE, nullptr);
+
         GstCaps      *caps = gst_caps_new_empty();
         GstStructure *cs   = gst_structure_new("video/x-raw", "width", G_TYPE_INT, size.width(), "height", G_TYPE_INT,
-                                               size.height(), NULL);
+                                               size.height(), "pixel-aspect-ratio", GST_TYPE_FRACTION, 1, 1, NULL);
 
         gst_caps_append_structure(caps, cs);
 
