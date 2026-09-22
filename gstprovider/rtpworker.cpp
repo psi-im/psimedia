@@ -1028,9 +1028,14 @@ bool RtpWorker::setupSendRecv()
                 return false;
         }
     } else {
-        // The Jingle adapter negotiates endpoints serially. Audio may therefore
-        // start the receive graph before video negotiation is applied. Add the
-        // missing VP8 receive branch without rebuilding the live audio graph.
+        // The Jingle adapter negotiates endpoints serially and the order is not
+        // stable across peers. Whichever media type arrives second must be
+        // grafted onto the already-running receive pipeline without tearing
+        // down the first one.
+        if (!localAudioParams.isEmpty() && !remoteAudioPayloadInfo.isEmpty() && !audiortpsrc) {
+            if (!addAudioRecvChain())
+                return false;
+        }
         if (!localVideoParams.isEmpty() && !remoteVideoPayloadInfo.isEmpty() && !videortpsrc) {
             if (!addVideoRecvChain())
                 return false;
@@ -1545,6 +1550,175 @@ fail1:
     recv_in_use = false;
 
     return false;
+}
+
+bool RtpWorker::addAudioRecvChain()
+{
+    if (!recvbin || !recv_in_use)
+        return false;
+
+    {
+        QMutexLocker locker(&audiortpsrc_mutex);
+        if (audiortpsrc)
+            return true;
+    }
+
+    int opusAt = -1;
+    for (int n = 0; n < remoteAudioPayloadInfo.count(); ++n) {
+        const auto &payload = remoteAudioPayloadInfo[n];
+        if (payload.name.compare(QLatin1String("OPUS"), Qt::CaseInsensitive) == 0
+            && payload.clockrate == OpusRtpClockRate) {
+            opusAt = n;
+            break;
+        }
+    }
+    if (opusAt < 0)
+        return false;
+
+#ifdef RTPWORKER_DEBUG
+    qDebug("adding audio recv to active pipeline");
+#endif
+
+    GstStructure *structure = payloadInfoToStructure(remoteAudioPayloadInfo[opusAt], "audio");
+    if (!structure)
+        return false;
+
+    static quint64 audioRecvSourceSerial = 0;
+    const QByteArray sourceName
+        = QByteArrayLiteral("psimedia_audio_rtp_recv_") + QByteArray::number(++audioRecvSourceSerial);
+    GstElement *source = gst_element_factory_make("appsrc", sourceName.constData());
+    if (!source) {
+        gst_structure_free(structure);
+        return false;
+    }
+
+    GstCaps *caps = gst_caps_new_empty();
+    gst_caps_append_structure(caps, structure);
+    g_object_set(G_OBJECT(source), "caps", caps, nullptr);
+    gst_caps_unref(caps);
+
+    const QString codec = remoteAudioPayloadInfo[opusAt].name.toLower();
+    GstElement *decoder = bins_audiodec_create(codec);
+    GstElement *volume  = gst_element_factory_make("volume", nullptr);
+    GstElement *convert = gst_element_factory_make("audioconvert", nullptr);
+    GstElement *resample = gst_element_factory_make("audioresample", nullptr);
+
+    PipelineDeviceContext *newAudioSink = nullptr;
+    GstElement *audioout = nullptr;
+    if (!aout.isEmpty()) {
+        newAudioSink
+            = PipelineDeviceContext::create(recv_pipelineContext, aout, PDevice::AudioOut, hardwareDeviceMonitor_);
+        if (newAudioSink)
+            audioout = newAudioSink->element();
+    } else {
+        audioout = gst_element_factory_make("fakesink", nullptr);
+    }
+
+    if (!decoder || !volume || !convert || !resample || !audioout) {
+        if (decoder)
+            gst_object_unref(decoder);
+        if (volume)
+            gst_object_unref(volume);
+        if (convert)
+            gst_object_unref(convert);
+        if (resample)
+            gst_object_unref(resample);
+        if (!newAudioSink && audioout)
+            gst_object_unref(audioout);
+        delete newAudioSink;
+        gst_object_unref(source);
+        return false;
+    }
+
+    g_object_set(G_OBJECT(volume), "volume", double(outputVolume) / 100.0, nullptr);
+
+    if (newAudioSink && pd_audiosrc) {
+        PipelineDeviceOptions opts = pd_audiosrc->options();
+        opts.echoProberName        = newAudioSink->options().echoProberName;
+        opts.aec                   = !opts.echoProberName.isEmpty();
+        pd_audiosrc->setOptions(opts);
+    }
+
+    gst_bin_add_many(GST_BIN(recvbin), source, decoder, volume, convert, resample, nullptr);
+    if (!gst_element_link_many(source, decoder, volume, convert, resample, nullptr)) {
+        gst_bin_remove_many(GST_BIN(recvbin), source, decoder, volume, convert, resample, nullptr);
+        if (!newAudioSink)
+            gst_object_unref(audioout);
+        delete newAudioSink;
+        return false;
+    }
+
+    bool linked = false;
+    if (newAudioSink) {
+        GstPad *srcPad = gst_element_get_static_pad(resample, "src");
+        GstPad *ghost = srcPad ? gst_ghost_pad_new("src", srcPad) : nullptr;
+        if (srcPad)
+            gst_object_unref(srcPad);
+        if (ghost && gst_element_add_pad(recvbin, ghost))
+            linked = gst_element_link(recvbin, audioout) != FALSE;
+        else if (ghost)
+            gst_object_unref(ghost);
+    } else {
+        gst_bin_add(GST_BIN(recvbin), audioout);
+        linked = gst_element_link(resample, audioout) != FALSE;
+    }
+
+    if (!linked) {
+        gst_element_set_state(source, GST_STATE_NULL);
+        gst_element_set_state(decoder, GST_STATE_NULL);
+        gst_element_set_state(volume, GST_STATE_NULL);
+        gst_element_set_state(convert, GST_STATE_NULL);
+        gst_element_set_state(resample, GST_STATE_NULL);
+        if (!newAudioSink) {
+            gst_element_set_state(audioout, GST_STATE_NULL);
+            gst_bin_remove(GST_BIN(recvbin), audioout);
+        } else {
+            GstPad *ghost = gst_element_get_static_pad(recvbin, "src");
+            if (ghost)
+                gst_element_remove_pad(recvbin, ghost);
+        }
+        gst_bin_remove_many(GST_BIN(recvbin), source, decoder, volume, convert, resample, nullptr);
+        delete newAudioSink;
+        return false;
+    }
+
+    const bool synced = gst_element_sync_state_with_parent(source)
+        && gst_element_sync_state_with_parent(decoder)
+        && gst_element_sync_state_with_parent(volume)
+        && gst_element_sync_state_with_parent(convert)
+        && gst_element_sync_state_with_parent(resample)
+        && (newAudioSink ? gst_element_sync_state_with_parent(audioout)
+                         : gst_element_sync_state_with_parent(audioout));
+    if (!synced) {
+        gst_element_set_state(source, GST_STATE_NULL);
+        gst_element_set_state(decoder, GST_STATE_NULL);
+        gst_element_set_state(volume, GST_STATE_NULL);
+        gst_element_set_state(convert, GST_STATE_NULL);
+        gst_element_set_state(resample, GST_STATE_NULL);
+        gst_element_set_state(audioout, GST_STATE_NULL);
+        if (!newAudioSink)
+            gst_bin_remove(GST_BIN(recvbin), audioout);
+        else {
+            GstPad *ghost = gst_element_get_static_pad(recvbin, "src");
+            if (ghost)
+                gst_element_remove_pad(recvbin, ghost);
+        }
+        gst_bin_remove_many(GST_BIN(recvbin), source, decoder, volume, convert, resample, nullptr);
+        delete newAudioSink;
+        return false;
+    }
+
+    {
+        QMutexLocker locker(&audiortpsrc_mutex);
+        audiortpsrc = source;
+    }
+    {
+        QMutexLocker locker(&volumeout_mutex);
+        volumeout = volume;
+    }
+    pd_audiosink = newAudioSink;
+    actual_remoteAudioPayloadInfo = remoteAudioPayloadInfo;
+    return true;
 }
 
 bool RtpWorker::addVideoRecvChain()
