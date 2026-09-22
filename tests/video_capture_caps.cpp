@@ -42,6 +42,44 @@ void expectMode(const QString &nativeCaps, const QString &expectedMime, int widt
         qFatal("Unexpected selected capture geometry/cadence");
 }
 
+void expectSanitizedPipeWireCaps()
+{
+    QString selectedMime;
+    GstCaps *caps = PsiMedia::selectVideoCaptureCaps(
+        QStringLiteral(
+            "video/x-raw(memory:DMABuf),format=(string){ NV12, YUY2 },"
+            "width=(int)[320,1920],height=(int)[240,1080],framerate=(fraction)[5/1,30/1]"),
+        QSize(640, 480), 30, &selectedMime);
+    if (!caps)
+        qFatal("Capture selector returned no caps for PipeWire feature caps");
+    if (selectedMime != QStringLiteral("video/x-raw"))
+        qFatal("Unexpected MIME for PipeWire feature caps");
+
+    const GstStructure *s = gst_caps_get_structure(caps, 0);
+    const GstCapsFeatures *features = gst_caps_get_features(caps, 0);
+    if (gst_caps_features_contains(features, "memory:DMABuf")) {
+        gst_caps_unref(caps);
+        qFatal("Discovery-only DMABuf feature leaked into source filter");
+    }
+    if (gst_structure_has_field(s, "format")) {
+        gst_caps_unref(caps);
+        qFatal("Discovery-only format list leaked into source filter");
+    }
+
+    int width = 0;
+    int height = 0;
+    int fpsNum = 0;
+    int fpsDen = 0;
+    if (!gst_structure_get_int(s, "width", &width)
+        || !gst_structure_get_int(s, "height", &height)
+        || !gst_structure_get_fraction(s, "framerate", &fpsNum, &fpsDen)
+        || width != 640 || height != 480 || fpsNum != 30 || fpsDen != 1) {
+        gst_caps_unref(caps);
+        qFatal("Sanitized PipeWire caps lost the selected fixed mode");
+    }
+    gst_caps_unref(caps);
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -76,6 +114,10 @@ int main(int argc, char **argv)
                    "video/x-raw,width=(int)640,height=(int)480,framerate=(fraction)5/1;"
                    "video/x-raw,width=(int)1280,height=(int)720,framerate=(fraction)30/1"),
                QStringLiteral("video/x-raw"), 1280, 720, 30, 1);
+
+    // Device discovery caps may carry PipeWire memory features and format
+    // lists that are not safe to reuse as a live source filter.
+    expectSanitizedPipeWireCaps();
 
     qInfo("Video capture caps selection regression passed");
     return 0;
