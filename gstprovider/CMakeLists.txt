@@ -234,6 +234,11 @@ if(PSIMEDIA_BUILD_TESTS)
         set_tests_properties(psimedia_securertp PROPERTIES TIMEOUT 15)
     endif()
 
+    add_executable(psimedia_rwcontrol_teardown_test ${ABS_GST_PARENT_DIR}/tests/rwcontrol_teardown.cpp)
+    target_link_libraries(psimedia_rwcontrol_teardown_test PRIVATE ${PROVIDERLIB})
+    add_test(NAME psimedia_rwcontrol_teardown COMMAND psimedia_rwcontrol_teardown_test)
+    set_tests_properties(psimedia_rwcontrol_teardown PROPERTIES TIMEOUT 10)
+
     add_executable(psimedia_rtpworkerownership_test ${ABS_GST_PARENT_DIR}/tests/rtpworkerownership.cpp)
     target_link_libraries(psimedia_rtpworkerownership_test PRIVATE ${PROVIDERLIB})
     add_test(NAME psimedia_rtpworkerownership COMMAND psimedia_rtpworkerownership_test)
