@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: psi-im/psi
-          ref: ai/jingle-srtp-psimedia
+          ref: e80d262ec72ca247197f183e148b2919ea4d1f55
           path: _psi
           fetch-depth: 1
 
