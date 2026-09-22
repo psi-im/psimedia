@@ -244,6 +244,11 @@ if(PSIMEDIA_BUILD_TESTS)
     add_test(NAME psimedia_rtpworkerownership COMMAND psimedia_rtpworkerownership_test)
     set_tests_properties(psimedia_rtpworkerownership PROPERTIES TIMEOUT 20)
 
+    add_executable(psimedia_rtpworker_receive_order_test ${ABS_GST_PARENT_DIR}/tests/rtpworker_receive_order.cpp)
+    target_link_libraries(psimedia_rtpworker_receive_order_test PRIVATE ${PROVIDERLIB})
+    add_test(NAME psimedia_rtpworker_receive_order COMMAND psimedia_rtpworker_receive_order_test)
+    set_tests_properties(psimedia_rtpworker_receive_order PROPERTIES TIMEOUT 20)
+
     add_executable(psimedia_opusrtppay_test ${ABS_GST_PARENT_DIR}/tests/opusrtppay.cpp)
     target_link_libraries(psimedia_opusrtppay_test PRIVATE ${PROVIDERLIB})
     add_test(NAME psimedia_opusrtppay COMMAND psimedia_opusrtppay_test)
