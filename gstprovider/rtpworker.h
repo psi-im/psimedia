@@ -122,6 +122,7 @@ public:
     void (*cb_outputFrame)(const Frame &frame, void *app)                         = nullptr;
     void (*cb_rtpAudioOut)(const EncodedRtpPacket &packet, void *app)             = nullptr;
     void (*cb_rtpVideoOut)(const EncodedRtpPacket &packet, void *app)             = nullptr;
+    void (*cb_videoKeyframeRequest)(quint32 ssrc, quint8 payloadType, void *app)   = nullptr;
 
     // empty record packet = EOF/error
     void (*cb_recordData)(const QByteArray &packet, void *app) = nullptr;
@@ -180,6 +181,7 @@ private:
     static void          cb_packet_ready_eos_stub(GstAppSink *appsink, gpointer data);
     static gboolean      cb_packet_ready_event_stub(GstAppSink *appsink, gpointer data);
     static gboolean      cb_packet_ready_allocation_stub(GstAppSink *appsink, GstQuery *query, gpointer user_data);
+    static GstPadProbeReturn cb_video_keyframe_event(GstPad *pad, GstPadProbeInfo *info, gpointer data);
     static gboolean      cb_fileReady(gpointer data);
 
     gboolean      doStart();
@@ -193,6 +195,8 @@ private:
     GstFlowReturn show_frame_output(GstAppSink *appsink);
     GstFlowReturn packet_ready_rtp_audio(GstAppSink *appsink);
     GstFlowReturn packet_ready_rtp_video(GstAppSink *appsink);
+    GstPadProbeReturn video_keyframe_event(GstPad *pad, GstPadProbeInfo *info);
+    bool          installVideoKeyframeProbe(GstElement *source);
     gboolean      fileReady();
 
     bool        setupSendRecv();
