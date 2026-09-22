@@ -72,6 +72,10 @@ public:
     bool receiveProtectedPacket(const PSecureRtpPacket &packet);
 
     bool          requestRtcp(guint64 maxDelay = 0) { return bridge_.requestRtcp(maxDelay); }
+    bool          requestRemoteKeyframe(quint32 ssrc, quint8 payloadType)
+    {
+        return bridge_.requestRemoteKeyframe(ssrc, payloadType);
+    }
     void          setRtcpMinimumInterval(guint64 interval) { bridge_.setRtcpMinimumInterval(interval); }
     quint64       receivedRtcpPackets() const { return bridge_.receivedRtcpPackets(); }
     GstStructure *sessionStats() const { return bridge_.sessionStats(); }
