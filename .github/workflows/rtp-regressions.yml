@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'jingle/**'
+      - 'ai/jingle/**'
   pull_request:
   workflow_dispatch:
 
