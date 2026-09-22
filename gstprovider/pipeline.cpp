@@ -217,9 +217,19 @@ static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, int p
                 continue;
             }
 
-            GstCaps *candidate = gst_caps_new_empty();
-            GstCapsFeatures *features = gst_caps_features_copy(gst_caps_get_features(nativeCaps, i));
-            gst_caps_append_structure_full(candidate, fixed, features);
+            // GstDevice caps describe device capabilities, not necessarily a
+            // filter that is safe to push back into the created source element.
+            // PipeWire in particular may advertise memory features (for example
+            // DMABuf) and extra format fields that are valid for discovery but
+            // make a dynamically created pipewiresrc fail to negotiate when
+            // copied verbatim. Use the full caps only for mode selection, then
+            // rebuild a minimal fixed filter in normal system memory.
+            GstCaps *candidate = gst_caps_new_simple(mime.toLatin1().constData(),
+                                                     "width", G_TYPE_INT, width,
+                                                     "height", G_TYPE_INT, height,
+                                                     "framerate", GST_TYPE_FRACTION, fpsNum, fpsDen,
+                                                     nullptr);
+            gst_structure_free(fixed);
 
             if (bestCaps)
                 gst_caps_unref(bestCaps);
