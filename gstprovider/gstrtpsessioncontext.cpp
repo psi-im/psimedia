@@ -620,6 +620,12 @@ bool GstRtpSessionContext::configureSecureGroup(const QByteArray &associationId)
             if (packet.rawValue.isEmpty())
                 return;
 
+            if (!audio && qEnvironmentVariableIsSet("PSIMEDIA_TRACE_SECURE_RTP")) {
+                static int tracedVideoPackets = 0;
+                if (tracedVideoPackets++ < 4)
+                    qInfo() << "PSIMEDIA_TRACE secure-video-endpoint bytes=" << packet.rawValue.size();
+            }
+
             QMutexLocker locker(&write_mutex);
             if (!allow_writes || !control)
                 return;
