@@ -136,16 +136,27 @@ static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, QStri
     if (selectedMime)
         selectedMime->clear();
 
+    const auto frameRate = [](const PDevice::Caps &c) {
+        return c.video.framerate_denominator > 0
+            ? double(c.video.framerate_numerator) / c.video.framerate_denominator
+            : 0.0;
+    };
+
     std::vector<std::pair<double, PDevice::Caps>> srcCaps;
     std::ranges::copy(
         dev->caps
             | views::filter([](auto const &c) {
-                  return c.video.framerate_denominator > 0
-                      && double(c.video.framerate_numerator) / c.video.framerate_denominator >= 24.0;
+                  return c.video.framerate_denominator > 0 && c.video.framerate_numerator > 0;
               })
             | views::transform([&](auto const &c) { return std::make_pair(capsScore(c), c); }),
         std::back_inserter(srcCaps));
-    std::ranges::sort(srcCaps, [](const auto &a, const auto &b) { return a.first < b.first; });
+    std::ranges::sort(srcCaps, [&](const auto &a, const auto &b) {
+        if (a.first != b.first)
+            return a.first < b.first;
+        // For equally suitable resolutions/formats prefer the higher native
+        // rate, but never discard a perfectly valid 15/17/20 fps camera.
+        return frameRate(a.second) > frameRate(b.second);
+    });
 
     if (srcCaps.empty()) {
         // PipeWire/V4L2 device caps are frequently expressed as ranges rather
@@ -162,7 +173,8 @@ static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, QStri
     if (selectedMime)
         *selectedMime = selected.mime;
     return gst_caps_new_simple(selected.mime.toLatin1().constData(), "width", G_TYPE_INT, selected.video.width,
-                               "height", G_TYPE_INT, selected.video.height, nullptr);
+                               "height", G_TYPE_INT, selected.video.height, "framerate", GST_TYPE_FRACTION,
+                               selected.video.framerate_numerator, selected.video.framerate_denominator, nullptr);
 }
 
 static GstElement *make_webrtcdsp_filter()
