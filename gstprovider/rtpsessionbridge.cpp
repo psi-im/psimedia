@@ -18,7 +18,9 @@
 #include <QThread>
 #include <QTimer>
 
+#include <algorithm>
 #include <cstring>
+#include <utility>
 
 namespace PsiMedia {
 namespace {
