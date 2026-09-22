@@ -3,6 +3,7 @@
 #include "../gstprovider/bins.h"
 
 #include <QCoreApplication>
+#include <QSize>
 #include <QtGlobal>
 
 #include <gst/gst.h>
