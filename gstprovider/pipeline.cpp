@@ -269,8 +269,19 @@ private:
 
             auto device = deviceMonitor->device(id);
             if (!device) {
-                gst_object_unref(deviceElement);
-                return nullptr;
+                // Synthetic/custom GStreamer sources (for example videotestsrc)
+                // do not have hardware DeviceMonitor metadata. Accept a raw-video
+                // source directly; real enumerated cameras keep the caps/decode
+                // selection path below.
+                GstPad *pad = gst_element_get_static_pad(deviceElement, "src");
+                if (!pad) {
+                    gst_object_unref(deviceElement);
+                    return nullptr;
+                }
+                gst_bin_add(GST_BIN(bin), deviceElement);
+                gst_element_add_pad(bin, gst_ghost_pad_new("src", pad));
+                gst_object_unref(pad);
+                return bin;
             }
 
 #ifdef Q_OS_MAC
