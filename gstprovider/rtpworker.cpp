@@ -2141,23 +2141,33 @@ bool RtpWorker::addVideoSendChain()
     }
 
     pd_videosrc->activate();
-    if (!waitForCurrentCaps(videortppay, 5000)) {
-        cleanupSend();
-        return false;
-    }
-#ifdef RTPWORKER_DEBUG
-    logElementSrcCaps("VideoIn negotiated caps", videosrc);
-#endif
 
-    localAudioPayloadInfo.clear();
-    localVideoPayloadInfo.clear();
-    if (!getCaps()) {
-        cleanupSend();
-        return false;
+    // A real live camera (notably PipeWire) may need several seconds before
+    // it produces negotiated current caps. Do not block the GLib owner context
+    // waiting for the first frame: that can delay the very source startup we
+    // are waiting for and used to turn a slow hot-add into a fatal sender
+    // teardown after five seconds. The RTP payload identity is already known
+    // from the negotiated preferences and the payloader PT selection, so
+    // commit that immediately and let the live branch start asynchronously.
+    PPayloadInfo videoPayload;
+    videoPayload.id        = Vp8PayloadType;
+    videoPayload.name      = QStringLiteral("VP8");
+    videoPayload.clockrate = Vp8RtpClockRate;
+    for (const auto &remote : std::as_const(remoteVideoPayloadInfo)) {
+        if (remote.name.compare(QLatin1String("VP8"), Qt::CaseInsensitive) == 0
+            && remote.clockrate == Vp8RtpClockRate) {
+            videoPayload.id = remote.id;
+            break;
+        }
     }
 
-    actual_localAudioPayloadInfo = localAudioPayloadInfo;
+    localVideoPayloadInfo = { videoPayload };
+    canTransmitVideo      = true;
     actual_localVideoPayloadInfo = localVideoPayloadInfo;
+
+#ifdef RTPWORKER_DEBUG
+    logElementSrcCaps("VideoIn caps after hot-add", videosrc);
+#endif
     return true;
 }
 
