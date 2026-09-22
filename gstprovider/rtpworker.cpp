@@ -21,6 +21,7 @@
 #include "rtpworker.h"
 
 #include <QDir>
+#include <QDebug>
 #include <QElapsedTimer>
 #include <QStringList>
 #include <cstring>
