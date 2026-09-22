@@ -642,18 +642,12 @@ int main(int argc, char **argv)
         return 16;
     }
 
-    PsiMedia::PVideoParams localVideo;
-    localVideo.codec = QStringLiteral("vp8");
-    localVideo.size  = QSize(320, 240);
-    localVideo.fps   = 15;
-    videoSession->setLocalVideoPreferences({ localVideo });
-
-    PsiMedia::PPayloadInfo remoteVp8;
-    remoteVp8.id        = 96;
-    remoteVp8.name      = QStringLiteral("VP8");
-    remoteVp8.clockrate = 90000;
-    videoSession->setRemoteVideoPreferences({ remoteVp8 });
-    videoChannel->setEnabled(true);
+    // Reproduce the Jingle adapter ordering: audio is negotiated first and
+    // starts the receive graph; video is negotiated only after that session is
+    // already running.
+    videoSession->setLocalAudioPreferences({ rawAudio });
+    videoSession->setRemoteAudioPreferences({ remoteOpus });
+    videoSession->audioRtpChannel()->setEnabled(true);
 
     TestVideoContext decodedVideo;
     videoSession->setVideoOutputWidget(&decodedVideo);
@@ -680,6 +674,44 @@ int main(int argc, char **argv)
     videoStartTimer.stop();
     if (videoStartFailed || videoStartTimedOut) {
         qCritical() << "Synthetic video test session did not start";
+        return 16;
+    }
+
+    PsiMedia::PVideoParams localVideo;
+    localVideo.codec = QStringLiteral("vp8");
+    localVideo.size  = QSize(320, 240);
+    localVideo.fps   = 15;
+    videoSession->setLocalVideoPreferences({ localVideo });
+
+    PsiMedia::PPayloadInfo remoteVp8;
+    remoteVp8.id        = 96;
+    remoteVp8.name      = QStringLiteral("VP8");
+    remoteVp8.clockrate = 90000;
+    videoSession->setRemoteVideoPreferences({ remoteVp8 });
+    videoChannel->setEnabled(true);
+
+    bool       videoUpdateFailed   = false;
+    bool       videoUpdateTimedOut = false;
+    QEventLoop videoUpdateLoop;
+    QTimer     videoUpdateTimer;
+    videoUpdateTimer.setSingleShot(true);
+    QObject::connect(&videoUpdateTimer, &QTimer::timeout, &videoUpdateLoop, [&]() {
+        videoUpdateTimedOut = true;
+        videoUpdateLoop.quit();
+    });
+    QObject::connect(videoGstSession, &PsiMedia::GstRtpSessionContext::preferencesUpdated, &videoUpdateLoop,
+                     &QEventLoop::quit);
+    QObject::connect(videoGstSession, &PsiMedia::GstRtpSessionContext::error, &videoUpdateLoop, [&]() {
+        videoUpdateFailed = true;
+        videoUpdateLoop.quit();
+    });
+
+    videoUpdateTimer.start(10000);
+    videoSession->updatePreferences();
+    videoUpdateLoop.exec();
+    videoUpdateTimer.stop();
+    if (videoUpdateFailed || videoUpdateTimedOut) {
+        qCritical() << "Adding video to the running audio receive graph failed";
         return 16;
     }
 
