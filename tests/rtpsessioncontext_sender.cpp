@@ -67,12 +67,11 @@ bool isExpectedRtpPacket(const PsiMedia::PRtpPacket &packet)
 }
 
 bool waitForPayloadPacket(PsiMedia::RtpChannelContext *channel, int payloadType,
-                          PsiMedia::RtpSessionContext *session, int timeoutMs = 10000)
+                          PsiMedia::GstRtpSessionContext *session, int timeoutMs = 10000)
 {
     bool failed = false;
     const auto errorConnection = QObject::connect(
-        session->qobject(), SIGNAL(error()), QCoreApplication::instance(), SLOT(quit()), Qt::DirectConnection);
-    Q_UNUSED(errorConnection);
+        session, &PsiMedia::GstRtpSessionContext::error, [&]() { failed = true; });
 
     QElapsedTimer timer;
     timer.start();
@@ -636,7 +635,7 @@ int main(int argc, char **argv)
         return 16;
     }
     videoSession->transmitVideo();
-    if (!waitForPayloadPacket(videoChannel, 96, videoSession.get())) {
+    if (!waitForPayloadPacket(videoChannel, 96, videoGstSession)) {
         qCritical() << "Synthetic video input did not produce VP8 RTP";
         return 16;
     }
