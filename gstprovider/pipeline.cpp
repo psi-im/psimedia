@@ -151,10 +151,11 @@ static double videoCaptureScore(const QSize &desiredSize, int preferredFps, cons
     if (mimeRank < 0)
         return std::numeric_limits<double>::infinity();
 
-    // Aspect ratio is the strongest constraint: do not trade distortion for
-    // nominal resolution. Smooth capture comes next, then size. MIME is only a
-    // tie breaker, preferring raw to avoid an unnecessary decode.
-    return aspectError * 1000.0 + fpsError * 100.0 + (widthError + heightError) * 10.0 + mimeRank * 0.01;
+    // Capture cadence is the strongest quality constraint. Geometry is
+    // secondary because videoprep preserves display aspect ratio with borders,
+    // so a smooth nearby mode is better than an exact 5 fps mode. MIME is only
+    // a tie breaker, preferring raw to avoid an unnecessary decode.
+    return fpsError * 100.0 + aspectError * 20.0 + (widthError + heightError) * 10.0 + mimeRank * 0.01;
 }
 
 static GstCaps *filter_for_desired_size(GstDevice *dev, const QSize &size, int preferredFps, QString *selectedMime)
