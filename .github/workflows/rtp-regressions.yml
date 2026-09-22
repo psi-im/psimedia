@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  PSI_SRTP_REF: 889d33390a2c89ced3755c3d56c79c40f284022e
+  PSI_SRTP_REF: 1ae835b8496ae71ec966c2e6a613844e991aa4f7
 
 concurrency:
   group: psimedia-rtp-${{ github.event.pull_request.number || github.ref }}
@@ -219,23 +219,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: ${{ env.PSI_SRTP_REF }}
+          path: _psi
+          fetch-depth: 1
+
       - name: Install Qt, GStreamer and libSRTP
         run: brew install cmake ninja qt gstreamer srtp pkgconf
 
-      - name: Configure secure provider
+      - name: Configure secure Psi media plugin
         shell: bash
         run: |
           cmake -S . -B build-macos -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage" \
             -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" \
             -DQT_DEFAULT_MAJOR_VERSION=6 \
             -DBUILD_DEMO=OFF \
-            -DBUILD_PSIPLUGIN=OFF \
+            -DBUILD_PSIPLUGIN=ON \
             -DPSIMEDIA_BUILD_TESTS=OFF \
-            -DPSIMEDIA_ENABLE_SRTP=ON
+            -DPSIMEDIA_ENABLE_SRTP=ON \
+            -DPLUGINS_ROOT_DIR="$PWD/_psi/plugins"
 
-      - name: Build secure provider
-        run: cmake --build build-macos --parallel 2
+      - name: Build and install secure Psi media plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build-macos --parallel 2
+          cmake --install build-macos
+
+      - name: Verify installed macOS SRTP runtime link
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin=$(find stage -type f -name '*mediaplugin*.dylib' -print -quit)
+          test -n "$plugin"
+          echo "MACOS_MEDIA_PLUGIN=$plugin"
+          otool -L "$plugin" | tee plugin-dependencies.txt
+          grep -Eiq 'srtp' plugin-dependencies.txt
 
   ubuntu-deb-package:
     strategy:
