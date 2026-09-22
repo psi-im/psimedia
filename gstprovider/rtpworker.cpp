@@ -997,9 +997,9 @@ bool RtpWorker::setupSendRecv()
     //   - remote payloadinfo indicates desire to receive (we need this
     //     to support vp8)
     //   - once sending or receiving is started, topology changes are
-    //     generally rejected. The negotiated audio->A/V receive transition is
-    //     the one supported exception: a VP8 branch may be added in place while
-    //     the existing audio receive graph keeps running. Removal remains unsupported.
+    //     generally rejected. The negotiated audio/video receive transition is
+    //     the supported exception: the second media branch may be added in
+    //     place while the first keeps running. Removal remains unsupported.
     //   - once sending or receiving is started, codecs can't be changed
     //     (changes will be rejected).  one exception: remote  vp8
     //     config can be updated.
@@ -1676,8 +1676,10 @@ bool RtpWorker::addAudioRecvChain()
             gst_bin_remove(GST_BIN(recvbin), audioout);
         } else {
             GstPad *ghost = gst_element_get_static_pad(recvbin, "src");
-            if (ghost)
+            if (ghost) {
                 gst_element_remove_pad(recvbin, ghost);
+                gst_object_unref(ghost);
+            }
         }
         gst_bin_remove_many(GST_BIN(recvbin), source, decoder, volume, convert, resample, nullptr);
         delete newAudioSink;
@@ -1689,8 +1691,7 @@ bool RtpWorker::addAudioRecvChain()
         && gst_element_sync_state_with_parent(volume)
         && gst_element_sync_state_with_parent(convert)
         && gst_element_sync_state_with_parent(resample)
-        && (newAudioSink ? gst_element_sync_state_with_parent(audioout)
-                         : gst_element_sync_state_with_parent(audioout));
+        && gst_element_sync_state_with_parent(audioout);
     if (!synced) {
         gst_element_set_state(source, GST_STATE_NULL);
         gst_element_set_state(decoder, GST_STATE_NULL);
