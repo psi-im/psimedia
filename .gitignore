@@ -1,4 +1,5 @@
 builddir/
+build/
 configure*
 *.pro.user
 .qmake.stash

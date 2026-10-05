@@ -19,6 +19,7 @@
  */
 
 #include "rtpworker.h"
+#include "rtpappsrc_p.h"
 
 #include <QDir>
 #include <QElapsedTimer>
@@ -156,6 +157,8 @@ static void logElementSrcCaps(const char *label, GstElement *element)
 class Stats {
 public:
     QString       name;
+    const void   *owner;
+    GstClockTime  maximumPresentationAge = GST_CLOCK_TIME_NONE;
     int           calls;
     int           sizes[30];
     int           sizes_at;
@@ -163,13 +166,15 @@ public:
     int           keyframes;
     QElapsedTimer calltime;
 
-    Stats(const QString &_name) : name(_name), calls(-1), sizes_at(0), frames(0), keyframes(0)
+    Stats(const QString &_name, const void *worker) :
+        name(_name), owner(worker), calls(-1), sizes_at(0), frames(0), keyframes(0)
     {
         for (int k = 0; k < 30; ++k)
             sizes[k] = 0;
     }
 
-    void print_stats(int current_size, bool frameBoundary = false, bool keyframe = false)
+    void print_stats(int current_size, bool frameBoundary = false, bool keyframe = false,
+                     GstClockTime presentationAge = GST_CLOCK_TIME_NONE)
     {
         // -2 means quit
         if (calls == -2)
@@ -180,6 +185,9 @@ public:
             --sizes_at;
         }
         sizes[sizes_at++] = current_size;
+        if (GST_CLOCK_TIME_IS_VALID(presentationAge)
+            && (!GST_CLOCK_TIME_IS_VALID(maximumPresentationAge) || presentationAge > maximumPresentationAge))
+            maximumPresentationAge = presentationAge;
         if (frameBoundary)
             ++frames;
         if (keyframe)
@@ -197,19 +205,30 @@ public:
             for (int n = 0; n < sizes_at; ++n)
                 avg += sizes[n];
             avg /= sizes_at;
-            const qint64 elapsedMs   = calltime.elapsed();
-            int          bytesPerSec = (calls * avg) / 10;
-            int          bps         = bytesPerSec * 10;
-            int          kbps        = bps / 1000;
-            calls                    = -2;
-            calltime.restart();
-            if (frames > 0) {
-                const double fps = elapsedMs > 0 ? (double(frames) * 1000.0 / double(elapsedMs)) : 0.0;
-                qDebug("%s: average packet size=%d, kbps=%d, rtp-fps=%.1f, keyframes=%d", qPrintable(name), avg, kbps,
-                       fps, keyframes);
+            const qint64 elapsedMs     = calltime.elapsed();
+            int          bytesPerSec   = (calls * avg) / 10;
+            int          bps           = bytesPerSec * 10;
+            int          kbps          = bps / 1000;
+            const bool   videoInterval = frames > 0;
+            if (videoInterval) {
+                const double fps   = elapsedMs > 0 ? (double(frames) * 1000.0 / double(elapsedMs)) : 0.0;
+                const qint64 ageMs = GST_CLOCK_TIME_IS_VALID(maximumPresentationAge)
+                    ? qint64(maximumPresentationAge / GST_MSECOND)
+                    : -1;
+                qDebug("%s worker=%p: average packet size=%d, kbps=%d, rtp-fps=%.1f, keyframes=%d, max-age-ms=%lld",
+                       qPrintable(name), owner, avg, kbps, fps, keyframes, static_cast<long long>(ageMs));
+                if (ageMs >= 1000)
+                    qWarning("psimedia worker=%p video capture/encoder backlog max-age-ms=%lld", owner,
+                             static_cast<long long>(ageMs));
             } else {
-                qDebug("%s: average packet size=%d, kbps=%d", qPrintable(name), avg, kbps);
+                qDebug("%s worker=%p: average packet size=%d, kbps=%d", qPrintable(name), owner, avg, kbps);
             }
+            // Keep reporting video age, so a backlog arising after startup is
+            // visible. One message per ten seconds per worker avoids frame spam.
+            calls    = videoInterval ? 0 : -2;
+            sizes_at = frames = keyframes = 0;
+            maximumPresentationAge        = GST_CLOCK_TIME_NONE;
+            calltime.restart();
         } else
             ++calls;
     }
@@ -239,20 +258,6 @@ static void dump_pipeline(GstElement *in, int indent)
 //----------------------------------------------------------------------------
 // RtpWorker
 //----------------------------------------------------------------------------
-static int              worker_refs          = 0;
-static PipelineContext *send_pipelineContext = nullptr;
-static PipelineContext *recv_pipelineContext = nullptr;
-static GstElement      *spipeline            = nullptr;
-static GstElement      *rpipeline            = nullptr;
-// static GstBus *sbus = 0;
-static bool send_in_use = false;
-static bool recv_in_use = false;
-
-static bool      use_shared_clock     = true;
-static GstClock *shared_clock         = nullptr;
-static bool      send_clock_is_shared = false;
-// static bool recv_clock_is_shared = false;
-
 static GstClockTime samplePresentationAge(GstSample *sample, GstElement *pipeline)
 {
     if (!sample || !pipeline)
@@ -283,30 +288,14 @@ static GstClockTime samplePresentationAge(GstSample *sample, GstElement *pipelin
 }
 
 RtpWorker::RtpWorker(GMainContext *mainContext, DeviceMonitor *hardwareDeviceMonitor) :
-    mainContext_(mainContext), hardwareDeviceMonitor_(hardwareDeviceMonitor), audioStats(new Stats("audio")),
-    videoStats(new Stats("video"))
+    mainContext_(mainContext), hardwareDeviceMonitor_(hardwareDeviceMonitor), audioStats(new Stats("audio", this)),
+    videoStats(new Stats("video", this))
 {
-    if (worker_refs == 0) {
-        send_pipelineContext = new PipelineContext;
-        recv_pipelineContext = new PipelineContext;
-
-        spipeline = send_pipelineContext->element();
-        rpipeline = recv_pipelineContext->element();
-
-#ifdef RTPWORKER_DEBUG
-        /*sbus = gst_pipeline_get_bus(GST_PIPELINE(spipeline));
-        GSource *source = gst_bus_create_watch(bus);
-        gst_object_unref(bus);
-        g_source_set_callback(source, (GSourceFunc)cb_bus_call, this, nullptr);
-        g_source_attach(source, mainContext_);*/
-#endif
-
-        QByteArray val = qgetenv("PSI_NO_SHARED_CLOCK");
-        if (!val.isEmpty())
-            use_shared_clock = false;
-    }
-
-    ++worker_refs;
+    send_pipelineContext = new PipelineContext;
+    recv_pipelineContext = new PipelineContext;
+    spipeline = send_pipelineContext->element();
+    rpipeline = recv_pipelineContext->element();
+    use_shared_clock = qgetenv("PSI_NO_SHARED_CLOCK").isEmpty();
 }
 
 RtpWorker::~RtpWorker()
@@ -324,16 +313,8 @@ RtpWorker::~RtpWorker()
 
     cleanup();
 
-    --worker_refs;
-    if (worker_refs == 0) {
-        delete send_pipelineContext;
-        send_pipelineContext = nullptr;
-
-        delete recv_pipelineContext;
-        recv_pipelineContext = nullptr;
-
-        // sbus = 0;
-    }
+    delete send_pipelineContext;
+    delete recv_pipelineContext;
 
     delete audioStats;
     delete videoStats;
@@ -418,6 +399,7 @@ void RtpWorker::cleanupSend()
 
 void RtpWorker::cleanup()
 {
+    qInfo("psimedia worker=%p callback-context=%p cleanup error=%d", static_cast<void *>(this), app, int(error));
 #ifdef RTPWORKER_DEBUG
     qDebug("cleaning up...");
 #endif
@@ -638,7 +620,7 @@ void RtpWorker::rtpAudioIn(const PRtpPacket &packet)
 
     GstBuffer *buffer = makeGstBuffer(packet);
     if (buffer)
-        gst_app_src_push_buffer(source, buffer);
+        RtpInput::push(source, buffer);
     gst_object_unref(source);
 }
 
@@ -668,7 +650,7 @@ void RtpWorker::rtpVideoIn(const PRtpPacket &packet)
 
     GstBuffer *buffer = makeGstBuffer(packet);
     if (buffer)
-        gst_app_src_push_buffer(source, buffer);
+        RtpInput::push(source, buffer);
     gst_object_unref(source);
 }
 
@@ -985,9 +967,10 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
         GError *err;
 
         gst_message_parse_error(msg, &err, &debug);
+        qWarning("psimedia worker=%p GStreamer error element=%s domain=%s code=%d message=%s debug=%s",
+                 static_cast<void *>(this), GST_OBJECT_NAME(GST_MESSAGE_SRC(msg)), g_quark_to_string(err->domain),
+                 err->code, err->message, debug ? debug : "");
         g_free(debug);
-
-        qDebug("Error: %s: %s", gst_element_get_name(GST_MESSAGE_SRC(msg)), err->message);
         g_error_free(err);
 
         // g_main_loop_quit(loop);
@@ -1006,9 +989,10 @@ gboolean RtpWorker::bus_call(GstBus *bus, GstMessage *msg)
         GError *err;
 
         gst_message_parse_warning(msg, &err, &debug);
+        qWarning("psimedia worker=%p GStreamer warning element=%s domain=%s code=%d message=%s debug=%s",
+                 static_cast<void *>(this), GST_OBJECT_NAME(GST_MESSAGE_SRC(msg)), g_quark_to_string(err->domain),
+                 err->code, err->message, debug ? debug : "");
         g_free(debug);
-
-        qDebug("Warning: %s: %s", gst_element_get_name(GST_MESSAGE_SRC(msg)), err->message);
         g_error_free(err);
 
         // g_main_loop_quit(loop);
@@ -1119,7 +1103,7 @@ GstFlowReturn RtpWorker::packet_ready_rtp_video(GstAppSink *appsink)
         keyframe      = vp8PacketStartsKeyframe(rtpMap.data, rtpMap.size);
         gst_buffer_unmap(buffer, &rtpMap);
     }
-    videoStats->print_stats(int(gst_buffer_get_size(buffer)), frameBoundary, keyframe);
+    videoStats->print_stats(int(gst_buffer_get_size(buffer)), frameBoundary, keyframe, packet.presentationAge);
     if (!firstOutgoingVideoLogged_.exchange(true, std::memory_order_acq_rel)) {
         const qint64 ageMs
             = GST_CLOCK_TIME_IS_VALID(packet.presentationAge) ? qint64(packet.presentationAge / GST_MSECOND) : -1;
@@ -1570,6 +1554,7 @@ bool RtpWorker::startRecv()
             = QByteArrayLiteral("psimedia_audio_rtp_recv_") + QByteArray::number(++audioRecvSourceSerial);
         audiortpsrc_mutex.lock();
         audiortpsrc = gst_element_factory_make("appsrc", audioRecvSourceName.constData());
+        RtpInput::configure(GST_APP_SRC(audiortpsrc));
         audiortpsrc_mutex.unlock();
 
         GstCaps *caps = gst_caps_new_empty();
@@ -1610,6 +1595,7 @@ bool RtpWorker::startRecv()
             = QByteArrayLiteral("psimedia_video_rtp_recv_") + QByteArray::number(++videoRecvSourceSerial);
         videortpsrc_mutex.lock();
         videortpsrc = gst_element_factory_make("appsrc", videoRecvSourceName.constData());
+        RtpInput::configure(GST_APP_SRC(videortpsrc));
         videortpsrc_mutex.unlock();
 
         GstCaps *caps = gst_caps_new_empty();
@@ -2262,8 +2248,9 @@ bool RtpWorker::addVideoChain()
     if (fileDemux && fps <= 0)
         fps = 30; // keep deterministic legacy pacing for file input
 #ifdef RTPWORKER_DEBUG
-    qDebug("codec=%s, video prep=%dx%d @ %s fps", qPrintable(codec), size.width(), size.height(),
-           fps > 0 ? qPrintable(QString::number(fps)) : "source");
+    qDebug("psimedia worker=%p video prep codec=%s size=%dx%d fps=%s live=%d cadence=%s", static_cast<void *>(this),
+           qPrintable(codec), size.width(), size.height(), fps > 0 ? qPrintable(QString::number(fps)) : "source",
+           int(!fileDemux), fileDemux ? "constant" : "capture-timestamps");
 #endif
 
     // see if we need to match a pt id
@@ -2391,12 +2378,30 @@ bool RtpWorker::addVideoChain()
     return true;
 }
 
+namespace {
+GstCaps *negotiatedPayloaderCaps(GstPad *pad)
+{
+    // Live sources can reach PLAYING with NO_PREROLL before the first buffer
+    // negotiates the payloader. This runs on the codec worker, never the UI
+    // thread. Wait for caps rather than treating normal asynchronous startup
+    // as a codec failure; broken sources still have a bounded deadline.
+    const auto deadline = gst_util_get_timestamp() + 5 * GST_SECOND;
+    do {
+        if (auto caps = gst_pad_get_current_caps(pad))
+            return caps;
+        g_usleep(10000);
+    } while (gst_util_get_timestamp() < deadline);
+    return nullptr;
+}
+}
+
 bool RtpWorker::getCaps()
 {
     if (audiortppay) {
         GstPad  *pad  = gst_element_get_static_pad(audiortppay, "src");
-        GstCaps *caps = gst_pad_get_current_caps(pad);
+        GstCaps *caps = negotiatedPayloaderCaps(pad);
         if (!caps) {
+            gst_object_unref(pad);
 #ifdef RTPWORKER_DEBUG
             qDebug("can't get audio caps");
 #endif
@@ -2428,8 +2433,9 @@ bool RtpWorker::getCaps()
 
     if (videortppay) {
         GstPad  *pad  = gst_element_get_static_pad(videortppay, "src");
-        GstCaps *caps = gst_pad_get_current_caps(pad);
+        GstCaps *caps = negotiatedPayloaderCaps(pad);
         if (!caps) {
+            gst_object_unref(pad);
 #ifdef RTPWORKER_DEBUG
             qWarning("can't get video caps");
 #endif
