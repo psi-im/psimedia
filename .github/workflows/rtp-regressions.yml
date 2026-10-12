@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  PSI_SRTP_REF: 1ae835b8496ae71ec966c2e6a613844e991aa4f7
+  PSI_SRTP_REF: caa631fd2b56d38a435b816cc6e4098dfe63c823
 
 concurrency:
   group: psimedia-rtp-${{ github.event.pull_request.number || github.ref }}
@@ -189,7 +189,7 @@ jobs:
     if: needs.ci-policy.outputs.run_ci == 'true'
     uses: ./.github/workflows/windows.yml
     with:
-      psi_ref: 1ae835b8496ae71ec966c2e6a613844e991aa4f7
+      psi_ref: caa631fd2b56d38a435b816cc6e4098dfe63c823
 
   macos-qt6-srtp:
     needs: ci-policy

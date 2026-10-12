@@ -6,7 +6,7 @@ on:
       psi_ref:
         description: Matching Psi plugin API revision
         type: string
-        default: 1ae835b8496ae71ec966c2e6a613844e991aa4f7
+        default: caa631fd2b56d38a435b816cc6e4098dfe63c823
 
 permissions:
   contents: read
