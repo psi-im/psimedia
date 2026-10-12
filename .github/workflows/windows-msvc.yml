@@ -1,4 +1,4 @@
-name: Native Windows media build
+name: Windows MSVC
 
 on:
   workflow_call:
@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    name: MSVC / ${{ inputs.build_profile }}
+    name: ${{ inputs.build_profile == 'win7' && 'Qt5 / Win7' || 'Qt6' }}
     runs-on: windows-2022
     timeout-minutes: 60
     env:
