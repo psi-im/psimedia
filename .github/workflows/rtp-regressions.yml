@@ -3,9 +3,9 @@ name: RTP provider regressions
 on:
   push:
     branches:
-      - 'jingle/**'
-      - 'ai/jingle/**'
+      - master
   pull_request:
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
@@ -19,7 +19,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ci-policy:
+    name: Check automatic CI policy
+    runs-on: ubuntu-latest
+    outputs:
+      run_ci: ${{ steps.policy.outputs.run_ci }}
+    steps:
+      - name: Check commit messages for skip ci
+        id: policy
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let messages = [];
+            if (context.eventName === 'push') {
+              messages = (context.payload.commits || []).map(commit => commit.message);
+              messages.push(context.payload.head_commit?.message || '');
+            } else if (context.eventName === 'pull_request') {
+              // Check the PR head, not GitHub's synthetic merge commit or the PR title.
+              const head = context.payload.pull_request.head;
+              const { data } = await github.rest.repos.getCommit({
+                owner: head.repo.owner.login,
+                repo: head.repo.name,
+                ref: head.sha
+              });
+              messages = [data.commit.message];
+            }
+            // Manual runs deliberately ignore skip instructions.
+            const run = !messages.some(message => message.toLowerCase().includes('skip ci'));
+            core.setOutput('run_ci', String(run));
+            core.info(run ? 'CI enabled' : 'Automatic builds skipped by commit message');
+
   qt6-gstreamer:
+    needs: ci-policy
+    if: needs.ci-policy.outputs.run_ci == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -153,11 +185,15 @@ jobs:
         run: cmake --build build-qt5 --parallel 2
 
   windows:
+    needs: ci-policy
+    if: needs.ci-policy.outputs.run_ci == 'true'
     uses: ./.github/workflows/windows.yml
     with:
       psi_ref: 1ae835b8496ae71ec966c2e6a613844e991aa4f7
 
   macos-qt6-srtp:
+    needs: ci-policy
+    if: needs.ci-policy.outputs.run_ci == 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -205,6 +241,8 @@ jobs:
           grep -Eiq 'srtp' plugin-dependencies.txt
 
   ubuntu-deb-package:
+    needs: ci-policy
+    if: needs.ci-policy.outputs.run_ci == 'true'
     strategy:
       fail-fast: false
       matrix:

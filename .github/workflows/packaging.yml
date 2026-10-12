@@ -1,0 +1,23 @@
+name: Windows packaging
+
+on:
+  workflow_dispatch:
+    inputs:
+      psi_ref:
+        description: Matching Psi plugin API revision
+        type: string
+        default: 1ae835b8496ae71ec966c2e6a613844e991aa4f7
+
+permissions:
+  contents: read
+
+concurrency:
+  group: psimedia-windows-packaging-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    uses: ./.github/workflows/windows.yml
+    with:
+      psi_ref: ${{ inputs.psi_ref }}
+      packaging: true

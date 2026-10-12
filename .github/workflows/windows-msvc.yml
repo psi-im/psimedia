@@ -1,0 +1,70 @@
+name: Native Windows media build
+
+on:
+  workflow_call:
+    inputs:
+      psi_ref:
+        type: string
+        required: true
+      build_profile:
+        description: modern or win7
+        type: string
+        default: modern
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: MSVC / ${{ inputs.build_profile }}
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      BUILD_PROFILE: ${{ inputs.build_profile }}
+      QT_MAJOR: ${{ inputs.build_profile == 'win7' && '5' || '6' }}
+      QT_VERSION: ${{ inputs.build_profile == 'win7' && '5.15.2' || '6.8.3' }}
+      GSTREAMER_VERSION: ${{ inputs.build_profile == 'win7' && '1.24.13' || '1.28.7' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: ${{ inputs.psi_ref }}
+          path: _psi
+          fetch-depth: 1
+      - name: Install matching Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: ${{ inputs.build_profile == 'win7' && 'win64_msvc2019_64' || 'win64_msvc2022_64' }}
+          cache: true
+      - name: Set up Visual Studio compiler
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          toolset: ${{ inputs.build_profile == 'win7' && '14.29' || '' }}
+      - name: Set up compiler cache
+        if: inputs.build_profile == 'modern'
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: psimedia-windows-msvc-modern-qt${{ env.QT_VERSION }}-gst${{ env.GSTREAMER_VERSION }}
+          max-size: 500M
+          variant: ccache
+      - name: Install pinned GStreamer runtime and SDK
+        shell: pwsh
+        run: |
+          ./ci/windows/install-gstreamer.ps1 -Version $env:GSTREAMER_VERSION `
+            -Root "$env:RUNNER_TEMP/gstreamer-$env:BUILD_PROFILE"
+      - name: Build and test native media plugin
+        shell: pwsh
+        run: |
+          ./ci/windows/build-msvc.ps1 -BuildProfile $env:BUILD_PROFILE `
+            -GStreamerVersion $env:GSTREAMER_VERSION -QtMajor $env:QT_MAJOR `
+            -UseCcache:($env:BUILD_PROFILE -eq 'modern')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: psimedia-windows-msvc-${{ inputs.build_profile }}
+          path: |
+            stage-msvc-${{ inputs.build_profile }}/
+            plugin-dependencies-${{ inputs.build_profile }}.txt

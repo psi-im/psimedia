@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$GStreamerVersion,
     [Parameter(Mandatory = $true)]
-    [int]$QtMajor
+    [int]$QtMajor,
+    [switch]$UseCcache
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,6 +52,11 @@ $configure = @('-S', '.', '-B', $build, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Relea
     "-DSRTP_ROOT=$srtp", '-DBUILD_DEMO=OFF', '-DBUILD_PSIPLUGIN=ON',
     '-DPSIMEDIA_BUILD_TESTS=ON', '-DPSIMEDIA_ENABLE_SRTP=ON',
     '-DPSIMEDIA_WINDOWS_VIDEO_SOURCE=mfvideosrc', "-DPLUGINS_ROOT_DIR=$source/_psi/plugins")
+if ($UseCcache) {
+    $ccache = (Get-Command ccache -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+    Invoke-Checked $ccache @('--version')
+    $configure += @("-DCMAKE_C_COMPILER_LAUNCHER=$ccache", "-DCMAKE_CXX_COMPILER_LAUNCHER=$ccache")
+}
 Invoke-Checked 'cmake' $configure
 Invoke-Checked 'cmake' @('--build', $build, '--parallel', '2')
 $env:QT_QPA_PLATFORM = 'offscreen'

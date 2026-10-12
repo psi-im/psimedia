@@ -52,14 +52,23 @@ tree ./out
 
 ## Windows CI and camera capture
 
-The reusable `.github/workflows/windows.yml` builds the media plugin in three
-profiles. The RTP regression workflow calls it; it can also be dispatched alone.
+Automatic CI runs on pushes to `master` and on opening, reopening or updating a
+pull request. Other branch pushes do not trigger CI. The phrase `skip ci` anywhere
+in a commit message, case-insensitively and with or without brackets, skips the
+build jobs: push events check the pushed commits, and PR events check the head
+commit. The policy check still runs for the unbracketed phrase. Manual workflow
+runs ignore this marker.
 
-| Profile | Compiler / Qt | GStreamer |
-| --- | --- | --- |
-| Modern MSYS2 | Current MINGW64 compiler / Qt5 | Current MSYS2 packages; installed versions are logged |
-| Modern MSVC | Visual Studio / Qt 6.8.3 | Official MSVC runtime and SDK 1.28.7 |
-| Win7 MSVC | v142 (14.29) / Qt 5.15.2 | Official MSVC runtime and SDK 1.24.13 |
+The reusable `.github/workflows/windows.yml` builds the two modern profiles with
+ccache in ordinary CI; it can also be dispatched alone. The manual
+`Windows packaging` workflow adds the Win7 profile and uploads plugin artifacts
+for all three profiles. It does not publish a release.
+
+| Profile | Compiler / Qt | GStreamer | Runs in |
+| --- | --- | --- | --- |
+| Modern MSYS2 | Current MINGW64 compiler / Qt5 | Current MSYS2 packages; installed versions are logged | CI and packaging |
+| Modern MSVC | Visual Studio / Qt 6.8.3 | Official MSVC runtime and SDK 1.28.7 | CI and packaging |
+| Win7 MSVC | v142 (14.29) / Qt 5.15.2 | Official MSVC runtime and SDK 1.24.13 | Packaging only |
 
 The Win7 profile uses the older native SDK rather than mixing it with current
 MSYS2 GLib/Qt runtimes. Its compiler and SRTP/OpenSSL dependencies target
