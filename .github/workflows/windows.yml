@@ -1,0 +1,140 @@
+name: Windows media profiles
+
+on:
+  workflow_dispatch:
+    inputs:
+      psi_ref:
+        description: Matching Psi plugin API revision
+        type: string
+        default: 1ae835b8496ae71ec966c2e6a613844e991aa4f7
+  workflow_call:
+    inputs:
+      psi_ref:
+        type: string
+        default: 1ae835b8496ae71ec966c2e6a613844e991aa4f7
+
+permissions:
+  contents: read
+
+jobs:
+  msys2:
+    name: Modern MSYS2 / Qt5 / current GStreamer
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: ${{ inputs.psi_ref }}
+          path: _psi
+          fetch-depth: 1
+      - name: Install current MSYS2 dependencies
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-qt5-base
+            mingw-w64-x86_64-gstreamer
+            mingw-w64-x86_64-gst-plugins-base
+            mingw-w64-x86_64-gst-plugins-good
+            mingw-w64-x86_64-gst-plugins-bad
+            mingw-w64-x86_64-libsrtp
+      - name: Verify installed media SDK
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          pacman -Q mingw-w64-x86_64-gstreamer mingw-w64-x86_64-gst-plugins-bad
+          gst-inspect-1.0 --version
+          gst-inspect-1.0 mfvideosrc
+      - name: Build and test modern media plugin
+        shell: msys2 {0}
+        env:
+          GSTREAMER_1_0_ROOT_X86_64: /mingw64
+          QT_QPA_PLATFORM: offscreen
+          GST_DEBUG_NO_COLOR: '1'
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-windows -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/stage-msys2" \
+            -DCMAKE_CXX_FLAGS='-D_WIN32_WINNT=0x0A00 -DWINVER=0x0A00' \
+            -DQT_DEFAULT_MAJOR_VERSION=5 -DBUILD_DEMO=OFF -DBUILD_PSIPLUGIN=ON \
+            -DPSIMEDIA_BUILD_TESTS=ON -DPSIMEDIA_ENABLE_SRTP=ON \
+            -DPSIMEDIA_WINDOWS_VIDEO_SOURCE=mfvideosrc \
+            -DPLUGINS_ROOT_DIR="$PWD/_psi/plugins"
+          cmake --build build-windows --parallel 2
+          ctest --test-dir build-windows --output-on-failure --no-tests=error -j1 \
+            -R '^psimedia_(payloadinfo|opusrtppay|securertp|securertpgroup|securertpqueue)$'
+          cmake --install build-windows
+          plugin=$(find stage-msys2 -type f -iname '*mediaplugin.dll' -print -quit)
+          test -n "$plugin"
+          objdump -p "$plugin" | tee plugin-dependencies-msys2.txt
+          grep -Eiq 'DLL Name: .*srtp.*\.dll' plugin-dependencies-msys2.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: psimedia-windows-msys2-qt5
+          path: |
+            stage-msys2/
+            plugin-dependencies-msys2.txt
+
+  msvc:
+    name: MSVC / ${{ matrix.profile }} / GStreamer ${{ matrix.gstreamer }}
+    runs-on: windows-2022
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: modern
+            qt_major: 6
+            qt: '6.8.3'
+            qt_arch: win64_msvc2022_64
+            toolset: ''
+            gstreamer: '1.28.7'
+          - profile: win7
+            qt_major: 5
+            qt: '5.15.2'
+            qt_arch: win64_msvc2019_64
+            toolset: '14.29'
+            gstreamer: '1.24.13'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout matching Psi plugin API
+        uses: actions/checkout@v4
+        with:
+          repository: psi-im/psi
+          ref: ${{ inputs.psi_ref }}
+          path: _psi
+          fetch-depth: 1
+      - name: Install matching Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ matrix.qt }}
+          arch: ${{ matrix.qt_arch }}
+          cache: true
+      - name: Set up Visual Studio compiler
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          toolset: ${{ matrix.toolset }}
+      - name: Install pinned GStreamer runtime and SDK
+        shell: pwsh
+        run: |
+          ./ci/windows/install-gstreamer.ps1 -Version '${{ matrix.gstreamer }}' `
+            -Root "$env:RUNNER_TEMP/gstreamer-${{ matrix.profile }}"
+      - name: Build and test native media plugin
+        shell: pwsh
+        run: |
+          ./ci/windows/build-msvc.ps1 -BuildProfile '${{ matrix.profile }}' `
+            -GStreamerVersion '${{ matrix.gstreamer }}' -QtMajor ${{ matrix.qt_major }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: psimedia-windows-msvc-${{ matrix.profile }}
+          path: |
+            stage-msvc-${{ matrix.profile }}/
+            plugin-dependencies-${{ matrix.profile }}.txt

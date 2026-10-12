@@ -49,3 +49,32 @@ make
 make install DESTDIR=./out
 tree ./out
 ```
+
+## Windows CI and camera capture
+
+The reusable `.github/workflows/windows.yml` builds the media plugin in three
+profiles. The RTP regression workflow calls it; it can also be dispatched alone.
+
+| Profile | Compiler / Qt | GStreamer |
+| --- | --- | --- |
+| Modern MSYS2 | Current MINGW64 compiler / Qt5 | Current MSYS2 packages; installed versions are logged |
+| Modern MSVC | Visual Studio / Qt 6.8.3 | Official MSVC runtime and SDK 1.28.7 |
+| Win7 MSVC | v142 (14.29) / Qt 5.15.2 | Official MSVC runtime and SDK 1.24.13 |
+
+The Win7 profile uses the older native SDK rather than mixing it with current
+MSYS2 GLib/Qt runtimes. Its compiler and SRTP/OpenSSL dependencies target
+`_WIN32_WINNT=0x0601` and `WINVER=0x0601`. GStreamer 1.26 and newer standard
+Windows binaries target Windows 10, so the Win7 profile must keep its separate
+SDK. These CI jobs run on Windows Server 2022; they verify compilation, linking
+and media regressions, and do not replace a smoke test on Windows 7 SP1.
+
+Windows capture defaults to `mfvideosrc`. All three profiles check the selected
+GStreamer element before building, then run the payload, Opus and SRTP tests.
+The MSVC installers are verified against upstream SHA256 files. Artifacts contain
+the plugin and its import report; deployment still needs the matching Qt and
+GStreamer runtimes, including the Media Foundation plugin.
+
+For an older/custom Windows SDK without Media Foundation, configure
+`-DPSIMEDIA_WINDOWS_VIDEO_SOURCE=ksvideosrc`. The element is selected at build
+time; PsiMedia does not silently choose another backend at runtime. An explicit
+`SRTP_ROOT` selects that SDK in preference to a different pkg-config installation.
