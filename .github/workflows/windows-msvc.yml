@@ -51,6 +51,29 @@ jobs:
           key: psimedia-windows-msvc-modern-qt${{ env.QT_VERSION }}-gst${{ env.GSTREAMER_VERSION }}
           max-size: 500M
           variant: ccache
+      # Mirror QCA's Windows vcpkg OpenSSL cache strategy. The cache is
+      # repository-scoped; QCA's cache itself cannot be restored by PsiMedia.
+      - name: Resolve Windows vcpkg cache key
+        if: inputs.build_profile == 'modern'
+        id: vcpkg-cache-key
+        shell: pwsh
+        run: |
+          $vcpkgRevision = (git -C $env:VCPKG_INSTALLATION_ROOT rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Could not resolve vcpkg revision' }
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+          $toolsetFile = Join-Path $vsPath 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+          $toolset = (Get-Content $toolsetFile -Raw).Trim()
+          "vcpkg=$vcpkgRevision" >> $env:GITHUB_OUTPUT
+          "msvc=$toolset" >> $env:GITHUB_OUTPUT
+
+      - name: Restore Windows vcpkg binary cache
+        if: inputs.build_profile == 'modern'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: psimedia-vcpkg-openssl-${{ runner.os }}-${{ steps.vcpkg-cache-key.outputs.vcpkg }}-${{ steps.vcpkg-cache-key.outputs.msvc }}-x64-windows-release-v1
+
       - name: Install pinned GStreamer runtime and SDK
         shell: pwsh
         run: |
