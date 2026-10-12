@@ -66,14 +66,22 @@ $env:PATH = "$srtp/bin;$env:PATH"
 $baseline = if ($BuildProfile -eq 'win7') { '0x0601' } else { '0x0A00' }
 $build = "build-msvc-$BuildProfile"
 $stage = Join-Path $source "stage-msvc-$BuildProfile"
+# CMake forwards CMAKE_MODULE_PATH into try_compile subprojects verbatim.
+# Backslashes in a -D path can therefore be interpreted as escapes (e.g. \a).
+# Pass all CMake paths with forward slashes on Windows.
+$sourceCmake = $source.Replace('\', '/')
+$stageCmake = $stage.Replace('\', '/')
+$qtCmake = $env:QT_ROOT_DIR.Replace('\', '/')
+$srtpCmake = $srtp.Replace('\', '/')
+$pkgconfCmake = $pkgconfFiles[0].FullName.Replace('\', '/')
 $configure = @('-S', '.', '-B', $build, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
-    "-DCMAKE_INSTALL_PREFIX=$stage", "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR",
+    "-DCMAKE_INSTALL_PREFIX=$stageCmake", "-DCMAKE_PREFIX_PATH=$qtCmake",
     "-DQT_DEFAULT_MAJOR_VERSION=$QtMajor", "-DCMAKE_C_FLAGS=/D_WIN32_WINNT=$baseline /DWINVER=$baseline",
     "-DCMAKE_CXX_FLAGS=/D_WIN32_WINNT=$baseline /DWINVER=$baseline",
-    "-DPKG_CONFIG_EXECUTABLE=$($pkgconfFiles[0].FullName)", '-DPKG_CONFIG_ARGN=--define-prefix',
-    "-DSRTP_ROOT=$srtp", '-DBUILD_DEMO=OFF', '-DBUILD_PSIPLUGIN=ON',
+    "-DPKG_CONFIG_EXECUTABLE=$pkgconfCmake", '-DPKG_CONFIG_ARGN=--define-prefix',
+    "-DSRTP_ROOT=$srtpCmake", '-DBUILD_DEMO=OFF', '-DBUILD_PSIPLUGIN=ON',
     '-DPSIMEDIA_BUILD_TESTS=ON', '-DPSIMEDIA_ENABLE_SRTP=ON',
-    '-DPSIMEDIA_WINDOWS_VIDEO_SOURCE=mfvideosrc', "-DPLUGINS_ROOT_DIR=$source/_psi/plugins")
+    '-DPSIMEDIA_WINDOWS_VIDEO_SOURCE=mfvideosrc', "-DPLUGINS_ROOT_DIR=$sourceCmake/_psi/plugins")
 if ($UseCcache) {
     $ccache = (Get-Command ccache -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
     Invoke-Checked $ccache @('--version')
