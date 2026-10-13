@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       psi_ref:
-        description: Matching Psi plugin API revision
+        description: Optional Psi commit; must match dependencies.lock.json
         type: string
-        default: caa631fd2b56d38a435b816cc6e4098dfe63c823
+        default: ''
   workflow_call:
     inputs:
       packaging:
@@ -15,7 +15,7 @@ on:
         default: false
       psi_ref:
         type: string
-        default: caa631fd2b56d38a435b816cc6e4098dfe63c823
+        default: ''
 
 permissions:
   contents: read

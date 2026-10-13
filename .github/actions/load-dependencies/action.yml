@@ -1,0 +1,41 @@
+name: Resolve PsiMedia dependencies
+description: Validate the source-controlled lock and export the selected API and Windows SDK coordinates
+inputs:
+  profile:
+    description: Optional Windows profile (modern or win7)
+    required: false
+    default: ''
+  psi-ref:
+    description: Optional requested Psi ref; must match the lock
+    required: false
+    default: ''
+outputs:
+  psi_repository:
+    description: Locked Psi repository
+    value: ${{ steps.resolve.outputs.PSI_API_REPOSITORY }}
+  psi_ref:
+    description: Locked Psi commit
+    value: ${{ steps.resolve.outputs.PSI_API_REF }}
+  gstreamer_cache_key:
+    description: Fingerprint of the locked GStreamer installers
+    value: ${{ steps.resolve.outputs.GSTREAMER_CACHE_KEY }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve dependency lock
+      id: resolve
+      shell: bash
+      env:
+        REQUESTED_PSI_REF: ${{ inputs.psi-ref }}
+        WINDOWS_PROFILE: ${{ inputs.profile }}
+      run: |
+        set -euo pipefail
+        args=(--psi-ref "$REQUESTED_PSI_REF")
+        if [[ -n "$WINDOWS_PROFILE" ]]; then
+          args+=(--profile "$WINDOWS_PROFILE")
+        fi
+        python_command=python
+        if ! command -v "$python_command" >/dev/null 2>&1; then
+          python_command=python3
+        fi
+        "$python_command" .github/scripts/resolve-dependencies.py "${args[@]}"

@@ -5,7 +5,7 @@ on:
     inputs:
       psi_ref:
         type: string
-        required: true
+        default: ''
       build_profile:
         description: modern or win7
         type: string
@@ -21,29 +21,35 @@ jobs:
     timeout-minutes: 60
     env:
       BUILD_PROFILE: ${{ inputs.build_profile }}
-      QT_MAJOR: ${{ inputs.build_profile == 'win7' && '5' || '6' }}
-      QT_VERSION: ${{ inputs.build_profile == 'win7' && '5.15.2' || '6.8.3' }}
-      GSTREAMER_VERSION: ${{ inputs.build_profile == 'win7' && '1.24.13' || '1.28.7' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve dependency lock
+        id: dependencies
+        uses: ./.github/actions/load-dependencies
+        with:
+          profile: ${{ inputs.build_profile }}
+          psi-ref: ${{ inputs.psi_ref }}
       - name: Checkout matching Psi plugin API
         uses: actions/checkout@v4
         with:
-          repository: psi-im/psi
-          ref: ${{ inputs.psi_ref }}
+          repository: ${{ steps.dependencies.outputs.psi_repository }}
+          ref: ${{ steps.dependencies.outputs.psi_ref }}
           path: _psi
           fetch-depth: 1
+      - name: Verify locked Psi API checkout
+        shell: bash
+        run: python .github/scripts/resolve-dependencies.py --verify-psi-dir _psi
       - name: Install matching Qt
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          arch: ${{ inputs.build_profile == 'win7' && 'win64_msvc2019_64' || 'win64_msvc2022_64' }}
+          arch: ${{ env.QT_ARCH }}
           cache: true
       - name: Set up Visual Studio compiler
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-          toolset: ${{ inputs.build_profile == 'win7' && '14.29' || '' }}
+          toolset: ${{ env.MSVC_TOOLSET }}
       - name: Set up compiler cache
         if: inputs.build_profile == 'modern'
         uses: hendrikmuhs/ccache-action@v1.2
@@ -74,11 +80,26 @@ jobs:
           path: ${{ runner.temp }}/vcpkg-binary-cache
           key: psimedia-vcpkg-openssl-${{ runner.os }}-${{ steps.vcpkg-cache-key.outputs.vcpkg }}-${{ steps.vcpkg-cache-key.outputs.msvc }}-x64-windows-release-v1
 
+      - name: Restore verified GStreamer installers
+        id: sdk-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/gstreamer-installers/${{ inputs.build_profile }}
+          key: psimedia-gstreamer-msvc-${{ steps.dependencies.outputs.gstreamer_cache_key }}
       - name: Install pinned GStreamer runtime and SDK
+        id: install-gstreamer
+        timeout-minutes: 20
         shell: pwsh
         run: |
-          ./ci/windows/install-gstreamer.ps1 -Version $env:GSTREAMER_VERSION `
-            -Root "$env:RUNNER_TEMP/gstreamer-$env:BUILD_PROFILE"
+          ./ci/windows/install-gstreamer.ps1 -BuildProfile $env:BUILD_PROFILE `
+            -Root "$env:RUNNER_TEMP/gstreamer-$env:BUILD_PROFILE" `
+            -CacheDirectory "$env:RUNNER_TEMP/gstreamer-installers/$env:BUILD_PROFILE"
+      - name: Save verified GStreamer installers
+        if: ${{ !cancelled() && steps.install-gstreamer.outputs.installers_verified == 'true' && steps.sdk-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/gstreamer-installers/${{ inputs.build_profile }}
+          key: psimedia-gstreamer-msvc-${{ steps.dependencies.outputs.gstreamer_cache_key }}
       - name: Build and test native media plugin
         shell: pwsh
         run: |

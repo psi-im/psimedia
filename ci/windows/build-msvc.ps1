@@ -66,9 +66,8 @@ $env:PATH = "$srtp/bin;$env:PATH"
 $baseline = if ($BuildProfile -eq 'win7') { '0x0601' } else { '0x0A00' }
 $build = "build-msvc-$BuildProfile"
 $stage = Join-Path $source "stage-msvc-$BuildProfile"
-# CMake forwards CMAKE_MODULE_PATH into try_compile subprojects verbatim.
-# Backslashes in a -D path can therefore be interpreted as escapes (e.g. \a).
-# Pass all CMake paths with forward slashes on Windows.
+# CMake copies module paths into try_compile scripts; Windows backslashes
+# become escapes such as \a there. Use forward slashes for every CMake path.
 $sourceCmake = $source.Replace('\', '/')
 $stageCmake = $stage.Replace('\', '/')
 $qtCmake = $env:QT_ROOT_DIR.Replace('\', '/')
@@ -85,7 +84,8 @@ $configure = @('-S', '.', '-B', $build, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Relea
 if ($UseCcache) {
     $ccache = (Get-Command ccache -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
     Invoke-Checked $ccache @('--version')
-    $configure += @("-DCMAKE_C_COMPILER_LAUNCHER=$ccache", "-DCMAKE_CXX_COMPILER_LAUNCHER=$ccache")
+    $ccacheCmake = $ccache.Replace('\', '/')
+    $configure += @("-DCMAKE_C_COMPILER_LAUNCHER=$ccacheCmake", "-DCMAKE_CXX_COMPILER_LAUNCHER=$ccacheCmake")
 }
 Invoke-Checked 'cmake' $configure
 Invoke-Checked 'cmake' @('--build', $build, '--parallel', '2')

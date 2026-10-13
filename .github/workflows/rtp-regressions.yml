@@ -11,9 +11,6 @@ on:
 permissions:
   contents: read
 
-env:
-  PSI_SRTP_REF: caa631fd2b56d38a435b816cc6e4098dfe63c823
-
 concurrency:
   group: psimedia-rtp-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -48,6 +45,15 @@ jobs:
             const run = !messages.some(message => message.toLowerCase().includes('skip ci'));
             core.setOutput('run_ci', String(run));
             core.info(run ? 'CI enabled' : 'Automatic builds skipped by commit message');
+      - uses: actions/checkout@v4
+        if: steps.policy.outputs.run_ci == 'true'
+      - name: Verify dependency lock and consumers
+        if: steps.policy.outputs.run_ci == 'true'
+        run: python3 -B -m unittest discover -s tests/dependency_lock -p 'test_*.py' -v
+      - name: Verify SDK download and installation control flow
+        if: steps.policy.outputs.run_ci == 'true'
+        shell: pwsh
+        run: ./tests/dependency_lock/windows-installers.ps1
 
   qt6-gstreamer:
     needs: ci-policy
@@ -56,13 +62,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve dependency lock
+        id: dependencies
+        uses: ./.github/actions/load-dependencies
+
       - name: Checkout matching Psi plugin API
         uses: actions/checkout@v4
         with:
-          repository: psi-im/psi
-          ref: ${{ env.PSI_SRTP_REF }}
+          repository: ${{ steps.dependencies.outputs.psi_repository }}
+          ref: ${{ steps.dependencies.outputs.psi_ref }}
           path: _psi
           fetch-depth: 1
+
+      - name: Verify locked Psi API checkout
+        run: python3 .github/scripts/resolve-dependencies.py --verify-psi-dir _psi
 
       - name: Install Qt and GStreamer dependencies
         shell: bash
@@ -188,8 +201,6 @@ jobs:
     needs: ci-policy
     if: needs.ci-policy.outputs.run_ci == 'true'
     uses: ./.github/workflows/windows.yml
-    with:
-      psi_ref: caa631fd2b56d38a435b816cc6e4098dfe63c823
 
   macos-qt6-srtp:
     needs: ci-policy
@@ -198,13 +209,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve dependency lock
+        id: dependencies
+        uses: ./.github/actions/load-dependencies
+
       - name: Checkout matching Psi plugin API
         uses: actions/checkout@v4
         with:
-          repository: psi-im/psi
-          ref: ${{ env.PSI_SRTP_REF }}
+          repository: ${{ steps.dependencies.outputs.psi_repository }}
+          ref: ${{ steps.dependencies.outputs.psi_ref }}
           path: _psi
           fetch-depth: 1
+
+      - name: Verify locked Psi API checkout
+        run: python3 .github/scripts/resolve-dependencies.py --verify-psi-dir _psi
 
       - name: Install Qt, GStreamer and libSRTP
         run: brew install cmake ninja qt gstreamer srtp pkgconf
@@ -259,13 +277,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve dependency lock
+        id: dependencies
+        uses: ./.github/actions/load-dependencies
+
       - name: Checkout matching Psi plugin API
         uses: actions/checkout@v4
         with:
-          repository: psi-im/psi
-          ref: ${{ env.PSI_SRTP_REF }}
+          repository: ${{ steps.dependencies.outputs.psi_repository }}
+          ref: ${{ steps.dependencies.outputs.psi_ref }}
           path: _psi
           fetch-depth: 1
+
+      - name: Verify locked Psi API checkout
+        run: python3 .github/scripts/resolve-dependencies.py --verify-psi-dir _psi
 
       - name: Install Debian package build dependencies
         run: |
