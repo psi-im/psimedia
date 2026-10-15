@@ -51,16 +51,15 @@ jobs:
           arch: x64
           toolset: ${{ env.MSVC_TOOLSET }}
       - name: Set up compiler cache
-        if: inputs.build_profile == 'modern'
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: psimedia-windows-msvc-modern-qt${{ env.QT_VERSION }}-gst${{ env.GSTREAMER_VERSION }}
+          key: psimedia-windows-msvc-${{ inputs.build_profile }}-qt${{ env.QT_VERSION }}-gst${{ env.GSTREAMER_VERSION }}
           max-size: 500M
           variant: ccache
-      # Mirror QCA's Windows vcpkg OpenSSL cache strategy. The cache is
-      # repository-scoped; QCA's cache itself cannot be restored by PsiMedia.
+      # Mirror QCA's Windows vcpkg OpenSSL cache strategy for both profiles: the
+      # Win7 profile otherwise rebuilds OpenSSL and libSRTP with v142 every run.
+      # The cache is repository-scoped; QCA's cache cannot be restored here.
       - name: Resolve Windows vcpkg cache key
-        if: inputs.build_profile == 'modern'
         id: vcpkg-cache-key
         shell: pwsh
         run: |
@@ -69,16 +68,15 @@ jobs:
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vsPath = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
           $toolsetFile = Join-Path $vsPath 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
-          $toolset = (Get-Content $toolsetFile -Raw).Trim()
+          $toolset = if ($env:MSVC_TOOLSET) { $env:MSVC_TOOLSET } else { (Get-Content $toolsetFile -Raw).Trim() }
           "vcpkg=$vcpkgRevision" >> $env:GITHUB_OUTPUT
           "msvc=$toolset" >> $env:GITHUB_OUTPUT
 
       - name: Restore Windows vcpkg binary cache
-        if: inputs.build_profile == 'modern'
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/vcpkg-binary-cache
-          key: psimedia-vcpkg-openssl-${{ runner.os }}-${{ steps.vcpkg-cache-key.outputs.vcpkg }}-${{ steps.vcpkg-cache-key.outputs.msvc }}-x64-windows-release-v1
+          key: psimedia-vcpkg-openssl-${{ runner.os }}-${{ steps.vcpkg-cache-key.outputs.vcpkg }}-${{ steps.vcpkg-cache-key.outputs.msvc }}-${{ inputs.build_profile == 'win7' && 'x64-win7' || 'x64-windows-release' }}-v1
 
       - name: Restore verified GStreamer installers
         id: sdk-cache
@@ -105,7 +103,7 @@ jobs:
         run: |
           ./ci/windows/build-msvc.ps1 -BuildProfile $env:BUILD_PROFILE `
             -GStreamerVersion $env:GSTREAMER_VERSION -QtMajor $env:QT_MAJOR `
-            -UseCcache:($env:BUILD_PROFILE -eq 'modern')
+            -UseCcache
       - uses: actions/upload-artifact@v4
         with:
           name: psimedia-windows-msvc-${{ inputs.build_profile }}

@@ -10,11 +10,6 @@
 # against gst-inspect-1.0 (ci/windows/check-gstreamer-runtime.ps1).
 
 set(_PSIMEDIA_GSTREAMER_RUNTIME_DIR "${CMAKE_CURRENT_LIST_DIR}")
-# install(CODE) below names the media plugin through $<TARGET_FILE:...>; functions keep the policies of their
-# definition, so this applies to psimedia_install_gstreamer_runtime().
-if(POLICY CMP0087)
-    cmake_policy(SET CMP0087 NEW)
-endif()
 
 # Elements psimedia cannot work without (gstthread.cpp checks most of them at start), with their plugins.
 set(PSIMEDIA_GSTREAMER_REQUIRED_ELEMENTS
@@ -86,13 +81,16 @@ function(psimedia_install_gstreamer_runtime target)
         endif()
     endforeach()
 
+    # The built plugin's path is known at generation time only; install(CODE) would expand it only with CMP0087.
+    set(location "${CMAKE_CURRENT_BINARY_DIR}/psimedia-gstreamer-runtime")
+    file(GENERATE OUTPUT "${location}-$<CONFIG>.cmake" CONTENT "set(media_plugin \"$<TARGET_FILE:${target}>\")\n")
     install(CODE "
         set(required \"${required}\")
         set(optional \"${optional}\")
         set(bin_dir \"${PSIMEDIA_GSTREAMER_RUNTIME_BIN_DIR}\")
         set(plugin_dir \"${PSIMEDIA_GSTREAMER_RUNTIME_PLUGIN_DIR}\")
         set(dest \"${BIN_INSTALL_DIR}\")
-        set(media_plugin \"$<TARGET_FILE:${target}>\")
+        include(\"${location}-\${CMAKE_INSTALL_CONFIG_NAME}.cmake\")
         include(\"${_PSIMEDIA_GSTREAMER_RUNTIME_DIR}/PsimediaGStreamerRuntimeInstall.cmake\")
     " COMPONENT plugins)
 endfunction()
