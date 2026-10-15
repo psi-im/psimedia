@@ -10,6 +10,11 @@
 # against gst-inspect-1.0 (ci/windows/check-gstreamer-runtime.ps1).
 
 set(_PSIMEDIA_GSTREAMER_RUNTIME_DIR "${CMAKE_CURRENT_LIST_DIR}")
+# install(CODE) below names the media plugin through $<TARGET_FILE:...>; functions keep the policies of their
+# definition, so this applies to psimedia_install_gstreamer_runtime().
+if(POLICY CMP0087)
+    cmake_policy(SET CMP0087 NEW)
+endif()
 
 # Elements psimedia cannot work without (gstthread.cpp checks most of them at start), with their plugins.
 set(PSIMEDIA_GSTREAMER_REQUIRED_ELEMENTS
