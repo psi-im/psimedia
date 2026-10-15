@@ -69,14 +69,16 @@ jobs:
           $vsPath = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
           $toolsetFile = Join-Path $vsPath 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
           $toolset = if ($env:MSVC_TOOLSET) { $env:MSVC_TOOLSET } else { (Get-Content $toolsetFile -Raw).Trim() }
-          "vcpkg=$vcpkgRevision" >> $env:GITHUB_OUTPUT
-          "msvc=$toolset" >> $env:GITHUB_OUTPUT
+          $triplet = if ($env:BUILD_PROFILE -eq 'win7') { 'x64-win7' } else { 'x64-windows-release' }
+          "key=psimedia-vcpkg-openssl-${env:RUNNER_OS}-$vcpkgRevision-$toolset-$triplet-v1" >> $env:GITHUB_OUTPUT
 
+      # Restore and save separately: the binaries built by vcpkg are kept even when a later check fails.
       - name: Restore Windows vcpkg binary cache
-        uses: actions/cache@v4
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/vcpkg-binary-cache
-          key: psimedia-vcpkg-openssl-${{ runner.os }}-${{ steps.vcpkg-cache-key.outputs.vcpkg }}-${{ steps.vcpkg-cache-key.outputs.msvc }}-${{ inputs.build_profile == 'win7' && 'x64-win7' || 'x64-windows-release' }}-v1
+          key: ${{ steps.vcpkg-cache-key.outputs.key }}
 
       - name: Restore verified GStreamer installers
         id: sdk-cache
@@ -104,6 +106,12 @@ jobs:
           ./ci/windows/build-msvc.ps1 -BuildProfile $env:BUILD_PROFILE `
             -GStreamerVersion $env:GSTREAMER_VERSION -QtMajor $env:QT_MAJOR `
             -UseCcache
+      - name: Save Windows vcpkg binary cache
+        if: ${{ !cancelled() && steps.vcpkg-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/vcpkg-binary-cache
+          key: ${{ steps.vcpkg-cache-key.outputs.key }}
       - uses: actions/upload-artifact@v4
         with:
           name: psimedia-windows-msvc-${{ inputs.build_profile }}

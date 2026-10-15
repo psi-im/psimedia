@@ -26,7 +26,7 @@ set(PSIMEDIA_GSTREAMER_REQUIRED_ELEMENTS
     "rtppcmupay:rtp" "rtppcmudepay:rtp" "rtph263ppay:rtp" "rtph263pdepay:rtp"
     "rtpjitterbuffer:rtpmanager" "rtpsession:rtpmanager"
     "mulawenc:mulaw" "mulawdec:mulaw"
-    "directsoundsrc:directsound" "directsoundsink:directsound")
+    "directsoundsrc:directsoundsrc" "directsoundsink:directsound")
 # Elements psimedia uses when present.
 set(PSIMEDIA_GSTREAMER_OPTIONAL_ELEMENTS
     # decodebin finds the type of a played file through the typefind functions ("-": no element of its own)
@@ -83,13 +83,13 @@ function(psimedia_install_gstreamer_runtime target)
 
     # The built plugin's path is known at generation time only; install(CODE) would expand it only with CMP0087.
     set(location "${CMAKE_CURRENT_BINARY_DIR}/psimedia-gstreamer-runtime")
-    file(GENERATE OUTPUT "${location}-$<CONFIG>.cmake" CONTENT "set(media_plugin \"$<TARGET_FILE:${target}>\")\n")
+    file(GENERATE OUTPUT "${location}-$<CONFIG>.cmake" CONTENT "set(psimedia_gst_media_plugin \"$<TARGET_FILE:${target}>\")\n")
     install(CODE "
-        set(required \"${required}\")
-        set(optional \"${optional}\")
-        set(bin_dir \"${PSIMEDIA_GSTREAMER_RUNTIME_BIN_DIR}\")
-        set(plugin_dir \"${PSIMEDIA_GSTREAMER_RUNTIME_PLUGIN_DIR}\")
-        set(dest \"${BIN_INSTALL_DIR}\")
+        set(psimedia_gst_required \"${required}\")
+        set(psimedia_gst_optional \"${optional}\")
+        set(psimedia_gst_bin_dir \"${PSIMEDIA_GSTREAMER_RUNTIME_BIN_DIR}\")
+        set(psimedia_gst_plugin_dir \"${PSIMEDIA_GSTREAMER_RUNTIME_PLUGIN_DIR}\")
+        set(psimedia_gst_dest \"${BIN_INSTALL_DIR}\")
         include(\"${location}-\${CMAKE_INSTALL_CONFIG_NAME}.cmake\")
         include(\"${_PSIMEDIA_GSTREAMER_RUNTIME_DIR}/PsimediaGStreamerRuntimeInstall.cmake\")
     " COMPONENT plugins)
