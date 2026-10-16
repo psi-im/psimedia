@@ -227,17 +227,24 @@ jobs:
       - name: Install Qt, GStreamer and libSRTP
         run: brew install cmake ninja qt gstreamer srtp pkgconf
 
+      - uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: macos-qt6-provider
+
       - name: Configure secure Psi media plugin
         shell: bash
         run: |
           cmake -S . -B build-macos -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_INSTALL_PREFIX="$PWD/stage" \
             -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" \
             -DQT_DEFAULT_MAJOR_VERSION=6 \
             -DBUILD_DEMO=OFF \
             -DBUILD_PSIPLUGIN=ON \
             -DPSIMEDIA_BUILD_TESTS=OFF \
+            -DPSIMEDIA_BUILD_SCREENCAPTUREKIT_TESTS=ON \
             -DPSIMEDIA_ENABLE_SRTP=ON \
             -DPLUGINS_ROOT_DIR="$PWD/_psi/plugins"
 
@@ -257,6 +264,9 @@ jobs:
           echo "MACOS_MEDIA_PLUGIN=$plugin"
           otool -L "$plugin" | tee plugin-dependencies.txt
           grep -Eiq 'srtp' plugin-dependencies.txt
+
+      - name: Check ScreenCaptureKit source registration without recording permission
+        run: ctest --test-dir build-macos -R '^psimedia_screencapturekit_registration$' --output-on-failure
 
   ubuntu-deb-package:
     needs: ci-policy
