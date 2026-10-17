@@ -1,4 +1,5 @@
 name: PsiMedia release
+run-name: "PsiMedia release (${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }})"
 
 on:
   push:
@@ -21,6 +22,7 @@ concurrency:
 
 jobs:
   validate-tag:
+    name: Validate release tag
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
@@ -56,6 +58,7 @@ jobs:
           echo "Building release from $tag ($tagged_sha)"
 
   packages:
+    name: Build release packages
     needs: validate-tag
     uses: ./.github/workflows/packages.yml
     with:
@@ -64,7 +67,7 @@ jobs:
       contents: read
 
   publish:
-    name: Publish complete GitHub Release
+    name: Publish GitHub release
     needs: [validate-tag, packages]
     runs-on: ubuntu-latest
     steps:
