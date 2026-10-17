@@ -4,39 +4,62 @@ on:
   push:
     tags:
       - 'v[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to release (for example v1.2)
+        required: true
+        type: string
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
-  group: psimedia-release-${{ github.ref }}
+  group: psimedia-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
   validate-tag:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      source_sha: ${{ steps.resolve.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Validate tag and source commit
+        id: resolve
         shell: bash
         env:
-          TAG: ${{ github.ref_name }}
+          MANUAL_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "::error::Expected a version tag such as v1.2 or v1.2.3"
+          tag="${MANUAL_TAG:-$GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Expected an existing version tag such as v1.2 or v1.2.3"
             exit 1
           fi
-          tagged_sha=$(git rev-list -n1 "$TAG")
-          test "$tagged_sha" = "$GITHUB_SHA"
-          echo "Building release from $TAG ($tagged_sha)"
+          git fetch --force --tags
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::Tag '$tag' does not exist"
+            exit 1
+          fi
+          tagged_sha=$(git rev-list -n1 "$tag")
+          if [[ "$GITHUB_EVENT_NAME" == push && "$tagged_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::The pushed tag commit differs from the checkout"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$tagged_sha" >> "$GITHUB_OUTPUT"
+          echo "Building release from $tag ($tagged_sha)"
 
   packages:
     needs: validate-tag
     uses: ./.github/workflows/packages.yml
+    with:
+      source_ref: ${{ needs.validate-tag.outputs.tag }}
     permissions:
       contents: read
 
@@ -49,7 +72,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.validate-tag.outputs.tag }}
         run: |
           set -euo pipefail
           expected_artifacts=(
@@ -84,7 +107,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.validate-tag.outputs.tag }}
         run: |
           set -euo pipefail
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
