@@ -148,8 +148,14 @@ source commit, invokes [PsiMedia packages](.github/workflows/packages.yml)
 for every supported release target, then creates a GitHub Release *only after
 all builds succeed and every expected artifact has been verified*. Re-running
 the tagged workflow replaces matching assets on an existing release.
-The packages workflow can also be run manually for testing without
-publishing a release.
+You can also open **Actions → PsiMedia release → Run workflow**, select
+`master`, and enter an **existing** version tag in the `tag` field. The
+manual run builds and publishes that exact tagged source revision, not the
+latest `master`. This is intended for tags made after the packaging pipeline
+was introduced; older tags may not have the necessary build infrastructure.
+The packages workflow can be run manually for testing without publishing a
+release. A push modifying the release workflows on `master` also triggers a
+one-off verification of the package matrix.
 
 Current release assets (ZIP archives of GitHub Actions artifacts):
 
