@@ -3,6 +3,10 @@ name: PsiMedia packages
 on:
   workflow_call:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/packages.yml'
+      - '.github/workflows/release.yml'
 
 permissions:
   contents: read
