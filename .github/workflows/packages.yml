@@ -2,11 +2,27 @@ name: PsiMedia packages
 
 on:
   workflow_call:
+    inputs:
+      source_ref:
+        description: Exact tag/ref to package
+        type: string
+        required: false
+        default: ''
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Existing tag/ref to package (empty means current branch)
+        type: string
+        required: false
+        default: ''
+  push:
+    branches: [master]
   pull_request:
     paths:
       - '.github/workflows/packages.yml'
       - '.github/workflows/release.yml'
+      - '.github/workflows/windows.yml'
+      - '.github/workflows/windows-msvc.yml'
 
 permissions:
   contents: read
@@ -35,6 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.source_ref || github.sha }}
           fetch-depth: 0
       - name: Resolve dependency lock
         id: dependencies
@@ -72,10 +89,18 @@ jobs:
           test -s "$pkg"
           dpkg-deb -c "$pkg" | grep -E '/psi/plugins/.*mediaplugin'
           dpkg-deb -f "$pkg" Depends | grep -i srtp
-          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+          source_ref='${{ inputs.source_ref }}'
+          if [[ -n "$source_ref" && "$source_ref" == v* ]]; then
+            tag="$source_ref"
+          elif [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag=""
+          fi
+          if [[ -n "$tag" ]]; then
             version=$(dpkg-deb -f "$pkg" Version)
-            [[ "$version" == "${GITHUB_REF_NAME#v}" ]] || {
-              echo "::error::Package version $version does not match tag $GITHUB_REF_NAME"
+            [[ "$version" == "${tag#v}" ]] || {
+              echo "::error::Package version $version does not match tag $tag"
               exit 1
             }
           fi
@@ -103,6 +128,7 @@ jobs:
             libgstreamer-plugins-bad1.0-dev libsrtp2-dev
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.source_ref || github.sha }}
           fetch-depth: 0
       - name: Resolve dependency lock
         id: dependencies
@@ -134,10 +160,18 @@ jobs:
           test -s "$pkg"
           dpkg-deb -c "$pkg" | grep -E '/psi/plugins/.*mediaplugin'
           dpkg-deb -f "$pkg" Depends | grep -i srtp
-          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+          source_ref='${{ inputs.source_ref }}'
+          if [[ -n "$source_ref" && "$source_ref" == v* ]]; then
+            tag="$source_ref"
+          elif [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag=""
+          fi
+          if [[ -n "$tag" ]]; then
             version=$(dpkg-deb -f "$pkg" Version)
-            [[ "$version" == "${GITHUB_REF_NAME#v}" ]] || {
-              echo "::error::Package version $version does not match tag $GITHUB_REF_NAME"
+            [[ "$version" == "${tag#v}" ]] || {
+              echo "::error::Package version $version does not match tag $tag"
               exit 1
             }
           fi
@@ -162,6 +196,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.source_ref || github.sha }}
           fetch-depth: 0
       - name: Resolve dependency lock
         id: dependencies
@@ -207,3 +242,4 @@ jobs:
     uses: ./.github/workflows/windows.yml
     with:
       packaging: true
+      source_ref: ${{ inputs.source_ref }}
