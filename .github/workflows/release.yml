@@ -1,0 +1,120 @@
+name: PsiMedia release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to release (for example v1.2)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: psimedia-release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      source_sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate tag and source commit
+        id: resolve
+        shell: bash
+        env:
+          MANUAL_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${MANUAL_TAG:-$GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Expected an existing version tag such as v1.2 or v1.2.3"
+            exit 1
+          fi
+          git fetch --force --tags
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::Tag '$tag' does not exist"
+            exit 1
+          fi
+          tagged_sha=$(git rev-list -n1 "$tag")
+          if [[ "$GITHUB_EVENT_NAME" == push && "$tagged_sha" != "$GITHUB_SHA" ]]; then
+            echo "::error::The pushed tag commit differs from the checkout"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$tagged_sha" >> "$GITHUB_OUTPUT"
+          echo "Building release from $tag ($tagged_sha)"
+
+  packages:
+    needs: validate-tag
+    uses: ./.github/workflows/packages.yml
+    with:
+      source_ref: ${{ needs.validate-tag.outputs.tag }}
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish complete GitHub Release
+    needs: [validate-tag, packages]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and verify all package artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate-tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          expected_artifacts=(
+            psimedia-deb-ubuntu-24.04-qt5
+            psimedia-deb-ubuntu-24.04-qt6
+            psimedia-deb-ubuntu-26.04-qt6
+            psimedia-deb-debian-13-qt6
+            psimedia-qt6-macos-arm64
+            psimedia-qt6-macos-x86_64
+            psimedia-windows-msvc-modern
+            psimedia-windows-msvc-win7
+          )
+          mkdir -p release-assets
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" > "$RUNNER_TEMP/psimedia-artifacts.json"
+          for name in "${expected_artifacts[@]}"; do
+            id=$(jq -r --arg name "$name" '
+              [.artifacts[] | select(.name == $name and .expired == false)] | first | .id // empty
+            ' "$RUNNER_TEMP/psimedia-artifacts.json")
+            if [[ -z "$id" ]]; then
+              echo "::error::Missing or expired package artifact: $name"
+              exit 1
+            fi
+            archive="release-assets/$name.zip"
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$archive"
+            unzip -tq "$archive" >/dev/null
+          done
+          actual=$(find release-assets -maxdepth 1 -name '*.zip' -type f | wc -l)
+          test "$actual" -eq "${#expected_artifacts[@]}"
+          ls -lh release-assets
+
+      - name: Create or update GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate-tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG exists; replacing matching assets"
+            gh release upload "$TAG" release-assets/*.zip --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" release-assets/*.zip \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag --generate-notes --title "PsiMedia ${TAG#v}"
+          fi

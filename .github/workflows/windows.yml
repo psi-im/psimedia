@@ -7,6 +7,10 @@ on:
         description: Optional Psi commit; must match dependencies.lock.json
         type: string
         default: ''
+      source_ref:
+        description: Optional tagged source revision to build
+        type: string
+        default: ''
   workflow_call:
     inputs:
       packaging:
@@ -14,6 +18,9 @@ on:
         type: boolean
         default: false
       psi_ref:
+        type: string
+        default: ''
+      source_ref:
         type: string
         default: ''
 
@@ -26,6 +33,7 @@ jobs:
     uses: ./.github/workflows/windows-msvc.yml
     with:
       psi_ref: ${{ inputs.psi_ref }}
+      source_ref: ${{ inputs.source_ref }}
       build_profile: modern
 
   win7-package:
@@ -34,4 +42,5 @@ jobs:
     uses: ./.github/workflows/windows-msvc.yml
     with:
       psi_ref: ${{ inputs.psi_ref }}
+      source_ref: ${{ inputs.source_ref }}
       build_profile: win7

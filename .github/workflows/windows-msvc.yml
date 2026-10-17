@@ -10,6 +10,10 @@ on:
         description: modern or win7
         type: string
         default: modern
+      source_ref:
+        description: Optional exact tagged source revision
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -23,6 +27,9 @@ jobs:
       BUILD_PROFILE: ${{ inputs.build_profile }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          fetch-depth: 0
       - name: Resolve dependency lock
         id: dependencies
         uses: ./.github/actions/load-dependencies
