@@ -1,4 +1,4 @@
-name: RTP provider regressions
+name: Build and test
 
 on:
   push:
