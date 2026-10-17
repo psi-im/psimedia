@@ -146,6 +146,24 @@ jobs:
           path: _psi
       - name: Verify locked Psi API
         run: python3 .github/scripts/resolve-dependencies.py --verify-psi-dir _psi
+      - name: Enable Git metadata for release versioning
+        shell: bash
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          set -euo pipefail
+          # Checkout's safe.directory is temporary; Debian's container
+          # has a different owner/UID. CMake invokes git describe to
+          # determine the DEB version, so Git metadata must be readable.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git -C "$GITHUB_WORKSPACE" rev-parse --verify HEAD
+          if [[ "$SOURCE_REF" == v* ]]; then
+            actual=$(git -C "$GITHUB_WORKSPACE" describe --tags --exact-match --match 'v[0-9]*')
+            if [[ "$actual" != "$SOURCE_REF" ]]; then
+              echo "::error::Expected checked out tag $SOURCE_REF, got $actual"
+              exit 1
+            fi
+          fi
       - name: Build Debian package
         shell: bash
         run: |
