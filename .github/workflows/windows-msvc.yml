@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   build:
-    name: ${{ inputs.build_profile == 'win7' && 'Qt5 / Win7' || 'Qt6' }}
+    name: ${{ inputs.build_profile == 'win7' && 'Windows 7 x64 (Qt 5, MSVC)' || 'Windows x64 (Qt 6, MSVC)' }}
     runs-on: windows-2022
     timeout-minutes: 60
     env:
