@@ -50,12 +50,17 @@ int main(int argc, char **argv)
     const GstStructure *structure = caps && gst_caps_get_size(caps) == 1 ? gst_caps_get_structure(caps, 0) : nullptr;
     gint rate = 0, channels = 0;
     const gchar *format = structure ? gst_structure_get_string(structure, "format") : nullptr;
+    // capsfilter leaves layout negotiable. Fixate it only for the GstAudioInfo
+    // parser, keeping the actual production filter unrestricted.
+    GstCaps *fixedCaps = caps ? gst_caps_copy(caps) : nullptr;
+    if (fixedCaps)
+        gst_structure_set(gst_caps_get_structure(fixedCaps, 0), "layout", G_TYPE_STRING, "interleaved", nullptr);
     GstAudioInfo audioInfo;
     const bool ok = structure && gst_structure_get_int(structure, "rate", &rate)
         && rate == 48000 && gst_structure_get_int(structure, "channels", &channels) && channels == 1
         && format && g_strcmp0(format, "S16LE") == 0
         && !gst_structure_has_field(structure, "channel-mask")
-        && gst_audio_info_from_caps(&audioInfo, caps)
+        && gst_audio_info_from_caps(&audioInfo, fixedCaps)
         && GST_AUDIO_INFO_CHANNELS(&audioInfo) == 1
         && GST_AUDIO_INFO_POSITION(&audioInfo, 0) == GST_AUDIO_CHANNEL_POSITION_MONO;
 
@@ -64,6 +69,8 @@ int main(int argc, char **argv)
         qCritical() << "Invalid AEC mono caps:" << (text ? text : "<null>");
         g_free(text);
     }
+    if (fixedCaps)
+        gst_caps_unref(fixedCaps);
     if (caps)
         gst_caps_unref(caps);
     return ok ? 0 : 3;
