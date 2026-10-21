@@ -1,0 +1,79 @@
+name: PsiMedia Windows Qt6 package for Psi alpha
+on:
+  push:
+    branches: ['ci/psi2-windows-alpha-package']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: psi2-media-windows-alpha
+  cancel-in-progress: true
+
+jobs:
+  media:
+    name: Reuse existing tested Windows MSVC profile
+    uses: ./.github/workflows/windows-msvc.yml
+    with:
+      build_profile: modern
+      psi_ref: 4c5dc13246871f1a5f5c8cdfb21f5673e92ad474
+
+  package:
+    needs: media
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download media CI staging tree
+        uses: actions/download-artifact@v4
+        with:
+          name: psimedia-windows-msvc-modern
+          path: input-media
+      - name: Assemble self-contained media binary package
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The reusable Windows job has already staged the DLL and installed
+          # its complete, independently tested GStreamer runtime.
+          manifest=$(find input-media -name gstreamer-runtime.txt -type f -print -quit)
+          test -n "$manifest"
+          source_dir=$(dirname "$manifest")
+          test "$(find "$source_dir" -name mediaplugin.dll -type f | wc -l)" -eq 1
+          test "$(find "$source_dir/gstreamer-1.0" -name '*.dll' -type f | wc -l)" -gt 9
+          mkdir -p artifacts
+          cp -a "$source_dir" stage
+          python3 - <<'PY'
+          import json, pathlib, os
+          lock=json.loads(pathlib.Path('dependencies.lock.json').read_text())
+          assert lock['psi']['commit']=='4c5dc13246871f1a5f5c8cdfb21f5673e92ad474'
+          (pathlib.Path('stage')/'COMPONENT-INFO.json').write_text(json.dumps({
+              'psi_api_sha':lock['psi']['commit'],
+              'psimedia_sha':os.environ['GITHUB_SHA'],
+              'qt_major':lock['windows']['modern']['qt']['major'],
+              'qt_version':lock['windows']['modern']['qt']['version'],
+              'profile':'windows-msvc2022-x64',
+          },indent=2)+'\n')
+          PY
+          (cd stage && zip -q -r ../artifacts/psimedia-windows-qt6-alpha.zip .)
+          unzip -tq artifacts/psimedia-windows-qt6-alpha.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: psimedia-windows-qt6-alpha
+          path: artifacts/psimedia-windows-qt6-alpha.zip
+          if-no-files-found: error
+      - name: Publish versioned binary prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=windows-qt6-psi2-alpha1
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Binary bundle release already exists; refusing to overwrite"
+            exit 1
+          fi
+          gh release create "$tag" artifacts/psimedia-windows-qt6-alpha.zip \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title 'PsiMedia for Psi 2.0 alpha on Windows x64' \
+            --notes 'Windows MSVC Qt6 media package built by the existing PsiMedia workflow, with GStreamer runtime. Plugin API locked to Psi 4c5dc132.'
