@@ -232,10 +232,23 @@ jobs:
           path: _psi
       - name: Verify locked Psi API
         run: python3 .github/scripts/resolve-dependencies.py --verify-psi-dir _psi
-      - name: Install pinned Qt 6.12.0
+      - name: Resolve pinned macOS Qt version
+        id: qt
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          lock = json.loads(Path("dependencies.lock.json").read_text(encoding="utf-8"))
+          qt = lock["windows"]["modern"]["qt"]
+          assert qt["major"] == 6
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              print("version=" + qt["version"], file=out)
+          PY
+      - name: Install locked macOS Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: 6.12.0
+          version: ${{ steps.qt.outputs.version }}
           cache: true
       - name: Install GStreamer and libSRTP
         run: brew install cmake ninja gstreamer srtp pkgconf
