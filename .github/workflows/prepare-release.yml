@@ -1,0 +1,83 @@
+name: Prepare PsiMedia release
+run-name: "Prepare PsiMedia ${{ inputs.tag }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: New version tag to create (for example v1.2 or v1.2.3)
+        required: true
+        type: string
+
+# Tag pushes made with GITHUB_TOKEN do NOT fire other workflows. Dispatch
+# release.yml explicitly after the commit and tag have been pushed.
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: psimedia-prepare-release
+  cancel-in-progress: false
+
+jobs:
+  prepare-and-dispatch:
+    name: Update embedded plugin version and publish tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update version, commit and tag atomically
+        id: prepare
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then
+            echo "::error::Run release preparation from master only"
+            exit 1
+          fi
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))?$ ]]; then
+            echo "::error::Expected a version such as v1.2 or v1.2.3"
+            exit 1
+          fi
+
+          git fetch origin master --tags --prune
+          if [[ "$(git rev-parse HEAD)" != "$(git rev-parse refs/remotes/origin/master)" ]]; then
+            echo "::error::master advanced after checkout; rerun on latest master"
+            exit 1
+          fi
+          if git show-ref --quiet --verify "refs/tags/$TAG"; then
+            echo "::error::Tag $TAG already exists. Retry release.yml instead."
+            exit 1
+          fi
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::Expected a clean checkout"
+            exit 1
+          fi
+
+          python3 .github/scripts/prepare-release-version.py --tag "$TAG"
+          python3 .github/scripts/prepare-release-version.py --tag "$TAG" --check
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --quiet -- psiplugin/psiplugin.json; then
+            git add psiplugin/psiplugin.json
+            git commit -m "Release PsiMedia $TAG: update embedded plugin version"
+          fi
+          git tag -a "$TAG" -m "PsiMedia $TAG"
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # The branch and tag either both update or neither does.
+          git push --atomic origin HEAD:refs/heads/master "refs/tags/$TAG:refs/tags/$TAG"
+
+      - name: Start existing tagged release workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref master -f "tag=$TAG"
+          echo "Tagged $TAG on ${{ steps.prepare.outputs.release_sha }}; dispatched release.yml"
