@@ -65,6 +65,7 @@ class ReleaseMetadataTests(unittest.TestCase):
         self.assertIn("gh workflow run release.yml", workflow)
         self.assertIn("actions: write", workflow)
         self.assertIn("contents: write", workflow)
+        self.assertIn("git cat-file -e", release)
         self.assertIn("git show", release)
         self.assertIn("prepare-release-version.py", release)
         self.assertIn("--check", release)

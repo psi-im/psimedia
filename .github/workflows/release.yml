@@ -57,8 +57,12 @@ jobs:
           echo "sha=$tagged_sha" >> "$GITHUB_OUTPUT"
           # Plugin metadata is embedded by Q_PLUGIN_METADATA at build time.
           # Always validate the content of the tagged commit, not the workflow checkout.
-          git show "$tag:psiplugin/psiplugin.json" |
-            python3 .github/scripts/prepare-release-version.py --tag "$tag" --check -
+          if git cat-file -e "$tag:.github/scripts/prepare-release-version.py" 2>/dev/null; then
+            git show "$tag:psiplugin/psiplugin.json" |
+              python3 .github/scripts/prepare-release-version.py --tag "$tag" --check -
+          else
+            echo "::warning::Legacy tag predates embedded plugin version validation"
+          fi
           echo "Building release from $tag ($tagged_sha)"
 
   packages:
